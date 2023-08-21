@@ -2,7 +2,7 @@
 Fortran preprocessor designed for multithreading and GPU offloading through OpenMP
 
 Features: \\
-  Automatic privatization of modified global variables in multithreaded code \\
+  * Automatic privatization of modified global variables in multithreaded code \\
   Fortran Array operation unrolling to DO-loops with automatic declaratives to spread work either along CPU or GPU threads\\
   Automatic declarations for global variables needed in target regions \\
   Function inlining which helps OpenMP offloading \\
