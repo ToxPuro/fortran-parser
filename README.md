@@ -12,5 +12,14 @@ Parameters:
   * -F --file In which file the function exists
   * -o --offload --no-offload Whether to offload the given function
   * -c --communication --no-communication Whether to warn about communication calls inside the given subroutine
+
+  Example call to offload a given function
+  * python parse.py -f example_function -F ./dir/file_where_function_is -o
+
+  Example call to make needed global variables threadprivate:
+  * python parse.py -f example_function -F ./dir/file_where_function_is
+
+OpenMP declarations are in files {original_file_path}_omp_incl.h
+
   
   
