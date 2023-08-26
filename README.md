@@ -12,8 +12,10 @@ Parameters:
   * -F --file In which file the function exists
   * -o --offload --no-offload Whether to offload the given function
   * -c --communication --no-communication Whether to warn about communication calls inside the given subroutine
+  * -d --directory From which directory to look for file
+  * -M --Makefile. Pencil Code specific. Filename to Makefile.local to know which modules are included (might change in the future) 
 
-  Example call to offload a given function
+  Example call to modify a given function to be suittable for offloading (Work in progress)
   * python parse.py -f example_function -F ./dir/file_where_function_is -o
 
   Example call to make needed global variables threadprivate:
