@@ -693,6 +693,8 @@ class Parser:
         self.ignored_subroutines.append("output_pencil_vect")
         self.ignored_subroutines.append("loptest")
         self.ignored_subroutines.append("result")
+        #omp subs
+        self.ignored_subroutines.extend(["omp_get_thread_num"])
         self.modules_in_scope = {}
         self.file = config["file"]
         # for file in self.used_files:
@@ -4288,7 +4290,7 @@ def main():
     argparser.add_argument("-o", "--offload",default=False,action=argparse.BooleanOptionalAction, help="Whether to offload the current code. Cannot multithread and offload at the same time")
     argparser.add_argument("-t", "--test",default=False,action=argparse.BooleanOptionalAction, help="Whether to generate an inlined version of the given subroutine (mainly used for testing)")
     argparser.add_argument("-d", "--directory",required=True, help="From which directory to look for files")
-    argparser.add_argument("--sample-dir", required=True, help="Sample")
+    argparser.add_argument("--sample-dir", required=False, help="Sample")
     # argparser.add_argument("-od", "--out-directory",required=True, help="To which directory write include files")
     argparser.add_argument("-M", "--Makefile", help="Makefile.local from which used modules are parsed")
     argparser.add_argument("-b", "--boundcond",default=False,action=argparse.BooleanOptionalAction, help="Whether the subroutine to offload is a boundcond or not")
@@ -4528,7 +4530,7 @@ def main():
     # parser.parse_subroutine_all_files(subroutine_name, "", check_functions, False, {})
 
     #slice buffers are safe, TODO add check to proof this
-    parser.ignored_subroutines.append("store_slices")
+    parser.ignored_subroutines.extend(["store_slices","store_slices_scal","store_slices_vec"])
     parser.parse_subroutine_in_file(filename, subroutine_name, check_functions, config["offload"])
     print("DONE PARSING")
     print("modules")
