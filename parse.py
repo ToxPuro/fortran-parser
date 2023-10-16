@@ -1715,9 +1715,6 @@ class Parser:
         type = source[var]["type"] if "%" not in var else "pencil_case"
         return (var,is_static, type, dims)
     def get_param_info(self,parameter,local_variables,local_module_variables):
-        #is scientific number
-        if parameter[0].replace(".","").replace("-","").replace("e","").replace("+","").isnumeric():
-            return (parameter[0],False,"real",[])
         if len(parameter[0]) == 0:
             print("INCORRECT PARAM",parameter)
             exit()
@@ -1937,6 +1934,9 @@ class Parser:
             elif "." in parameter:
                 if all([part.isnumeric() or part[1:].isnumeric() for part in parameter[0].split(",")]):
                     type = "real"
+                #is scientific number
+                if parameter[0].replace(".","").replace("-","").replace("e","").replace("+","").isnumeric():
+                    return (parameter[0],False,"real",[])
             return (parameter[0],parameter[1],type,[])
     def get_static_passed_parameters(self,parameters,local_variables,local_module_variables):
         original_parameters = parameters
@@ -4556,7 +4556,7 @@ def main():
 
     all_file = open(f"{parser.directory}/omp_includes/omp.inc","w")
     for file in threadprivate_declarations:
-        include_filename = f"{file.replace('.f90','')}_omp.inc"
+        include_filename = f"{parser.directory}/omp_includes/{file.rsplit('/',1)[-1].replace('.f90','')}_omp.inc"
         print("Creating ", include_filename)
         include_file = open(include_filename, "w")
         include_file.write(threadprivate_declarations[file])
