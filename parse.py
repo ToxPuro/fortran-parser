@@ -519,20 +519,22 @@ class Parser:
 
         }
         self.safe_subs_to_remove = ["print","not_implemented","fatal_error","keep_compiler_quiet"]
-        self.profile_mappings = {
-            "sinth": "PROFILE_Y", 
-            "cosph": "PROFILE_Z",
-            "costh":"PROFILE_Y",
-            "sinph":"PROFILE_Z",
-            "x":"PROFILE_X",
-            "y":"PROFILE_Y",
-            "z": "PROFILE_Z",
-            "dline_1_x": "PROFILE_X",
-            "dline_1_y": "PROFILE_Y",
-            "dline_1_z": "PROFILE_Z",
-            "etatotal": "PROFILE_X",
-            "cs2cool_x": "PROFILE_X",
-            }
+        # self.profile_mappings = {
+        #     "sinth": "PROFILE_Y", 
+        #     "cosph": "PROFILE_Z",
+        #     "costh":"PROFILE_Y",
+        #     "sinph":"PROFILE_Z",
+        #     "x":"PROFILE_X",
+        #     "y":"PROFILE_Y",
+        #     "z": "PROFILE_Z",
+        #     "dline_1_x": "PROFILE_X",
+        #     "dline_1_y": "PROFILE_Y",
+        #     "dline_1_z": "PROFILE_Z",
+        #     "etatotal": "PROFILE_X",
+        #     "cs2cool_x": "PROFILE_X",
+        #     "cs2mxy": "PROFILE_XY",
+        #     "cs2mx": "PROFILE_X",
+        #     }
         self.func_info = {}
         self.file_info = {}
         self.module_info = {}
@@ -567,7 +569,7 @@ class Parser:
         self.used_files = [file for file in self.used_files if not self.file_info[file]["is_program_file"]]
         self.used_files.append(f"{self.directory}/run.f90")
         # self.used_files = list(filter(lambda x: x not in ignored_files and not self.is_program_file(x) and "/inactive/" not in x and "deriv_alt.f90" not in x and "diagnostics_outlog.f90" not in x "boundcond_alt.f90" and not re.search("cuda",x) and re.search("\.f90", x) and not re.search("astaroth",x)  and "/obsolete/" not in x,self.used_files))
-        self.ignored_subroutines = ["alog10","count", "min1", "erf","aimag", "cmplx","len", "inquire", "floor", "matmul","ceiling", "achar", "adjustl", "index", "iabs","tiny","dble","float","nullify","associated","nint","open","close","epsilon","random_seed","modulo","nearest","xor","ishft","iand","ieor","ior","random_number","all","any","deallocate","cshift","allocated","allocate","case","real","int","complex","character","if","where","while","elsewhere","forall","maxval", "minval", "dot_product", "abs", "alog", "mod", "size",  "sqrt", "sum","isnan", "exp", "spread", "present", "trim", "sign","min","max","sin","cos","log","log10","tan","tanh","cosh","sinh","asin","acos","atan","atan2","write","read","char"]
+        self.ignored_subroutines = ["alog10","count", "min1", "erf","aimag", "cmplx","len", "inquire", "floor", "matmul","ceiling", "achar", "adjustl", "index", "iabs","tiny","dble","float","nullify","associated","nint","open","close","epsilon","random_seed","modulo","nearest","xor","ishft","iand","ieor","ior","random_number","all","any","deallocate","cshift","allocated","allocate","case","real","int","complex","character","if","elseif","where","while","elsewhere","forall","maxval", "minval", "dot_product", "abs", "alog", "mod", "size",  "sqrt", "sum","isnan", "exp", "spread", "present", "trim", "sign","min","max","sin","cos","log","log10","tan","tanh","cosh","sinh","asin","acos","atan","atan2","write","read","char"]
         ##Ask Matthias about these
         self.ignored_subroutines.extend(["DCONST","fatal_error", "terminal_highlight_fatal_error","warning","caller","caller2", "coeffsx","coeffsy","coeffsz","r1i","sth1i","yh_","not_implemented","die","deri_3d","u_dot_grad_mat"])
         self.module_variables = {}
@@ -643,27 +645,42 @@ class Parser:
         exit()
     def evaluate_integer(self,value):
         print("evaluating int->",value)
-        if value in self.known_values:
-            orig_value = value
-            while value in self.known_values:
-                value = self.known_values[value]
-            return value
-            return self.known_values[value]
-        if "(" in value and ("/" in value or "*" in value):
-            print("/ and * not supported with braces")
-            exit()
         #pencil specific values known beforehand
         value = value.replace("iux-iuu","0")
         value = value.replace("iuz-iuu","2")
         value = value.replace("l2-l1+1","nx")
-        if "+" in value and "-" not in value and "*" not in value and "/" not in value:
-            res = 0
-            parts = [part.strip() for part in value.split("+")]
-            for part in parts:
-                if not part.isnumeric():
-                    return value
-                res += eval(part)
-            return str(res)
+        value = value.replace("n1","1+nghost")
+        for mapping in self.flag_mappings:
+            if mapping in value:
+                value = replace_variable(value,mapping,self.flag_mappings[mapping])
+        if value in self.known_values:
+            orig_value = value
+            while value in self.known_values:
+                value = self.known_values[value]
+            print("->",value)
+            return value
+        if "(" in value and ("/" in value or "*" in value):
+            print("/ and * not supported with braces")
+            exit()
+
+        if "+" in value  and "*" not in value and "/" not in value:
+            res = ""
+            sum = 0
+            for part in [part.strip() for part in value.split("+")]:
+                if part.isnumeric() or (part[0] == "-" and part[:1].isnumeric()):
+                    sum += eval(part)
+                else:
+                    res += part
+            new_res = ""
+            for part in [part.strip() for part in res.split("-")]:
+                if part.isnumeric():
+                    sum -= eval(part)
+                else:
+                    new_res += part
+            new_res += "+" + str(sum)
+            print("->",new_res)
+            return new_res
+        print("->",value)
         return value
 
     def evaluate_indexes(self,value):
@@ -847,8 +864,9 @@ class Parser:
                 res.append(line)
             if f"&{name}{prefix}_pars" in line:
                 in_pars = True
-                res.append(line.replace(f"&{name}{prefix}_pars",""))
-        return [(line,0) for line in res]
+                res.append(line.replace(f"&{name}{prefix}_pars","").replace("/","").strip())
+        #/ is replaced since it represents the end of line
+        return [(line.replace("/","").strip(),0) for line in res]
     def get_lines(self, filepath, start=0, end=math.inf, include_comments=False):
         if filepath not in self.lines.keys():
             in_sub_name = None 
@@ -1139,7 +1157,6 @@ class Parser:
                     num_of_single_quotes = 0
                     num_of_double_quotes = 0
                     parameter_list_start_index = current_index
-                    print("hmm",line)
                     while(number_of_right_brackets>number_of_left_brackets):
                         parameter_list = line[parameter_list_start_index:current_index]
                         if line[current_index] == "'" and num_of_double_quotes %2 == 0:
@@ -2528,7 +2545,7 @@ class Parser:
                 print("don't know what to do since return statement in a conditional branch")
                 exit()
         for (line,count) in lines:
-            if "do i_69_72=l1-2,l2+2" in line:
+            if "if(idiag_u2mr==0) return" in line:
                 print("don't want to inline this func")
                 print(subroutine_name, original_subroutine_name)
                 exit()
@@ -2625,6 +2642,8 @@ class Parser:
                             self.add_write(new_param_list[i][0], 0, new_param_list[i][0] in local_variables, self.subroutine_modifies_param[function_name][str(param_types)][i]["filename"], self.subroutine_modifies_param[function_name][str(param_types)][i]["call trace"], self.subroutine_modifies_param[function_name][str(param_types)][i]["line"])
     def evaluate_ifs(self,lines,local_variables):
         for line_index, line in enumerate(lines):
+            # print("evaluating ifs",line)
+            orig_line = line
             check_line = line.replace("then","").replace("else if","if",1).replace("elseif","if",1).replace("if","call if",1)
             has_then = "then" in line
             if_func_calls = list(filter(lambda func_call: func_call["function_name"] == "if", self.get_function_calls_in_line(check_line,local_variables)))
@@ -2660,6 +2679,9 @@ class Parser:
                         if_str ="else if"
                     orig_line = line 
                     lines[line_index] = self.replace_func_call(check_line, func_call, f"{if_str}({replacement_value})").replace("call if","if").replace("call else if", "else if")
+                    if "if(f /) then" in lines[line_index]:
+                        print("I fucked up in evaluate index")
+                        exit()
                     if "elseelse if" in lines[line_index]:
                         print("Fdsfsdafsd")
                         print(orig_line)
@@ -2668,6 +2690,11 @@ class Parser:
                         exit()
                     if has_then:
                         lines[line_index] = lines[line_index] + "then"
+                        if "if(f /) then" in lines[line_index]:
+                            print(lines[line_index])
+                            print(orig_line)
+                            print("I fucked up in evaluate index")
+                            exit()
     def global_loop_replacer(self,segment,segment_index,line,local_variables,info):
         if segment[0] in local_variables:
             dims = local_variables[segment[0]]["dims"]
@@ -2820,8 +2847,15 @@ class Parser:
 
     def eliminate_while(self,lines):
 
-        self.eliminate_dead_branches(lines)
-        print("worked first")
+        for line in lines:
+            if "if (f /) then" in line:
+                print("I fucked up")
+                exit()
+        for line in lines:
+            if "if (f /) then" in line:
+                print("I fucked up")
+                exit()
+        print("did first")
         #if there are some writes to flagged params then not safe to substitue
         writes = self.get_writes([(line,0) for line in lines])
         for flag_mapping in self.flag_mappings:
@@ -2831,29 +2865,69 @@ class Parser:
         for line_index in range(len(lines)):
             for flag_mapping in self.flag_mappings:
                 lines[line_index] = replace_variable(lines[line_index],flag_mapping,self.flag_mappings[flag_mapping])
+                if "if (f /) then" in lines[line_index]:
+                    print(flag_mapping,self.flag_mappings[flag_mapping])
+                    print(line)
+                    print(lines[line_index])
+                    print("I fucked up mapping")
+                    exit()
         # done twice since can have lflag_a -> lflag_b .or. lflag_c
         for line_index in range(len(lines)):
             for flag_mapping in self.flag_mappings:
                 lines[line_index] = replace_variable(lines[line_index],flag_mapping,self.flag_mappings[flag_mapping])
+                if "if (f /) then" in lines[line_index]:
+                    print("I fucked up")
+                    exit()
 
+
+        print("done flag mapping")
+        for line in lines:
+            if "if (f /) then" in line:
+                print("I fucked up")
+                exit()
+        print("passed flag map test")
         lines = self.transform_case(lines)
+        print("passed transform case")
         local_variables = {parameter:v for parameter,v in self.get_variables([(line,0) for line in lines], {},self.file).items() }
         self.evaluate_ifs(lines,local_variables)
+        print("passed evaluate ifs")
         writes = self.get_writes([(line,0) for line in lines])
         orig_lines = lines.copy()
         orig_lines.append("one more")
+        print("start while")
         while(len(orig_lines) > len(lines)):
+            print("start while")
             lines = self.eliminate_dead_branches(lines)
+            for line in lines:
+                if "if (f /) then" in line:
+                    print("I fucked up")
+                    exit()
+            print("passed eliminate")
             writes = self.get_writes([(line,0) for line in lines])
             self.try_to_deduce_if_params(lines,writes,local_variables)
             self.evaluate_ifs(lines,local_variables)
+            for line in lines:
+                if "if (f /) then" in line:
+                    print("I fucked up")
+                    exit()
+            print("passed eval")
 
             orig_lines = lines.copy()
 
             lines = self.eliminate_dead_branches(lines)
+            for line in lines:
+                if "if (f /) then" in line:
+                    print("I fucked up")
+                    exit()
+            print("passed elim")
             writes = self.get_writes([(line,0) for line in lines])
             self.try_to_deduce_if_params(lines,writes,local_variables)
             self.evaluate_ifs(lines,local_variables)
+            for line in lines:
+                if "if (f /) then" in line:
+                    print("I fucked up")
+                    exit()
+            print("passed eval")
         return lines
     def transform_line_stencil(self,line,num_of_looped_dims, local_variables, array_segments_indexes,rhs_var,vectors_to_replace):
         variables = merge_dictionaries(self.static_variables, local_variables)
@@ -2905,20 +2979,52 @@ class Parser:
                         vtxbuf_name = get_vtxbuf_name_from_index("VTXBUF_OUT_",indexes[-1])
                     res = vtxbuf_name
                 else:
-                    indexes = get_indexes(line[segment[1]:segment[2]],segment[0],0)
-                    if segment[0] in self.profile_mappings:
-                        if self.profile_mappings[segment[0]] == "PROFILE_Y":
-                            if indexes != ["m"] and indexes != []:
+                    var_dims = src[segment[0]]["dims"]
+                    indexes = [self.evaluate_indexes(index) for index  in get_indexes(line[segment[1]:segment[2]],segment[0],0)]
+                    is_profile = segment[0] in self.static_variables and var_dims in [["nx"],["mx"],["ny"],["my"],["nz"],["mz"],["nx","my"]]
+                    if is_profile:
+                        #PROFILE_X
+                        if var_dims in [["nx"],["mx"]]:
+                            if indexes not in [[],["l1:l2"],["l1+3:l2+3"]]:
+                                print(indexes)
+                                print("WEIRD INDEX in profile_x")
+                                print(indexes)
+                                print(line[segment[1]:segment[2]])
+                                exit()
+                            profile_index = "0"
+                            if indexes == ["l1+3:l2+3"]:
+                                profile_index = "3"
+                        #PROFILE_Y
+                        elif var_dims in [["ny"],["my"]]:
+                            if indexes not in  [["m"]]:
                                 print("WEIRD INDEX in profile_y")
+                                print(indexes)
                                 print(line[segment[1]:segment[2]])
                                 exit()
-                            res = segment[0].upper()
-                        if self.profile_mappings[segment[0]] == "PROFILE_Z":
-                            if indexes != ["n"] and indexes != []:
+                            profile_index = "0"
+                        #PROFILE_Z
+                        elif var_dims in [["nz"],["mz"]]:
+                            print("PROFILE_Z: ",segment[0])
+                            if indexes not in [["n"],["n+3"]]:
                                 print("WEIRD INDEX in profile_z")
+                                print(indexes)
                                 print(line[segment[1]:segment[2]])
                                 exit()
-                            res = "AC_PROFILE_" + segment[0].upper()
+                            profile_index = "0"
+                            if indexes == ["n+3"]:
+                                profile_index = "3"
+                        #PROFILE_XY
+                        elif var_dims in [["nx","my"]]:
+                            if indexes not in [[":","m"]]:
+                                print("WEIRD INDEX in profile_xy")
+                                print(indexes)
+                                print(line[segment[1]:segment[2]])
+                                exit()
+                            profile_index = "0"
+                        else:
+                            print("add profile mapping to profile", self.profile_mappings[segment[0]])
+                            exit()
+                        res = "AC_PROFILE_" + segment[0].upper() + "[" + profile_index + "]"
                     elif segment[0] in local_variables and self.evaluate_indexes(src[segment[0]]["dims"][0]) == "nx" and indexes in [[],[":"]]:
                         print("nx var -> scalar")
                         print(line[segment[1]:segment[2]])
@@ -2945,8 +3051,12 @@ class Parser:
                         print(line)
                         print("is static: ",segment[0] in self.static_variables)
                         print("is local: ",segment[0] in local_variables)
+                        print("var dims",var_dims)
                         print(src[segment[0]])
                         print("make vector copies = ",make_vector_copies)
+                        #for time being skip
+                        if "p%uij" in segment[0]:
+                            res = ""
                         exit()
                 res_line = res_line + line[last_index:segment[1]]
                 res_line = res_line + res 
@@ -3202,7 +3312,8 @@ class Parser:
             
         if is_use_line(line):
             return ""
-        if "do" in line:
+        if "do" in line[:2]:
+            print("do line",line)
             loop_index = self.get_writes_from_line(line,0)[0]["variable"]
             lower,upper= [part.strip() for part in line.split("=")[1].split(",",1)]
             loop_indexes.append(loop_index)
@@ -3223,18 +3334,18 @@ class Parser:
             print("res der call --->")
             print(res)
             return res
-        if len(func_calls) == 1 and func_calls[0]["function_name"] in ["where"]:
+        if len(func_calls) > 0 and func_calls[0]["function_name"] in ["where"]:
             is_scalar_if = False
             print("where call",line)
             arr_segs_in_line = self.get_array_segments_in_line(line,variables)
             for seg in arr_segs_in_line:
                 param_info = self.get_param_info((line[seg[1]:seg[2]],False),local_variables,self.static_variables)
                 print("param info",param_info)
-                is_scalar_if = is_scalar_if or (param_info[3] == ["nx"] )
+                is_scalar_if = is_scalar_if or (param_info[3] in [["nx","3"],["nx"]] )
             for seg in self.get_struct_segments_in_line(line,variables):
                 param_info = self.get_param_info((line[seg[1]:seg[2]],False),local_variables,self.static_variables)
                 print("param info",param_info)
-                is_scalar_if = is_scalar_if or (param_info[3] == ["nx"])
+                is_scalar_if = is_scalar_if or (param_info[3] in  [["nx"],["nx","3"]])
             if not is_scalar_if:
                 print("what to about where")
                 print(line)
@@ -4099,6 +4210,9 @@ class Parser:
             else:
                 inside = ".or.".join([f"{case_param} == {y}" for y in x])
                 res = f"else if({inside}) then" 
+            if "if (f /) then" in res:
+                print("I fucked up in transform case")
+                exit()
             res_lines.append(res)
         #default case is handled separately
         res_lines.append("else")
@@ -4116,6 +4230,12 @@ class Parser:
         global_init_lines = init_lines
         global_init_lines = list(set(global_init_lines))
         elim_lines = self.eliminate_while([line[0] for line in new_lines])
+        # elim_lines = [line[0] for line in new_lines]
+        for line in elim_lines:
+            if "if(f /) then" in line:
+                print("I fucked up")
+                exit()
+
         new_lines = [(line,0) for line in elim_lines]
         local_variables = {parameter:v for parameter,v in self.get_variables(new_lines, {},filename).items() }
         func_calls_to_replace = [call for call in self.get_function_calls(new_lines,local_variables) if call["function_name"] != subroutine_name and call["function_name"] not in self.ignored_subroutines]
@@ -4256,7 +4376,7 @@ def main():
         #get flags from params.log
         lines = parser.get_lines(f"{parser.sample_dir}/data/params.log")
 
-        for module in ["grav_","density_","magnetic_"]:
+        for module in ["grav_","density_","magnetic_","hydro_"]:
             for prefix in ["run"]:
                 grav_lines = parser.get_pars_lines(prefix, module,lines)
                 res_lines = []
@@ -4280,10 +4400,11 @@ def main():
         for map_param in parser.default_mappings:
             if map_param not in parser.flag_mappings:
                 parser.flag_mappings[map_param] = parser.default_mappings[map_param]
+
         #for testing
-        parser.flag_mappings["topbot"] = "top"
-        parser.flag_mappings["lone_sided"] = ".false."
-        parser.flag_mappings["loptest(lone_sided)"] = ".false."
+        # parser.flag_mappings["topbot"] = "top"
+        # parser.flag_mappings["lone_sided"] = ".false."
+        # parser.flag_mappings["loptest(lone_sided)"] = ".false."
 
         if config["stencil"]:
             parser.offload_type = "stencil"
@@ -4356,9 +4477,9 @@ def main():
         # parser.flag_mappings["lone_sided"] = ".true."
         #
         parser.ignored_subroutines.extend(["mpiwtime","random_number_wrapper"])
-        parser.ignored_subroutines.extend(["sum_mn_name","max_mn_name","yzsum_mn_name_x","xzsum_mn_name_y","xysum_mn_name_z","zsum_mn_name_xy"])
+        parser.ignored_subroutines.extend(["sum_mn_name","max_mn_name","yzsum_mn_name_x","xzsum_mn_name_y","xysum_mn_name_z","zsum_mn_name_xy","ysum_mn_name_xz","phizsum_mn_name_r"])
+        parser.safe_subs_to_remove.extend(["sum_mn_name","max_mn_name","yzsum_mn_name_x","xzsum_mn_name_y","xysum_mn_name_z","zsum_mn_name_xy","ysum_mn_name_xz","phizsum_mn_name_r"])
         parser.ignored_subroutines.extend(["diagnostic_magnetic","xyaverages_magnetic","yzaverages_magnetic","xzaverages_magnetic"])
-        parser.safe_subs_to_remove.extend(["sum_mn_name","max_mn_name","yzsum_mn_name_x","xzsum_mn_name_y","xysum_mn_name_z","zsum_mn_name_xy"])
         parser.safe_subs_to_remove.extend(["diagnostic_magnetic","xyaverages_magnetic","yzaverages_magnetic","xzaverages_magnetic"])
         parser.ignored_subroutines.extend(["timing"])
         parser.safe_subs_to_remove.extend(["timing"])
