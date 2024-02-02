@@ -76,8 +76,8 @@ mk_param_lines = [
     "logical,            dimension(npencils):: lpencil         = .false."
 ]
 
-c_helpers = ctypes.CDLL("./helpers.so") 
-c_helpers.hi_from_c.argtypes = [ctypes.c_int]
+# c_helpers = ctypes.CDLL("./helpers.so") 
+# c_helpers.hi_from_c.argtypes = [ctypes.c_int]
 
 #transforms .5 -> 0.5 and etc.
 #needed since the Astaroth grammar does not support e.g. .5
@@ -908,9 +908,10 @@ class Parser:
         self.ignored_files.append("spiegel.f90")
         self.used_files = [file for file in self.used_files if not any([ignored_file in file for ignored_file in self.ignored_files])  and ".f90" in file]
         self.main_program = f"{self.directory}/run.f90"
-        if self.offloading:
-          if self.chosen_modules["energy"] != "noenergy":
-            self.used_files = [x for x in self.used_files if "noenergy.f90" not in x]
+        # print(self.chosen_modules)
+        # if self.offloading:
+        #   if self.chosen_modules["energy"] != "noenergy":
+        #     self.used_files = [x for x in self.used_files if "noenergy.f90" not in x]
           # for module in ["energy"]:
             
         self.not_chosen_files = []
@@ -1242,6 +1243,7 @@ class Parser:
         self.chosen_modules = {}
         if makefile:
             lines = [line.strip().lower() for line in open(makefile,'r').readlines() if  line.strip() != "" and line.strip()[0] != "#" and line.split("=")[0].strip() != "REAL_PRECISION"] 
+            print(lines)
             for line in lines:
                 if len(line.split("=")) == 2:
                     variable = line.split("=")[0].strip()
@@ -1317,7 +1319,7 @@ class Parser:
             checked_local_writes.append({"variable": variable, "line_num": line_num, "local": is_local, "filename": filename, "call_trace": call_trace, "line": line})
 
 
-    def get_pars_lines(self,prefix, name, lines):
+    def get_pars_lines(self,suffix, name, lines):
         res = []
         in_pars = False
         for line in lines:
@@ -1326,40 +1328,41 @@ class Parser:
                 in_pars = False
             if in_pars:
                 res.append(line)
-            if f"&{name}{prefix}_pars" in line:
+            if f"&{name}{suffix}_pars" in line:
                 in_pars = True
-                res.append(line.replace(f"&{name}{prefix}_pars","").replace("/","").strip())
+                print("In pars")
+                res.append(line.replace(f"&{name}{suffix}_pars","").replace("/","").strip())
         #/ is replaced since it represents the end of line
         return [line.replace("/","").strip() for line in res]
     def get_flags_from_lines(self,lines):
         for module in ["grav","density","magnetic","hydro","entropy","viscosity","eos",""]:
             if module:
-                prefixes = ["_init","_run"]
+                suffixes= ["_init","_run"]
             else:
-                prefixes = ["init","run"]
-            for prefix in prefixes:
-                grav_lines = self.get_pars_lines(prefix, module,lines)
+                suffixes= ["init","run"]
+            for suffix in suffixes :
+                module_lines = self.get_pars_lines(suffix, module,lines)
                 res_lines = []
-                for line in grav_lines:
+                for line in module_lines:
                     res_line = line
                     if len(res_line) >0 and res_line[-1] == ",":
                       res_line = res_line[:-1]
                     res_lines.append(res_line)
-                grav_lines = res_lines
-                grav_writes = self.get_writes(grav_lines,False)
+                module_lines = res_lines
+                writes = self.get_writes(module_lines,False)
                 if module:
                     mod = get_mod_from_physics_name(module)
-                    for write in grav_writes:
+                    for write in writes:
                         if write["variable"] in self.rename_dict[mod]:
                             write["variable"] = self.rename_dict[mod][write["variable"]]
                         else:
                             pos_mod = self.get_module_where_declared(write["variable"],self.get_module_file(mod))
                             write["variable"] = self.rename_dict[pos_mod][write["variable"]]
                 else:
-                    for write in grav_writes:
+                    for write in writes:
                         pos_mod = self.get_module_where_declared(write["variable"],f"{self.directory}/param_io.f90")
                         write["variable"] = self.rename_dict[pos_mod][write["variable"]]
-                for write in grav_writes:
+                for write in writes:
                     if write["value"] == "t":
                         self.flag_mappings[write["variable"]] = ".true."
                     elif write["value"] == "f":
@@ -4711,6 +4714,7 @@ class Parser:
         print("did not found module for var: ",static_var)
         print("len possible modules:", len(possible_modules))
         print("possible modules:",possible_modules)
+        print("modules: ",modules)
         for x in possible_modules:
             print(x, static_var in self.rename_dict[x])
             print(x, static_var in self.rename_dict[x])
@@ -5936,6 +5940,7 @@ def main():
     directory_name = config["directory"]
     files = get_used_files(config["use_make_output"],directory_name)
     files = [file for file in files if os.path.isfile(file)]
+    print("config",config)
     parser = Parser(files,config)
     # print(parser.evaluate_indexes("1+3:l2__mod__cdata"))
     # exit()
@@ -6036,6 +6041,10 @@ def main():
 
 
         #get flags from params.log
+        # params_lines = parser.get_lines(f"{parser.sample_dir}/data/params.log")
+        # module_lines = parser.get_pars_lines("_init", "density", params_lines)
+        # print("density init lines",module_lines)
+        # exit()
         parser.get_flags_from_lines(parser.get_lines(f"{parser.sample_dir}/data/params.log"))
         print("\nMappings\n")
         for x in parser.flag_mappings:
