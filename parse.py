@@ -807,6 +807,23 @@ def build_new_access(var,new_indexes):
     res = res + ")"
     return res
 
+def get_chosen_modules(makefile):
+    chosen_modules = {}
+    if makefile:
+        lines = [line.strip().lower() for line in open(makefile,'r').readlines() if  line.strip() != "" and line.strip()[0] != "#" and line.split("=")[0].strip() != "REAL_PRECISION"] 
+        for line in lines:
+            if len(line.split("=")) == 2 and all([x not in line for x in ["@",">","_obj","override","flags","_src","$",".x","ld_"]]) and line[0] != "$":
+                variable = line.split("=")[0].strip()
+                value = line.split("=")[1].strip()
+                chosen_modules[variable] = value
+                if variable == "density":
+                    chosen_modules["density_methods"] = f"{value}_methods"
+                if variable == "eos":
+                    chosen_modules["equationofstate"] = f"{value}"
+                if variable == "entropy":
+                    chosen_modules["energy"] = f"{value}"
+    return chosen_modules
+
 
 class Parser:
 
@@ -898,7 +915,13 @@ class Parser:
         self.struct_table = {}
         self.module_variables = {}
         ignored_files = []
-        self.get_chosen_modules(config["Makefile"])
+        default_modules = get_chosen_modules(f"{config['sample_dir']}/src/Makefile.src")
+        chosen_modules = get_chosen_modules(f"{config['sample_dir']}/src/Makefile.local")
+        for mod in default_modules:
+            if mod not in chosen_modules:
+                chosen_modules[mod] = default_modules[mod]
+        self.chosen_modules = chosen_modules
+        print(self.chosen_modules)
         self.ignored_modules = ["hdf5"]
         self.ignored_files = ["nodebug.f90","/boundcond_examples/","deriv_alt.f90","boundcond_alt.f90", "diagnostics_outlog.f90","pscalar.f90", "/cuda/", "/obsolete/", "/inactive/", "/astaroth/", "/pre_and_post_processing/", "/scripts/"]
         # self.ignored_files = ["nodebug.f90","/boundcond_examples/","deriv_alt.f90","boundcond_alt.f90", "diagnostics_outlog.f90","pscalar.f90", "/cuda/", "/obsolete/", "/inactive/", "/astaroth/", "/initial_condition/", "/pre_and_post_processing/", "/scripts/"]
@@ -1239,22 +1262,6 @@ class Parser:
             for file_path in file_paths:
                 self.parse_file_for_static_variables(file_path)
 
-    def get_chosen_modules(self,makefile):
-        self.chosen_modules = {}
-        if makefile:
-            lines = [line.strip().lower() for line in open(makefile,'r').readlines() if  line.strip() != "" and line.strip()[0] != "#" and line.split("=")[0].strip() != "REAL_PRECISION"] 
-            print(lines)
-            for line in lines:
-                if len(line.split("=")) == 2:
-                    variable = line.split("=")[0].strip()
-                    value = line.split("=")[1].strip()
-                    self.chosen_modules[variable] = value
-                    if variable == "density":
-                        self.chosen_modules["density_methods"] = f"{value}_methods"
-                    if variable == "eos":
-                        self.chosen_modules["equationofstate"] = f"{value}"
-                    if variable == "entropy":
-                        self.chosen_modules["energy"] = f"{value}"
 
     def get_array_segments_in_line(self,line,variables):
         array_vars = self.get_arrays_in_line(line,variables)
