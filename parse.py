@@ -7,6 +7,8 @@ import argparse
 import glob
 import cProfile
 import ctypes
+import ast
+
 
 global_loop_y = "m__mod__cdata"
 global_loop_z = "n__mod__cdata"
@@ -28,22 +30,78 @@ global_subdomain_range_z_lower= "n1__mod__cparam"
 
 farray_register_funcs = ["farray_register_pde","farray_register_auxiliary"]
 
-number_of_fields = "5+0+0+0"
+number_of_fields = ""
+
+def split_line_nml(line):
+    if "=" not in line:
+        return [line]
+    if "&" not in line:
+        return [line]
+    res = []
+    num_of_equals = 0
+    last_start_index  = 0
+    index = 0
+    while(num_of_equals == 0):
+        symbol = line[index]
+        if(symbol == "="):
+            num_of_equals += 1
+            iter_index = 0
+            symbol = line[iter_index]
+            while(symbol != " "):
+                iter_index += 1
+                symbol = line[iter_index]
+            res.append(line[last_start_index:iter_index].strip())
+            last_start_index = iter_index + 1
+            num_of_quotes = 0
+            symbol = line[index]
+            while(not (symbol == "," and num_of_quotes %2 == 0) ):
+                symbol = line[index]
+                if(symbol == '"'):
+                    num_of_quotes += 1
+                index += 1
+            res.append(line[last_start_index:index].strip())
+        index += 1
+    last_start_index = index
+    while(index < len(line)):
+        char = line[index]
+        if(char  == "="):
+            iter_index = index+1
+            symbol = line[index]
+            num_of_quotes = 0
+            # print("HMM", line[last_start_index:index])
+            while(line[iter_index] != "=" and iter_index < len(line)-1):
+                iter_index += 1
+            if(iter_index == len(line) -1 and line[iter_index] == "/"):
+                res.append(f"{line[last_start_index:iter_index]},")
+                break
+                index = len(line) + 1
+            while(line[iter_index] != ","):
+                iter_index -= 1
+            iter_index += 2
+            res.append(line[last_start_index:iter_index])
+            last_start_index = iter_index
+            index = last_start_index
+            # while(not (symbol == "," and num_of_quotes %2 == 0) and iter_index < len(line)-1):
+            #     if(symbol == '"'):
+            #         num_of_quotes += 1
+            #     iter_index += 1
+            #     symbol = line[iter_index]
+            # res.append(line[last_start_index:iter_index+1].strip())
+            # last_start_index = iter_index + 1
+        index += 1
+
+    # while(line[last_start_index] != ","):
+    #     last_start_index -= 1
+    # last_start_index += 1
+    # res.append(line[last_start_index:len(line)-1])
+    if(res[-1][-1] == "/"):
+        res[-1] = res[-1][:-1]
+    res.append("/")
+    return res
 
 checked_local_writes = []
 der_funcs = ["der","der2","der3","der4","der5","der6","der4i2j","der2i2j2k","der5i1j","der3i3j","der3i2j1k","der4i1j1k","derij"]
-implemented_der_funcs = {
-  "der_main": str([("real",[global_subdomain_range_with_halos_x,global_subdomain_range_with_halos_y,global_subdomain_range_with_halos_z,number_of_fields]), ("integer", []), ("real",[global_subdomain_range_x]),("integer",[])]),
-  "derij_main": str([("real",[global_subdomain_range_with_halos_x,global_subdomain_range_with_halos_y,global_subdomain_range_with_halos_z,number_of_fields]), ("integer", []), ("real",[global_subdomain_range_x]),("integer",[]),("integer",[])]),
-  "der2_main": str([("real",[global_subdomain_range_with_halos_x,global_subdomain_range_with_halos_y,global_subdomain_range_with_halos_z,number_of_fields]), ("integer", []), ("real",[global_subdomain_range_x]),("integer",[])]),
-  "der6_main": [
-          str([("real",[global_subdomain_range_with_halos_x,global_subdomain_range_with_halos_y,global_subdomain_range_with_halos_z,number_of_fields]), ("integer", []), ("real",[global_subdomain_range_x]),("integer",[])]),
-          str([("real",[global_subdomain_range_with_halos_x,global_subdomain_range_with_halos_y,global_subdomain_range_with_halos_z,number_of_fields]), ("integer", []), ("real",[global_subdomain_range_x]),("integer",[]),("logical",[])]),
-  ],
-  "der5": str([("real",[global_subdomain_range_with_halos_x,global_subdomain_range_with_halos_y,global_subdomain_range_with_halos_z,number_of_fields]), ("integer", []), ("real",[global_subdomain_range_x]),("integer",[])]),
-  "der4": str([("real",[global_subdomain_range_with_halos_x,global_subdomain_range_with_halos_y,global_subdomain_range_with_halos_z,number_of_fields]), ("integer", []), ("real",[global_subdomain_range_x]),("integer",[])]),
-  "der4i2j": str([("real",[global_subdomain_range_with_halos_x,global_subdomain_range_with_halos_y,global_subdomain_range_with_halos_z,number_of_fields]), ("integer", []), ("real",[global_subdomain_range_x]),("integer",[]),("integer",[])]),
-}
+implemented_der_funcs = {}
 der_func_map = {
   "der_main":
   {
@@ -65,8 +123,270 @@ der_func_map = {
   }
 
 }
-del_funcs = ["del2v_etc"]
+def map_curl(func_call):
+    params = func_call["parameters"]
+    if len(params)>3:
+        pexit("optional params not supported")
+    return f"{params[2]} = curl(Field3(Field({params[1]}),Field({params[1]}+1),Field({params[1]}+2)))"
 
+def map_curl_mn(func_call):
+    #for time being only support carteesian coords
+    params = func_call["parameters"]
+    #other_params = func_call["parameters"][:1] + func_call["parameters"][2:]
+    #return f"{func_call['parameters'][1]}=curl_from_matrix({','.join(other_params)})"
+
+    return f"{func_call['parameters'][1]}=curl_from_matrix({func_call['parameters'][0]})"
+
+def map_dot_mn(func_call):
+    params = func_call["parameters"]
+    if len(params) == 3:
+        return f"{params[2]} = dot({params[0]},{params[1]})"
+    print("hmm",params)
+    pexit("what to about ladd")
+
+def map_del2_main(func_call):
+    params = func_call["parameters"]
+    return f"{params[2]} = laplace(Field({params[1]})"
+
+def map_del2v(func_call):
+    params = func_call["parameters"]
+    if len(params)>3:
+        pexit("optional params not supported")
+    return f"{params[2]} = veclaplace(Field3(Field({params[1]}),Field({params[1]}+1),Field({params[1]}+2)))"
+
+def map_del4v(func_call):
+    params = func_call["parameters"]
+    return f"{params[2]} = vecdel4(Field3(Field({params[1]}), Field({params[1]}+2), Field({params[1]}+2)))"
+
+def map_del6v(func_call):
+    params = func_call["parameters"]
+    if len(params)>3:
+        pexit("optional params not supported")
+    return f"{params[2]} = del6v(Field3(Field({params[1]}),Field({params[1]}+1),Field({params[1]}+2)))"
+
+def map_traceless_strain(func_call):
+    params = func_call["parameters"]
+    if len(params)>3 and params[-1].split("=")[-1].strip() != ".false.":
+        pexit("optional params not supported")
+    if len(params) == 3:
+        return f"{params[2]} = traceless_strain({params[0]},{params[1]})"  
+    return f"{params[1]} = traceless_strain_without_divu({params[0]})"
+
+def map_gij(func_call):
+    params = func_call["parameters"]
+    if(params[3] == "1"):
+        return f"{params[2]} = gradients(Field3(Field({params[1]}), Field({params[1]}+1), Field({params[1]}+2)))"
+    print(params)
+    pexit("what to do")
+
+def map_grad_main(func_call):
+    params = func_call["parameters"]
+    return f"{params[2]} = gradient(Field({params[1]}))"
+def map_div(func_call):
+    params = func_call["parameters"]
+    if len(params)>3:
+        pexit("optional params not supported\n")
+    return f"{params[2]} = divergence(Field3(Field({params[1]}), Field({params[2]}+1), Field({params[2]}+2)))"
+def map_div_mn(func_call):
+    params = func_call["parameters"]
+    if len(params)>3:
+        pexit("optional params not supported\n")
+    return f"{params[1]} = divergence_from_matrix({params[0]})"
+def map_dot2_mn(func_call):
+    params = func_call["parameters"]
+    if len(params)>2:
+        pexit("optional params not supported\n")
+    return f"{params[1]} = dot({params[0]},{params[0]})"
+def map_del2v_etc(func_call):
+    params = func_call["parameters"]
+    print(params)
+    pexit("what to do?")
+def map_cross_mn(func_call):
+    params = func_call["parameters"]
+    return f"{params[2]} = cross({params[0]},{params[1]})"
+def map_multm2_sym_mn(func_call):
+    params = func_call["parameters"]
+    return f"{params[1]} = multm2_sym({params[0]})"
+def map_u_dot_grad_vec(func_call):
+    params = func_call["parameters"]
+    if len(params)>5:
+        pexit("optional params not supported\n")
+    return f"{params[4]} = {params[2]}*{params[1]}"
+def map_u_dot_grad_scl(func_call):
+    params = func_call["parameters"]
+    if len(params)>6:
+        print(params)
+        pexit("optional params not supported\n")
+    if len(params) == 6 and params[5].split("=")[-1].strip() != ".false.":
+        pass
+    elif len(params) == 6 and params[5].split("=")[-1].strip() != ".true.":
+        return f"{params[4]} = dot({params[3]},{params[2]}) - del6_upwd(Field({params[1]}))"
+    else:
+        pexit("don't know whether to do upwinding or not\n")
+    return f"{params[4]} = dot({params[3]},{params[2]})"
+def map_del4(func_call):
+    params = func_call["parameters"]
+    if len(params)>3:
+        pexit("optional params not supported\n")
+    return f"{params[2]} = del4(Field({params[1]})"
+
+def map_del6(func_call):
+    params = func_call["parameters"]
+    if len(params)>3:
+        pexit("optional params not supported\n")
+    return f"{params[2]} = del6(Field({params[1]})"
+def map_del2fi_dxjk(func_call):
+    print(func_call)
+    pexit("what to do?")
+def map_df2i_dxj(func_call):
+    print(func_call)
+    pexit("what to do?")
+def map_d2f_dxj(func_call):
+    print(func_call)
+    pexit("what to do?")
+def map_g2ij(func_call):
+    print(func_call)
+    pexit("what to do?")
+def map_multmv_mn(func_call):
+    params = func_call["parameters"]
+    if len(params)>3:
+        pexit("optional params not supported\n")
+    return f"{params[2]} = {params[0]}*{params[1]}"
+
+sub_funcs = {
+    "multmv_mn":
+    {
+        "output_params_indexes": [2],
+        "map_func": map_multmv_mn
+    },
+    "g2ij":
+    {
+        "output_params_indexes": [2],
+        "map_func": map_g2ij
+    },
+    "d2f_dxj":
+    {
+        "output_params_indexes": [2],
+        "map_func": map_d2f_dxj
+    },
+    "del4":
+    {
+        "output_params_indexes": [2],
+        "map_func": map_del4
+    },
+    "del6":
+    {
+        "output_params_indexes": [2],
+        "map_func": map_del6
+    },
+    "u_dot_grad_vec":
+    {
+        "output_params_indexes":  [4],
+        "map_func": map_u_dot_grad_vec
+    },
+    "u_dot_grad_scl":
+    {
+        "output_params_indexes":  [4],
+        "map_func": map_u_dot_grad_scl
+    },
+    "multm2_sym_mn":
+    {
+        "output_params_indexes": [1],
+        "map_func": map_multm2_sym_mn
+    },
+    "cross_mn":
+    {
+        "output_params_indexes": [2],
+        "map_func": map_cross_mn
+    },
+    "curl_mn":
+    {
+        "output_params_indexes": [1],
+        "map_func": map_curl_mn
+    },
+    "dot_mn":
+    {
+        "output_params_indexes": [3],
+        "map_func": map_dot_mn
+    },
+    "dot_0":
+    {
+        "output_params_indexes": [3],
+        "map_func": map_dot_mn
+    },
+    "dot_mn_sv":
+    {
+        "output_params_indexes": [3],
+        "map_func": map_dot_mn
+    },
+    "dot2_mn":
+    {
+        "output_params_indexes": [1],
+        "map_func": map_dot2_mn
+    },
+    "del2_main":
+    {
+        "output_params_indexes": [2],
+        "map_func": map_del2_main
+    },
+    "del2v":
+    {
+        "output_params_indexes": [2],
+        "map_func": map_del2v
+    },
+    "del4v":
+    {
+        "output_params_indexes": [2],
+        "map_func": map_del4v
+    },
+    "del6v":
+    {
+        "output_params_indexes": [2],
+        "map_func": map_del6v
+    },
+    "traceless_strain":
+    {
+        #only one output, but because of optional params can't know which one
+        "output_params_indexes": [1,2],
+        "map_func": map_traceless_strain
+    },
+    "gij":
+    {
+        "output_params_indexes": [2],
+        "map_func": map_gij
+    },
+    "grad_main":
+    {
+        "output_params_indexes": [2],
+        "map_func": map_grad_main
+    },
+    "div":
+    {
+        "output_params_indexes": [2],
+        "map_func": map_div
+    },
+    "div_mn":
+    {
+        "output_params_indexes": [1],
+        "map_func": map_div_mn
+    },
+    "curl":{
+        "output_params_indexes": [2],
+        "map_func": map_curl
+    },
+    "del2v_etc":{
+        "output_params_indexes": [2,3,4,5],
+        "map_func": map_del2v_etc
+    },
+    "del2fi_dxjk":{
+        "output_params_indexes": [2],
+        "map_func": map_del2fi_dxjk
+    },
+    "d2fi_dxj":{
+        "output_params_indexes": [2],
+        "map_func": map_df2i_dxj
+    }
+}
 mk_param_lines = [
     "logical, parameter, dimension(npencils):: lpenc_required  = .false.",
     "logical,            dimension(npencils):: lpenc_diagnos   = .false.",
@@ -182,6 +502,7 @@ def parse_declaration_value(value):
     return value[:index]
 
 def parse_input_string(param,string_symbol):
+        print(param)
         res = []
         char = param[0]
         index = 0
@@ -235,6 +556,7 @@ def parse_input_string(param,string_symbol):
                         char = param[index]
             else:
                 print("huh")
+                print(param, string_symbol)
                 pexit(char)
         return [f"{string_symbol}{x}{string_symbol}" for x in res]
 def parse_input_number_part(part):
@@ -247,13 +569,19 @@ def parse_input_number(param):
   for x in lists:
     res.extend(x)
   return res
+
 def parse_input_param(param):
+    if param.strip() == "":
+        return ["''"]
     if "'" in param and ("," in param or "*" in param):
+      print("HMM", param)
       return parse_input_string(param,"'")
     if '"' in param and ("," in param or "*" in param):
       return parse_input_string(param,'"')
     if "." in param and ("," in param or "*" in param):
       return parse_input_number(param)
+    if not any([x.isdigit() or x == "," for x in param]):
+        return [f'"{x.strip()}"' for x in param.split(" ") if x.strip() != ""]
     return param
 def get_func_from_trace(trace):
   if "->" not in trace:
@@ -921,7 +1249,6 @@ class Parser:
             if mod not in chosen_modules:
                 chosen_modules[mod] = default_modules[mod]
         self.chosen_modules = chosen_modules
-        print(self.chosen_modules)
         self.ignored_modules = ["hdf5"]
         self.ignored_files = ["nodebug.f90","/boundcond_examples/","deriv_alt.f90","boundcond_alt.f90", "diagnostics_outlog.f90","pscalar.f90", "/cuda/", "/obsolete/", "/inactive/", "/astaroth/", "/pre_and_post_processing/", "/scripts/"]
         # self.ignored_files = ["nodebug.f90","/boundcond_examples/","deriv_alt.f90","boundcond_alt.f90", "diagnostics_outlog.f90","pscalar.f90", "/cuda/", "/obsolete/", "/inactive/", "/astaroth/", "/initial_condition/", "/pre_and_post_processing/", "/scripts/"]
@@ -1068,55 +1395,7 @@ class Parser:
             orig_value = value
             while value in self.known_values:
                 value = self.known_values[value]
-        if "(" in value and ("/" in value or "*" in value):
-            pexit("/ and * not supported with braces")
-
-        if ("+" in value or "-" in value) and "*" not in value and "/" not in value:
-            while "(" in value:
-                start_index = -1
-                end_index = -1
-                for i,char in enumerate(value):
-                    if char == "(" and end_index<0 and (value[i-1] in " */-+( " or i==0) :
-                        start_index = i
-                    if char == ")" and end_index<0 and start_index>-1:
-                        end_index = i
-                if start_index > -1 and end_index >-1:
-                    inside = self.evaluate_integer(value[start_index+1:end_index])
-                    res_value = value[:start_index]
-                    res_value += inside
-                    res_value += value[end_index+1:]
-                    value = res_value
-            res = ""
-            sum = 0
-            remove_indexes = []
-            if value[0].isnumeric():
-              remove_indexes.append(0)
-              sum += eval(value[0])
-            for i in range(1,len(value)):
-                last_char = value[i-1]
-                char = value[i]
-                if last_char == "+" and char.isnumeric():
-                    remove_indexes.extend([i-1,i])
-                    sum += eval(char)
-                if last_char == "-" and char.isnumeric():
-                    remove_indexes.extend([i-1,i])
-                    sum -= eval(char)
-            res_value = ""
-            for i, char in enumerate(value):
-                if i not in remove_indexes:
-                    res_value += char
-            if sum == 0:
-                return res_value
-            #if neg then - is already there
-            if sum < 0:
-                return res_value + f"{sum}"
-            #was able to full constant folding
-            if res_value == "":
-              return f"{sum}"
-            return res_value + "+" + f"{sum}"
-        if value in self.known_ints:
-            value = self.known_ints[value]
-        return value
+        return ast.simplify(value)
 
     def evaluate_indexes(self,value):
         if value == ":":
@@ -1164,12 +1443,6 @@ class Parser:
                     res_value += "ldon't_know"
                 res_value += value[end_index+1:]
                 res = self.evaluate_boolean_helper(res_value,local_variables,func_calls)
-                #if was not able to deduce abort
-                # if not has_balanced_parens(value):
-                #     print("not balanced")
-                #     print(value)
-                #     print("---->")
-                #     print(res)
                 if "ldon't_know" in res:
                     return value
                 value = res
@@ -1286,6 +1559,8 @@ class Parser:
         return [seg for seg in get_variable_segments(line,search_vars) if seg[0] != ""]
     def get_arrays_in_line(self,line,variables):
         variables_in_line= get_used_variables_from_line(line)
+        print("vars in line", line, variables_in_line)
+        print("vdrift_175" in variables)
         res = []
         for var in variables_in_line:
             if var in variables and len(variables[var]["dims"]) > 0:
@@ -1327,6 +1602,10 @@ class Parser:
 
 
     def get_pars_lines(self,suffix, name, lines):
+        tmp_lines = []
+        for line in lines:
+            tmp_lines.extend(split_line_nml(line))
+        lines = tmp_lines
         res = []
         in_pars = False
         for line in lines:
@@ -1342,6 +1621,8 @@ class Parser:
         #/ is replaced since it represents the end of line
         return [line.replace("/","").strip() for line in res]
     def get_flags_from_lines(self,lines):
+
+
         for module in ["grav","density","magnetic","hydro","entropy","viscosity","eos",""]:
             if module:
                 suffixes= ["_init","_run"]
@@ -1382,6 +1663,9 @@ class Parser:
                         self.flag_mappings[write["variable"]] = "impossible"
                     else:
                       self.flag_mappings[write["variable"]] = write["value"]
+        for flag in self.flag_mappings:
+            if(self.flag_mappings[flag] == ""):
+                self.flag_mappings[flag] == "''"
     def get_variables_from_line(self, line,line_num,variables,filename,module,local,in_public):
         parts = [part.strip() for part in line.split("::")]
         start =  parts[0].strip()
@@ -1463,7 +1747,15 @@ class Parser:
                 if "rkind8" in line and type == "real":
                     type = "double"
                 type = type.lower()
-                var_object = {"type": type, "dims": dims, "allocatable": allocatable, "origin": [filename], "public": public, "threadprivate": False, "saved_variable": (saved_variable or "=" in line_variables.split(",")[i]), "parameter": is_parameter, "on_target": False, "optional": is_optional, "line_num": line_num}
+                if dims in [["my"],["ny"]]:
+                    profile_type = "y"
+                elif dims in [["mx"],["nx"]]:
+                    profile_type = "x"
+                elif dims in [["mz"],["nz"]]:
+                    profile_type = "z"
+                else:
+                    profile_type = None
+                var_object = {"type": type, "dims": dims, "allocatable": allocatable, "origin": [filename], "public": public, "threadprivate": False, "saved_variable": (saved_variable or "=" in line_variables.split(",")[i]), "parameter": is_parameter, "on_target": False, "optional": is_optional, "line_num": line_num, "profile_type": profile_type}
                 if is_parameter or "=" in line:
                   var_writes = [x for x in writes if x["variable"] == variable_name and "kind" not in x["value"]]
                   #these have meaning to Astaroth
@@ -1628,13 +1920,14 @@ class Parser:
                                         cur_index += 1
                                         cur_line = read_lines[cur_index].lower()
                                     #add also mod name version
-                                    mod_sub_name = get_mod_name(sub_name,module_name)
-                                    if mod_sub_name not in self.func_info:
-                                      self.func_info[mod_sub_name] = {"files": []}
-                                    if "interface_funcs" not in self.func_info[mod_sub_name]:
-                                      self.func_info[mod_sub_name]["interface_funcs"] = {"files": [], "lines": {}}
-                                    self.func_info[mod_sub_name]["files"].append(filepath)
-                                    self.func_info[mod_sub_name]["interface_funcs"][filepath] = self.func_info[sub_name]["interface_funcs"][filepath]
+                                    if ".h" not in filepath:
+                                        mod_sub_name = get_mod_name(sub_name,module_name)
+                                        if mod_sub_name not in self.func_info:
+                                            self.func_info[mod_sub_name] = {"files": []}
+                                        if "interface_funcs" not in self.func_info[mod_sub_name]:
+                                            self.func_info[mod_sub_name]["interface_funcs"] = {"files": [], "lines": {}}
+                                        self.func_info[mod_sub_name]["files"].append(filepath)
+                                        self.func_info[mod_sub_name]["interface_funcs"][filepath] = self.func_info[sub_name]["interface_funcs"][filepath]
                                     
 
                         
@@ -1771,7 +2064,7 @@ class Parser:
                 num_of_single_quotes += 1
             elif elem == '"':
                 num_of_double_quotes += 1
-            elif elem == "=" and line[index-1] not in "/<>=!" and line[index+1] not in "/<>=!" and num_of_single_quotes%2==0 and num_of_double_quotes%2==0 and num_of_left_brackets == num_of_right_brackets:
+            elif elem == "=" and line[index-1] not in "/<>=!" and (index>=len(line)-2 or line[index+1] not in "/<>=!") and num_of_single_quotes%2==0 and num_of_double_quotes%2==0 and num_of_left_brackets == num_of_right_brackets:
                 write = self.parse_variable(line[start_index:index])
                 variable = write
                 if to_lower:
@@ -2274,17 +2567,20 @@ class Parser:
               if self.find_module_files(mod) == []:
                 del self.file_info[filename]["used_modules"][mod]
     def update_static_var_dims(self):
+      number_of_updated_values = 0
       for var in self.static_variables:
         for i, dim in enumerate(self.static_variables[var]["dims"]):
           file = self.static_variables[var]["origin"][0]
-          if dim in ["nx","ny","nz","mx","my","mz"]:
-            self.static_variables[var]["dims"][i] = self.rename_line_to_internal_names(dim, {},self.file_info[file]["used_modules"], self.get_own_module(file))
-            dim = self.static_variables[var]["dims"][i]
-            known_parameters_in_dim= [x for x in self.static_variables if self.static_variables[x]["parameter"] and "value" in self.static_variables[x] and x in dim]
-            replace_dict = {}
-            for x in known_parameters_in_dim:
-              replace_dict[x] = self.static_variables[x]["value"]
-            self.static_variables[var]["dims"][i] = self.replace_variables_multi(dim, replace_dict)
+          self.static_variables[var]["dims"][i] = self.rename_line_to_internal_names(dim, {},self.file_info[file]["used_modules"], self.get_own_module(file))
+          dim = self.static_variables[var]["dims"][i]
+          known_parameters_in_dim= [x for x in self.static_variables if self.static_variables[x]["parameter"] and "value" in self.static_variables[x] and x in dim]
+          replace_dict = {}
+          for x in known_parameters_in_dim:
+            replace_dict[x] = self.static_variables[x]["value"]
+          new_dim = self.evaluate_integer(self.replace_variables_multi(dim, replace_dict))
+          if(new_dim != self.static_variables[var]["dims"][i]):
+            number_of_updated_values += 1
+          self.static_variables[var]["dims"][i] = new_dim
             # for var in self.static_variables
             # if dim in self.static_variables and self.static_variables[dim]["parameter"] and "value" in self.static_variables[dim]:
             #   self.static_variables[var]["dims"][i] = self.static_variables[dim]["value"]
@@ -2293,38 +2589,93 @@ class Parser:
         for field in self.struct_table[struct]:
           file = self.struct_table[struct][field]["origin"][0]
           for i, dim in enumerate(self.struct_table[struct][field]["dims"]):
-            if dim in ["nx","ny","nz","mx","my","mz","n_forcing_cont_max"]:
-                self.struct_table[struct][field]["dims"][i] = self.rename_line_to_internal_names(dim, {},self.file_info[file]["used_modules"], self.get_own_module(file))
-                dim = self.struct_table[struct][field]["dims"][i]
-                known_parameters_in_dim= [x for x in self.static_variables if self.static_variables[x]["parameter"] and "value" in self.static_variables[x] and x in dim]
-                replace_dict = {}
-                for x in known_parameters_in_dim:
-                  replace_dict[x] = self.static_variables[x]["value"]
-                self.struct_table[struct][field]["dims"][i] = self.replace_variables_multi(dim, replace_dict)
-
-    def update_static_var_values(self):
-      for var in self.static_variables:
+            self.struct_table[struct][field]["dims"][i] = self.rename_line_to_internal_names(dim, {},self.file_info[file]["used_modules"], self.get_own_module(file))
+            dim = self.struct_table[struct][field]["dims"][i]
+            known_parameters_in_dim= [x for x in self.static_variables if self.static_variables[x]["parameter"] and "value" in self.static_variables[x] and x in dim]
+            replace_dict = {}
+            for x in known_parameters_in_dim:
+                replace_dict[x] = self.static_variables[x]["value"]
+            new_dim = self.evaluate_integer(self.replace_variables_multi(dim, replace_dict))
+            if(new_dim != self.struct_table[struct][field]["dims"][i]):
+                number_of_updated_values += 1
+            self.struct_table[struct][field]["dims"][i] = new_dim
+      return number_of_updated_values
+    
+    def update_static_var_value(self,var):
         if "value" in self.static_variables[var] and "mpi" not in self.static_variables[var]["value"]:
           file = self.static_variables[var]["origin"][0]
-          self.static_variables[var]["value"] = self.rename_line_to_internal_names(self.static_variables[var]["value"], {},self.file_info[file]["used_modules"], self.get_own_module(file))
-      
-      #recurse until base known values
-      for var in self.static_variables:
+          #remove all use guards from use statements for modules for this use case
+          modules = self.file_info[file]["used_modules"]
+          for mod in modules:
+            modules[mod] = None
+          self.static_variables[var]["value"] = self.rename_line_to_internal_names(self.static_variables[var]["value"], {},modules, self.get_own_module(file))
+
+        changed = False
         if "value" in self.static_variables[var] and "mpi" not in self.static_variables[var]["value"]:
           value = self.static_variables[var]["value"]
-          known_parameters_in_value= [x for x in self.static_variables if self.static_variables[x]["parameter"] and "value" in self.static_variables[x] and x in value]
+          value_parts = [value]
+          for char in [" ","+","-","*","/"]:
+            tmp = []
+            for part in value_parts:
+                tmp.extend(part.split(char))
+            value_parts = tmp
+          known_parameters_in_value= [x for x in self.static_variables if self.static_variables[x]["parameter"] and "value" in self.static_variables[x] and x in value_parts]
+          #if scientific number
+          if "." in value and "e" in value and "'" in value:
+            known_parameters_in_value = []
+          #recurse until base known values
           while(len(known_parameters_in_value)>0):
+            value_parts = []
+            for char in [" ","+","-","*","/"]:
+                tmp = []
+                for part in value_parts:
+                    tmp.extend(part.split(char))
+                value_parts = tmp
             replace_dict = {}
             for x in known_parameters_in_value:
               replace_dict[x] = self.static_variables[x]["value"]
             value = self.replace_variables_multi(value, replace_dict)
-            known_parameters_in_value= [x for x in self.static_variables if self.static_variables[x]["parameter"] and "value" in self.static_variables[x] and x in value]
+            known_parameters_in_value= [x for x in self.static_variables if self.static_variables[x]["parameter"] and "value" in self.static_variables[x] and x in value_parts]
+            if "." in value and "e" in value or ("'" in value):
+                known_parameters_in_value = []
+          if(self.static_variables[var]["value"] != value):
+            changed = True
+          if(self.static_variables[var]["type"] == "integer"):
+            value = self.evaluate_integer(value)
           self.static_variables[var]["value"] = value
+        return changed
+
+    def update_static_var_values(self):
+      number_of_updated_values = 0
+      for var in self.static_variables:
+        if self.update_static_var_value(var):
+            number_of_updated_values += 1
+      return number_of_updated_values
+
 
     def update_static_vars(self):
-      self.update_static_var_values()
-      self.update_static_var_dims()
-    
+      some_value_was_updated = True
+      while(some_value_was_updated):
+        number_of_updated_values = self.update_static_var_values()
+        print("number of updated values:",number_of_updated_values)
+        some_value_was_updated = number_of_updated_values > 0
+      some_value_was_updated = True
+      while(some_value_was_updated):
+        number_of_updated_values = self.update_static_var_dims()
+        print("number of updated values:",number_of_updated_values)
+        some_value_was_updated = number_of_updated_values > 0
+
+
+    def update_func_info(self):
+        for func in self.func_info:
+            if "interface_funcs" in self.func_info[func]:
+                all_interface_funcs = []
+                for key in self.func_info[func]["interface_funcs"]:
+                    if key not in ["lines","files"]:
+                        all_interface_funcs.extend(self.func_info[func]["interface_funcs"][key])
+                self.func_info[func]["all_interface_funcs"] = all_interface_funcs
+
+
     def get_local_module_variables(self,filename,subroutine_name):
         res = {}
         #Variables in own file take precedence 
@@ -2610,8 +2961,8 @@ class Parser:
             return (parameter[0], False, "logical", [])
         elif "(" in parameter[0] and ")" in parameter[0] and not any(operations) and ".and." not in parameter[0] and ".not." not in parameter[0]:
             var = parameter[0].split("(")[0].strip()
-            if var in local_variables or var in local_module_variables:
-                return self.get_var_info_from_array_access(parameter,local_variables,local_module_variables)
+            if var in local_variables or var in local_module_variables or var in self.static_variables:
+                return self.get_var_info_from_array_access(parameter,local_variables,self.static_variables)
             ##Boolean intrinsic funcs
             elif var in ["present","isnan","associated","allocated","all","any"]:
                 return (parameter[0],False,"logical",[])
@@ -2620,6 +2971,7 @@ class Parser:
             else:
                 #check if function in source code
                 print(parameter)
+                print(self.static_variables["feta_ztdep__mod__magnetic"])
                 pexit("how did I end up here?")
         else:
             type =""
@@ -3059,6 +3411,9 @@ class Parser:
             return "*".join(sizes)
         else:
             dim = func_call["parameters"][1]
+            print("TP DIM",dim)
+            print(sizes)
+            print(func_call)
             return  sizes[int(dim)-1]
     def replace_func_call(self, line,func_call, replacement):
         return line[:func_call["range"][0]] + replacement + line[func_call["range"][1]:]
@@ -3286,26 +3641,6 @@ class Parser:
         for count,line in enumerate(lines):
             if line.strip() == "return":
                 has_return_line = True
-        # if has_return_line:
-        #     print("\n\nlines before elimination\n\n")
-        #     for (line,count) in lines:
-        #         print(line)
-            # lines = [(line,0) for line in self.eliminate_while([x[0] for x in lines])]
-        #TODO: fix
-        # if has_return_line:
-        #     print("\n\nlines after elimination\n\n")
-        #     for (line,count) in lines:
-        #         print(line)
-        #     if self.has_no_ifs(lines):
-        #         remove_indexes = []
-        #         has_return_line = False
-        #         for line_index,(line,count) in enumerate(lines):
-        #             has_return_line = has_return_line or line == "return"
-        #             if has_return_line:
-        #                 remove_indexes.append(line_index)
-        #         lines = [x[1] for x in enumerate(lines) if x[0] not in remove_indexes]
-        #     else:
-        #         pexit("don't know what to do since return statement in a conditional branch")
         for count,line in enumerate(lines):
             if ".false.=.true." in line:
                 print("don't want to inline this func")
@@ -3561,14 +3896,23 @@ class Parser:
                   found_modules.append(mod)
               else:
                 found_modules.append(mod)
+        #if didn't find to fallbacks
         if len(found_modules) == 0:
             if segment[0] in self.rename_dict[info["own_module"]]:
                 found_modules.append(info["own_module"])
+        
         # print("var:", segment[0])
         # print("seg:",line[segment[1]:segment[2]])
         # print("line",line)
         # print(found_modules)
-        assert(len(found_modules) == 1)
+        if(len(found_modules) != 1):
+            print(line[segment[1]:segment[2]])
+            print(found_modules)
+            print("int_sgl" in self.module_info["cparam"]["public_variables"])
+            print("int_sgl" in self.rename_dict["cparam"])
+            print(segment[0] == "int_sgl")
+            print(len(found_modules))
+            pexit("should be only a single module")
         return line[segment[1]:segment[2]].replace(segment[0],self.rename_dict[found_modules[0]][segment[0]])
 
     def unroll_range(self,segment,segment_index,line,local_variables,info):
@@ -3699,18 +4043,6 @@ class Parser:
             return line[segment[1]:segment[2]]
         if segment[0] in info["possible_values"]:
             return replace_variable(line[segment[1]:segment[2]], segment[0], f"({info['possible_values'][segment[0]]})")
-            
-            # indexes = get_segment_indexes(segment,line,1)
-            # is_safe = indexes[0] in [":",f"{global_subdomain_range_x_lower}:{global_subdomain_range_x_upper}"] or len(local_variables[var]["dims"]) == 0
-            # if is_safe:
-            #     res = "("  + replace_variable(line[segment[1]:segment[2]].split("(",1)[0].strip(), var, info["possible_values"][var]) + ")"
-            #     return res
-            #     # add_line =  replace_variable(line[segment[1]:segment[2]], var, possible_values[var])
-            # else:
-            #     print("not safe abort")
-            #     print(line)
-            #     print(line[segment[1]:segment[2]])
-            #     exit()
         return line[segment[1]:segment[2]]
     def replace_segments(self,segments,line,map_func,local_variables,info):
         res_line = ""
@@ -3828,6 +4160,13 @@ class Parser:
       inline_constants = {}
       remove_indexes = []
       local_variables = {parameter:v for parameter,v in self.get_variables(lines, {},self.file, True).items() }
+      tmp_local_variables = {}
+      #skip those local variables which value is not known or their value depend on their own value
+      for var in local_variables:
+        if("value" in local_variables[var] and var not in local_variables[var]["value"]):
+            tmp_local_variables[var] = local_variables[var]
+      local_variables = tmp_local_variables
+
       if also_local_variables:
         for var in local_variables:
             if local_variables[var]["parameter"] and local_variables[var]["dims"] == [] and "value" in local_variables[var]:
@@ -3840,8 +4179,15 @@ class Parser:
       return [x[1] for x in enumerate(self.replace_vars_in_lines(lines,inline_constants)) if x[0] not in remove_indexes]
     def eliminate_while(self,lines,unroll=False,take_last_write_as_output=False):
         local_variables = {parameter:v for parameter,v in self.get_variables(lines, {},self.file, True).items() }
+        lines = self.normalize_where_calls(lines, local_variables)
         lines = self.normalize_if_calls(lines, local_variables)
         lines = self.normalize_where_calls(lines, local_variables)
+        lines = self.normalize_if_calls(lines, local_variables)
+
+        for line in lines:
+            if "addbext:" in line:
+                print("wrong",line)
+                pexit("abort")
         remove_indexes = []
         #Matthias said that lcoarse_mn is broken for now
         #No communication
@@ -3867,45 +4213,23 @@ class Parser:
         lines = self.inline_known_parameters(lines,local_variables)
         if unroll:
           lines = self.unroll_constant_loops(lines,local_variables)
-        for line in lines:
-          if "if(*/=0.) then" in line:
-            print("WRONG")
-            pexit(line)
 
         for line_index in range(len(lines)):
             for x in [x for x in self.flag_mappings if "(" in x and ")" in x]:
                 orig_line = lines[line_index]
                 lines[line_index]= lines[line_index].replace(x,self.flag_mappings[x])
-                if "if(*/=0.) then" in lines[line_index]:
-                  print("before:", orig_line)
-                  print("mapping",x)
-                  print("mapping val",self.flag_mappings[x])
-                  print("WRONG")
-                  pexit(lines[line_index])
         #     for mapping in self.flag_mappings:
         #         if "(" in mapping:
         #             lines[line_index] = lines[line_index].replace(mapping,self.flag_mappings[mapping])
         for line_index in range(len(lines)):
             lines[line_index] = self.replace_variables_multi(lines[line_index],self.flag_mappings)
-        for line in lines:
-          if "if(*/=0.) then" in line:
-            print("WRONG")
-            pexit(line)
         # done twice since can have lflag_a -> lflag_b .or. lflag_c
         for line_index in range(len(lines)):
             lines[line_index] = self.replace_variables_multi(lines[line_index],self.flag_mappings)
 
 
-        for line in lines:
-          if "if(*/=0.) then" in line:
-            print("WRONG")
-            pexit(line)
         lines = self.transform_case(lines)
         ##Needed to remove size from variable dims
-        for line in lines:
-          if "if(*/=0.) then" in line:
-            print("WRONG")
-            pexit(line)
         local_variables = {parameter:v for parameter,v in self.get_variables(lines, {},self.file, True).items() }
 
 
@@ -4001,10 +4325,6 @@ class Parser:
         #   print(self.flag_mappings["lgravx__mod__cdata"])
         #   exit()
 
-        for line in lines:
-          if "if(*/=0.) then" in line:
-            print("WRONG")
-            pexit(line)
         return lines
     def get_ac_matrix_res(self,segment,indexes):
       #read/write to matrix indexes
@@ -4093,9 +4413,9 @@ class Parser:
                         and var_dims in [[global_subdomain_range_x],[global_subdomain_range_with_halos_x],[global_subdomain_range_y],[global_subdomain_range_with_halos_y],[global_subdomain_range_z],[global_subdomain_range_with_halos_z],[global_subdomain_range_x,global_subdomain_range_with_halos_y]]
                         and len([x for x in writes if x["variable"] == segment[0]])  == 0
                       )
-                    if is_profile:
+                    if src[segment[0]]["profile_type"]:
                         #PROFILE_X
-                        if var_dims in [[global_subdomain_range_x],[global_subdomain_range_with_halos_x]]:
+                        if src[segment[0]]["profile_type"] == "x":
                             if indexes not in [[],[f"{global_subdomain_range_x_lower}:{global_subdomain_range_x_upper}"],[f"{global_subdomain_range_x_lower}+3:{global_subdomain_range_x_upper}+3"],[f"{global_subdomain_range_x_lower}-1:{global_subdomain_range_x_upper}-1"]]:
                                 print(indexes)
                                 print("WEIRD INDEX in profile_x")
@@ -4107,7 +4427,7 @@ class Parser:
                             if indexes == [f"{global_subdomain_range_x_lower}-1:{global_subdomain_range_x_upper}-1"]:
                                 profile_index = "-1"
                         #PROFILE_Y
-                        elif var_dims in [[global_subdomain_range_y],[global_subdomain_range_with_halos_y]]:
+                        elif src[segment[0]]["profile_type"] == "y":
                             if indexes not in  [[global_loop_y],[f"{global_loop_y}-1"]]:
                                 print("WEIRD INDEX in profile_y")
                                 print(indexes)
@@ -4116,7 +4436,7 @@ class Parser:
                             if indexes == [f"{global_loop_y}-1"]:
                                 profile_index = "-1"
                         #PROFILE_Z
-                        elif var_dims in [[global_subdomain_range_z],[global_subdomain_range_with_halos_z]]:
+                        elif src[segment[0]]["profile_type"] == "z":
                             if indexes not in [[global_loop_z],[f"{global_loop_z}+3"],[f"{global_loop_z}-1"],[f"{global_loop_z}-3"]]:
                                 print("WEIRD INDEX in profile_z")
                                 print(indexes)
@@ -4359,7 +4679,9 @@ class Parser:
                     print("DO LINE",line)
                     print("PARTS:",lower,upper)
                     print(self.evaluate_integer("1+1"))
-                    if lower.isnumeric() and upper.isnumeric():
+                    #for the time being only unroll vector loops
+                    #i.e. lower=1;upper=3
+                    if lower.isnumeric() and upper.isnumeric() and int(upper)<int(global_subdomain_range_x)-10:
                         loop_index = write["variable"]
                         in_constant_loop = True
                         do_nest_num = 1
@@ -4525,6 +4847,7 @@ class Parser:
                     assert(False)
               else:
                 print("no der case for ", interfaced_call)
+                print(func_calls[0])
                 assert(False)
               return res
 
@@ -4639,12 +4962,13 @@ class Parser:
             lines = [x[1] for x in enumerate(lines) if x[0] not in remove_indexes]
         return lines
     def elim_empty_branches(self,lines,local_variables):
+
         orig_line_len = len(lines)+1
         while(orig_line_len > len(lines)):
             orig_line_len = len(lines)
             remove_indexes = []
-            for line_index, line in enumerate(lines[:-2]):
-                if "if" in line and "then" in line:
+            for line_index, line in enumerate(lines):
+                if "if" in line and "then" in line and "else" not in line:
                     if_calls = [call for call in self.get_function_calls_in_line(line,local_variables) if call["function_name"] == "if"]
                     if len(if_calls) == 1:
                         if any([x == lines[line_index+1] for x in ["endif", "end if"]]):
@@ -4652,61 +4976,107 @@ class Parser:
                             remove_indexes.append(line_index+1)
                         elif lines[line_index+1] == "else" and any([x == lines[line_index+2] for x in ["endif", "end if"]]):
                             remove_indexes.extend([line_index,line_index+1,line_index+2])
+                # if "else if" in line and (lines[line_index+1] == "endif" or "else if" in lines[line_index+1]):
+                #     remove_indexes.append(line_index)
+                # elif "if" in line and "then" in line and "else" in line:
+                #     if lines[line_index+1] == "endif":
+                #         remove_indexes.append(line_index)
             lines = [x[1] for x in enumerate(lines) if x[0] not in remove_indexes]
         return lines
+
+    def get_var_use_info(self,lines,local_variables,variables):
+        var_dict = {}
+        writes = self.get_writes(lines,False)
+        needed_func_call_lines = []
+        #the first line is the subroutine we are transforming so skip it
+        func_calls = self.get_function_calls(lines,local_variables,False)
+        for call in func_calls:
+            if call["function_name"] in der_funcs:
+                output_param = call["parameters"][2].split("(")[0].strip()
+                if output_param not in var_dict:
+                    var_dict[output_param] = {
+                        "indexes": [],
+                        "is_used": False
+                    }
+                var_dict[output_param]["indexes"].append(call["line_num"])
+            if call["function_name"] in sub_funcs:
+                for i,_ in enumerate(call["parameters"]):
+                    param = call["parameters"][i].split("=")[-1].strip()
+                    if param not in var_dict:
+                        var_dict[param] = {
+                            "indexes": [],
+                            "is_used": False
+                        }
+                    var_dict[param]["indexes"].append(call["line_num"])
+                    if i not in sub_funcs[call["function_name"]]["output_params_indexes"]:
+                        var_dict[param]["is_used"] = True
+
+                    #if multiple output params things get weird if one is used but another one is not
+                    #so for now keep those func calls
+                    if len(sub_funcs[call["function_name"]]["output_params_indexes"]) > 1:
+                        needed_func_call_lines.append(call["line_num"])
+
+        for write in [x for x in writes if x["variable"] not in [".false.",".true."]]:
+                line = write["line"]
+                line_index = write["line_num"]
+                rhs_segment = get_variable_segments(line, [write["variable"]])
+                if len(rhs_segment) == 0:
+                    rhs_segment = self.get_struct_segments_in_line(line, [write["variable"]])
+                rhs_segment  = rhs_segment[0]
+                var_name = line[rhs_segment[1]:rhs_segment[2]].split("::",1)[-1].split("(",1)[0].strip()
+                if var_name not in var_dict:
+                    var_dict[var_name] = {
+                        "indexes": [],
+                        "is_used": False
+                    }
+                    #some calls imply a write so redundant to check for it
+                    for call in [call for call in func_calls if call["function_name"] not in ["max","min","maxval","cos","sin","cosh","sinh"] and var_name in call["line"]]:
+                        if var_name in call["parameters"]:
+                            var_dict[var_name]["is_used"] = True
+
+                for var_name_in_dict in [x for x in var_dict if not var_dict[x]["is_used"]]:
+                    if (("%" in var_name_in_dict and var_name_in_dict in write["value"]) or (var_name_in_dict in write["value"] and var_name_in_dict in get_used_variables_from_line(write["value"],False))):
+                        if var_name_in_dict != var_name:
+                            var_dict[var_name_in_dict]["is_used"] = True
+                var_dict[var_name]["indexes"].append(line_index)
+        return (var_dict, needed_func_call_lines)
+            
+                
+
     def elim_unnecessary_writes_and_calls(self,lines,local_variables,variables):
         orig_lines_len = len(lines)+1
         while(orig_lines_len>len(lines)):
-            print(orig_lines_len,len(lines))
             orig_lines_len = len(lines)
             #elim empty if branches
             lines = self.elim_empty_branches(lines,local_variables)
-            var_dict = {}
-            writes = self.get_writes(lines,False)
-            #the first line is the subroutine we are transforming so skip it
-            func_calls = self.get_function_calls(lines,local_variables,False)
-            for call in func_calls:
-                if call["function_name"] in der_funcs:
-                    output_param = call["parameters"][2].split("(")[0].strip()
-                    if output_param not in var_dict:
-                        var_dict[output_param] = {
-                            "indexes": [],
-                            "is_used": False
-                        }
-                    var_dict[output_param]["indexes"].append(call["line_num"])
-            for write in [x for x in writes if x["variable"] not in [".false.",".true."]]:
-                    line = write["line"]
-                    line_index = write["line_num"]
-                    rhs_segment = get_variable_segments(line, [write["variable"]])
-                    if len(rhs_segment) == 0:
-                        rhs_segment = self.get_struct_segments_in_line(line, [write["variable"]])
-                    rhs_segment  = rhs_segment[0]
-                    var_name = line[rhs_segment[1]:rhs_segment[2]].split("::",1)[-1].split("(",1)[0].strip()
-                    if var_name not in var_dict:
-                        var_dict[var_name] = {
-                            "indexes": [],
-                            "is_used": False
-                        }
-                        #some calls imply a write so redundant to check for it
-                        for call in [call for call in func_calls if call["function_name"] not in ["max","min","maxval","cos","sin","cosh","sinh"] and var_name in call["line"]]:
-                            if var_name in call["parameters"]:
-                                var_dict[var_name]["is_used"] = True
-
-                    for var_name_in_dict in [x for x in var_dict if not var_dict[x]["is_used"]]:
-                        if (("%" in var_name_in_dict and var_name_in_dict in write["value"]) or (var_name_in_dict in write["value"] and var_name_in_dict in get_used_variables_from_line(write["value"],False))):
-                            if var_name_in_dict != var_name:
-                                var_dict[var_name_in_dict]["is_used"] = True
-                    var_dict[var_name]["indexes"].append(line_index)
-                
+            var_dict, needed_func_call_lines = self.get_var_use_info(lines,local_variables,variables) 
             remove_indexes = []
             if "mass_per_proc" in var_dict:
                 var_dict["mass_per_proc"]["is_used"] = False
             for var in var_dict:
                 if not var_dict[var]["is_used"]:
                     if self.get_param_info((var,False),local_variables,variables)[2] != "integer":
-                        remove_indexes.extend(var_dict[var]["indexes"])
+                        for index in var_dict[var]["indexes"]:
+                            if index not in needed_func_call_lines:
+                                remove_indexes.append(index)
             lines = [x[1] for x in enumerate(lines) if x[0] not in remove_indexes]
         return lines
+    def evaluate_rest_pencil_flags(self,lines,local_variables):
+        variables = merge_dictionaries(local_variables,self.static_variables)
+        var_dict, _ = self.get_var_use_info(lines,local_variables,variables)
+        pencil_flag_mappings = {}
+        for var in var_dict:
+            if "ac_transformed_pencil_" in var:
+                pencil_name = var.replace("ac_transformed_pencil_","")
+                if var_dict[var]["is_used"]:
+                    pencil_flag_mappings[f"lpencil__mod__cparam(i_{pencil_name}__mod__cparam)"] = ".true."
+                else:
+                    pencil_flag_mappings[f"lpencil__mod__cparam(i_{pencil_name}__mod__cparam)"] = ".false."
+        for line_index,_ in enumerate(lines):
+            for flag in pencil_flag_mappings:
+                lines[line_index] = lines[line_index].replace(flag,pencil_flag_mappings[flag])
+        return lines
+
     def get_module_where_declared(self,static_var,filename):
         possible_modules = []
         modules = self.file_info[filename]["used_modules"]
@@ -4726,6 +5096,17 @@ class Parser:
             print(x, static_var in self.rename_dict[x])
             print(x, static_var in self.rename_dict[x])
         exit()
+    def replace_interfaced_calls(self,lines,variables):
+        for line_index,_ in enumerate(lines):
+            func_calls = self.get_function_calls_in_line(lines[line_index],variables)
+            #might not be in func info as in the case of intrinsic funcs
+            if len(func_calls) == 1 and func_calls[0]["function_name"] in self.func_info and "interface_funcs" in self.func_info[func_calls[0]["function_name"]]:
+                file_path = self.find_subroutine_files(func_calls[0]["function_name"])[0]
+                interfaced_call = self.get_interfaced_functions(file_path,func_calls[0]["function_name"])[0]
+                lines[line_index] = self.replace_func_call(lines[line_index],func_calls[0],f"{interfaced_call}({','.join(func_calls[0]['parameters'])})")
+        return lines
+
+
     def transform_lines(self,lines,all_inlined_lines,local_variables,transform_func):
         for i,line in enumerate(lines):
             if not has_balanced_parens(line) and "print*" not in line:
@@ -4797,11 +5178,18 @@ class Parser:
                     pexit(line)
                 replacement_lower, replacement_upper = [part.strip() for part in write["value"].split(":")]
 
+                #TODO: can be some other index than 1
+                first_segment = self.get_array_segments_in_line(search_line, variables)[0]
+                indexes = get_segment_indexes(first_segment, search_line, 0)
+                replacement_index = -1
+                for i,index in enumerate(indexes):
+                    if index == iterator:
+                        replacement_index = i
                 res = self.replace_segments(self.get_array_segments_in_line(search_line,variables),search_line,self.global_loop_replacer,local_variables,{
                     "iterator": iterator, 
                     "replacement_lower": replacement_lower,
                     "replacement_upper": replacement_upper,
-                    "replacement_index": 3,
+                    "replacement_index": replacement_index,
                 })
                 save_var = False 
                 #copypaste
@@ -4889,12 +5277,9 @@ class Parser:
             pexit(line)
         print("Check inlined file")
         #try to transform maxvals into max before transform 
-        for line_index,line in enumerate(lines):
-            maxval_calls = [call for call in self.get_function_calls_in_line(line,variables) if call["function_name"] == "maxval"]
-            if len(maxval_calls) > 1:
-                print("multiple maxval calls")
-                pexit(line)
-            elif len(maxval_calls) == 1:
+        for line_index,_ in enumerate(lines):
+            maxval_calls = [call for call in self.get_function_calls_in_line(lines[line_index],variables) if call["function_name"] == "maxval"]
+            while(len(maxval_calls) > 1):
                 first_param_info = self.get_param_info((maxval_calls[0]["parameters"][0],False),local_variables,self.static_variables)
                 #max of nx (possibly vector components), is safe to take max
                 if ((len(maxval_calls[0]["parameters"]) == 1) or (len(maxval_calls[0]["parameters"]) == 2 and maxval_calls[0]["parameters"][1] in ["dim=2","2"])) and first_param_info[3] in [[global_subdomain_range_x], [global_subdomain_range_x,"3"]]:
@@ -4903,6 +5288,7 @@ class Parser:
                     print("first param info",first_param_info)
                     print("no case maxval")
                     pexit(line)
+                maxval_calls = [call for call in self.get_function_calls_in_line(lines[line_index],variables) if call["function_name"] == "maxval"]
         file = open("res.txt","w")
         for line in lines:
           file.write(f"{line}\n")
@@ -4941,9 +5327,12 @@ class Parser:
 
 
 
+
         #move written profiles to local_vars since we know their values
         lines = self.transform_pencils(lines,all_inlined_lines,local_variables)
         variables = merge_dictionaries(local_variables,self.static_variables)
+
+        lines = self.replace_interfaced_calls(lines,variables)
         file = open("res-before.txt","w")
         for line in lines:
             file.write(f"{line}\n")
@@ -4991,14 +5380,28 @@ class Parser:
 
                     
 
-        #TODO: do this better
-        lines = [line.replace("+(1-1)","+0").replace("+1-1","+0") for line in lines]
         self.known_values = {}
         lines = self.eliminate_while(lines)
         # lines = self.inline_0d_writes(lines,local_variables)
         #rewrite some ranges in AcVectors and AcMatrices
         variables = merge_dictionaries(local_variables,self.static_variables)
-        lines = self.evaluate_leftover_pencils_as_true(lines,local_variables)
+        file = open("res-inlined-profiles-before-any.txt","w")
+        for line in lines:
+            file.write(f"{line}\n")
+        file.close()
+
+
+        file = open("res-inlined-profiles.txt","w")
+        for line in lines:
+            file.write(f"{line}\n")
+        file.close()
+        lines = self.evaluate_rest_pencil_flags(lines,local_variables)
+        file = open("res-debug-before.txt","w")
+        for line in lines:
+            file.write(f"{line}\n")
+        file.close()
+        print("TP check output")
+        # exit()
         #any -> normal if 
         variables = merge_dictionaries(local_variables,self.static_variables)
         for line_index,line in enumerate(lines):
@@ -5020,7 +5423,16 @@ class Parser:
                     else:
                       pexit("what to do?")
                     any_calls=  [x for x in self.get_function_calls_in_line(lines[line_index],variables) if x["function_name"] == "any"]
+
+
+        lines = self.elim_empty_branches(lines,local_variables)
+        lines = self.elim_empty_dos(lines,local_variables)
+
+
+
+
         lines = self.eliminate_while(lines)
+
         lines = self.elim_empty_branches(lines,local_variables)
         lines = self.elim_empty_dos(lines,local_variables)
         local_variables = {parameter:v for parameter,v in self.get_variables(lines, {},"",True).items() }
@@ -5030,6 +5442,14 @@ class Parser:
         for line in lines:
             file.write(f"{line}\n")
         file.close()
+
+        #translate how sub funcs are called in PC to how they would be called in Astaroth
+        for func in sub_funcs: 
+            for line_index,_ in enumerate(lines):
+                func_calls = self.get_function_calls_in_line(lines[line_index],variables)
+                if(len(func_calls) == 1 and func_calls[0]["function_name"] == func):
+                    lines[line_index] = sub_funcs[func_calls[0]["function_name"]]["map_func"](func_calls[0])
+
         #add some static vars to local vars
         for var in ["dline_1__mod__cdata","lcoarse_mn__mod__cdata"]:
             local_variables[var] = self.static_variables[var]
@@ -5227,6 +5647,14 @@ class Parser:
                 if analyse_lines[write["line_num"]][1] == 0:
                     self.static_variables[variable]["value"] = write["value"]
                     self.known_values[variable] = write["value"] 
+        #can't have x = x + y
+        #since it depends on x previous values
+        if variable in self.known_values:
+            if variable in self.known_values[variable]:
+                del self.known_values[variable]
+        if("lcalc_uumeanx__mod__hydro" in self.known_values):
+            print(self.known_values["lcalc_uumeanx__mod__hydro"])
+            pexit("lcalc_uumeanx is wrong!")
         return
     
     def expand_size_in_line(self, line,local_variables,writes):
@@ -5337,6 +5765,9 @@ class Parser:
               flag = call["parameters"][1]
               if (flag[0] == "l" and flag in self.file_info[filename]["variables"] and self.file_info[filename]["variables"][flag]["type"] == "logical") or remove_mod(flag) in ["beta_glnrho_scaled"]:
                 self.shared_flags_given[mod].append(flag)
+        for flag in self.flag_mappings:
+            if self.flag_mappings[flag] == "":
+                self.flag_mappings[flag] = "''"
         new_lines = self.eliminate_while(orig_lines,True,True)
         new_lines = self.unroll_constant_loops(new_lines,{})
         self.known_values = {}
@@ -5496,8 +5927,6 @@ class Parser:
             if line in ["endif","end if"]:
                 nest_num -= 1
                 if_nums.pop()
-                print(line_index)
-                print(line)
                 assert(len(if_nums)>0)
                 if_num = if_nums[-1]
         assert(len(analyse_lines) == len(lines))
@@ -5537,7 +5966,8 @@ class Parser:
                 line = choice[0]
                 if "if" in line and ".false." in line and ".true." not in line and ".and." not in line and ".or." not in line:
                     pass
-                elif "if" in line and ".true." in line and ".false." not in line and ".and." not in line and ".or." not in line:
+                #if multiple ifs that evaluate true the program would take the first one
+                elif "if" in line and ".true." in line and ".false." not in line and ".and." not in line and ".or." not in line and not found_true:
                     found_true = True
                     possibilities = [choice]
                     res_index = choice_index
@@ -5557,7 +5987,11 @@ class Parser:
 
                 keep_starting_index = possibilities[0][3]+1
                 #till next conditional or end
-                print(choices)
+                file = open("res-debug.txt","w")
+                for line in lines:
+                    file.write(f"{line}\n")
+                file.close()
+                print("CHOICES:",choices)
                 keep_ending_index = choices[res_index+1][3]-1
                 for index in range(starting_index, ending_index+1):
                     if not (index >= keep_starting_index and index<=keep_ending_index):
@@ -5797,7 +6231,40 @@ class Parser:
         lines[end_index] = "endif"
         lines = [x[1] for x in enumerate(lines) if x[0] not in remove_indexes]
         return self.transform_case(lines)
+    def remove_name_after_keyword(self,line):
+        if len(line)>=len("else") and line[:len("else")].strip() == "else" and "if" not in line and "where" not in line:
+            return "else"
+        if len(line)>=len("endif") and line[:len("endif")].strip() == "endif":
+            return "endif"
+        return line
+
+    def remove_named_ifs(self,lines,local_variables):
+        res_lines = []
+        for line in lines:
+            if(len([call for call in self.get_function_calls_in_line(line,local_variables) if call["function_name"] == "if"]) >=1):
+                has_name = False
+                scope_has_began = False
+                for char in line:
+                    if char == ":" and not scope_has_began:
+                        has_name = True
+                    if char == "(":
+                        scope_has_began = True
+                start_index = 0
+                if has_name:
+                    while(line[start_index] != ":"):
+                        start_index +=1
+                    res_lines.append(line[start_index+1:])
+                    if ":" in res_lines[-1]:
+                        print("TP HMM", line[start_index+1:])
+                        print(line)
+                        exit()
+                else:
+                    res_lines.append(line)
+            else:
+                res_lines.append(self.remove_name_after_keyword(line))
+        return res_lines
     def normalize_if_calls(self,lines,local_variables):
+        lines = self.remove_named_ifs(lines,local_variables)
         res_lines = []
         for line_index, line in enumerate(lines):
             #Consider only possible lines
@@ -5853,8 +6320,6 @@ class Parser:
         new_lines = [x.replace(".eq.","==").replace(".ne.","/=").replace(".lt.","<").replace(".gt.",">") for x in new_lines]
         if elim_lines:
             new_lines = self.eliminate_while(new_lines)
-        for line in new_lines:
-          print(line)
         local_variables = {parameter:v for parameter,v in self.get_variables(new_lines, {},filename,True).items() }
         for var in local_variables:
           if local_variables[var]["saved_variable"] and not local_variables[var]["parameter"]:
@@ -5862,9 +6327,22 @@ class Parser:
               print("saved variable",var)
               print(local_variables[var])
               print("in:",subroutine_name,filename)
-              print("abort")
-              exit()
-        func_calls_to_replace = [call for call in self.get_function_calls(new_lines,local_variables) if call["function_name"] != subroutine_name and call["function_name"] not in subs_not_to_inline]
+              print(self.static_variables["lpscalar__mod__cparam"])
+              pexit("abort")
+
+        func_calls_to_replace = [call for call in self.get_function_calls(new_lines,local_variables) if call["function_name"] != subroutine_name and call["function_name"] not in subs_not_to_inline and ("interface_funcs" not in self.func_info[call["function_name"]] or all([x not in subs_not_to_inline for x in self.func_info[call["function_name"]]["all_interface_funcs"]]) )]
+        for call in func_calls_to_replace:
+            if call["function_name"] == "dot":
+                pexit("wrong")
+        res_func_calls_to_replace = []
+        for call in func_calls_to_replace:
+            replace_call = True
+            if "interface_funcs" in self.func_info[call["function_name"]]:
+                replace_call = not any([x in subs_not_to_inline for x in self.func_info[call["function_name"]]["interface_funcs"]])
+            if replace_call:
+                res_func_calls_to_replace.append(call)
+        func_calls_to_replace = res_func_calls_to_replace
+
         sub_modules = self.get_subroutine_modules(filename,subroutine_name)
         while len(func_calls_to_replace) != 0:
             new_lines = self.expand_function_call_main(new_lines, subroutine_name, filename,func_calls_to_replace,global_init_lines,sub_modules,subs_not_to_inline,elim_lines,local_variables)
@@ -5919,7 +6397,14 @@ def get_used_files(make_output,directory):
     #     return files
     return glob.glob(f"{directory}/**/*.f90",recursive=True)
 
+                    
+
 def main():
+    # func_call = [{'function_name': 'curl_mn', 'parameters': ['ac_transformed_pencil_uij', 'ac_transformed_pencil_oo', 'ac_transformed_pencil_uu'], 'range': (5, 89), 'line': 'call curl_mn(ac_transformed_pencil_uij,ac_transformed_pencil_oo,ac_transformed_pencil_uu)', 'line_num': 0}][0]
+    # print(func_call)
+    # res = map_curl_mn(func_call)
+    # print(res)
+    # exit()
     # line = 'forall( j = iux__mod__cdata:iuz__mod__cdata) df(1+3:l2__mod__cparam,m__mod__cdata,n__mod__cdata,j_92) = df(1+3:l2__mod__cparam,m__mod__cdata,n__mod__cdata,j_92) - p%uu(:,j_92-iuu__mod__cdata+1) * tmp_92'
     # print(get_var_name_segments(line,{"j":None,"j_92":None}))
     # exit()
@@ -5947,66 +6432,93 @@ def main():
     directory_name = config["directory"]
     files = get_used_files(config["use_make_output"],directory_name)
     files = [file for file in files if os.path.isfile(file)]
-    print("config",config)
     parser = Parser(files,config)
-    # print(parser.evaluate_indexes("1+3:l2__mod__cdata"))
+    # lines = ["if(.true.) then","endif"]
+    # print(parser.elim_empty_branches(lines,{}))
     # exit()
-    new_lines = ["if(idiag_umax/=0) then","max_mn_name(p%u)","endif"]
-    # idiag_vars = parser.get_idiag_vars(new_lines)
-    # print("idiag vars\n")
-    # print(idiag_vars)
-    # exit()
-    # print(parser.include_diagnostics)
-    local_variables = {
-      "fvisc":{
-        "type": "real",
-        "dims": [global_subdomain_range_x,"3"],
-        "saved_variable": False
-      }
-    }
-    # lines = parser.unroll_ranges(lines,local_variables)
-    # print("\nres\n")
-    # print(lines)
-    # exit()
-    # lines = ["do i_8_53_54_55_83=1+1,3", 
-    #   "ac_transformed_pencil_sij(:,i_8_53_54_55_83,1)=.5*(ac_transformed_pencil_uij(:,i_8_53_54_55_83,1)+ac_transformed_pencil_uij(:,1,i_8_53_54_55_83))",
-    #   "ac_transformed_pencil_sij(:,1,i_8_53_54_55_83)=ac_transformed_pencil_sij(:,i_8_53_54_55_83,1)",
-    #   "enddo"
-    # ]
-    # res = parser.unroll_constant_loops(lines,{})
-    # print("res")
-    # for line in res:
-    #   print(line)
-    # exit()
-    # line = "if(lpencil__mod__cparam(i_sij2)) then"
-    # print(parser.evaluate_leftover_pencils_as_true([line],{}))
-    # exit()
-    # if len(if_calls) == 1 and len(if_calls[0]["parameters"]) == 1 and "lpencil__mod__cparam" in if_calls[0]["parameters"][0]:
 
 
-    # exit()
-    # test_lines = ["if ( lfirst.and.ldt.and.(lcdt_tauf.or.ldiagnos.and.idiag_dtF/=0) .or ldiagnos.and.idiag_taufmin/=0 ) then", "where (abs(p%uu)>1)","uu1=1./p%uu","elsewhere","uu1=1.","endwhere","do j=1,3","ftot=abs(df(l1:l2,m,n,iux+j-1)*uu1(:,j))","if (ldt.and.lcdt_tauf) dt1_max=max(dt1_max,ftot/cdtf)","if (ldiagnos.and.(idiag_dtF/=0.or.idiag_taufmin/=0)) Fmax=max(Fmax,ftot)","enddo","endif"]
-    # test_lines = parser.eliminate_while(test_lines)
-    # print(test_lines)
-    # exit()
-    # line = "if(p%uu(:,j_21_22_79_83_86)>=0) then"
-    # print(parser.get_function_calls([line],{}))
-    # exit()
     #PENCIL SPECIFIC
     parser.populate_pencil_case()
-    print("here." in parser.struct_table["pencil_case"])
-    for symbol in ["nxgrid,nygrid,nzgrid","nprocx","nprocy","nprocz"]:
-      parser.static_variables[symbol] = {
-        "type": "integer",
-        "saved_variable": False,
-        "parameter": False,
-        "dims": []
-      }
     lines = parser.get_lines(f"{parser.sample_dir}/src/cparam.inc")
+    lines = parser.get_lines(f"{parser.sample_dir}/src/cparam.local")
     #used to load sample specific values
     parser.get_variables(lines,parser.static_variables,f"{parser.directory}/cparam.f90",False,True)
+    parser.update_func_info()
     parser.update_used_modules()
     parser.update_static_vars()
+    if(parser.static_variables["lspherical_coords__mod__cdata"]["value"] == ".true."):
+        pexit("transpiler not supported for spherical coords at the moment!\n")
+    if(parser.static_variables["lcylindrical_coords__mod__cdata"]["value"] == ".true."):
+        pexit("transpiler not supported for cylindrical coords at the moment!\n")
+    # parser.static_variables["l2__mod__cparam"]["value"] = "35"
+    # parser.static_variables["l1__mod__cparam"]["value"] = "4"
+    # exit()
+    global global_subdomain_range_x
+    global global_subdomain_range_y
+    global global_subdomain_range_z
+
+    global global_subdomain_range_with_halos_x
+    global global_subdomain_range_with_halos_y
+    global global_subdomain_range_with_halos_z
+
+
+    global global_subdomain_range_x_lower
+    global global_subdomain_range_x_upper
+
+    global global_subdomain_range_y_lower
+    global global_subdomain_range_y_upper
+
+    global global_subdomain_range_z_lower
+    global global_subdomain_range_z_upper
+
+    global implemented_der_funcs
+    global number_of_fields
+
+    number_of_fields = parser.static_variables["mfarray__mod__cparam"]["value"]
+
+    global_subdomain_range_x = parser.static_variables["nx__mod__cparam"]["value"]
+    global_subdomain_range_y = parser.static_variables["ny__mod__cparam"]["value"]
+    global_subdomain_range_z = parser.static_variables["nz__mod__cparam"]["value"]
+    nghost_val = parser.static_variables["nghost__mod__cparam"]["value"]
+
+    global_subdomain_range_with_halos_x = parser.evaluate_integer(f"{global_subdomain_range_x}+2*{nghost_val}")
+    global_subdomain_range_with_halos_y = parser.evaluate_integer(f"{global_subdomain_range_y}+2*{nghost_val}")
+    global_subdomain_range_with_halos_z = parser.evaluate_integer(f"{global_subdomain_range_z}+2*{nghost_val}")
+
+    global_subdomain_range_x_lower= parser.static_variables["l1__mod__cparam"]["value"]
+    global_subdomain_range_x_upper = parser.static_variables["l2__mod__cparam"]["value"]
+
+    global_subdomain_range_y_lower= parser.static_variables["l1__mod__cparam"]["value"]
+    global_subdomain_range_y_upper = parser.static_variables["l2__mod__cparam"]["value"]
+
+    global_subdomain_range_z_lower= parser.static_variables["l1__mod__cparam"]["value"]
+    global_subdomain_range_z_upper = parser.static_variables["l2__mod__cparam"]["value"]
+
+    implemented_der_funcs = {
+        "der_main": str([("real",[global_subdomain_range_with_halos_x,global_subdomain_range_with_halos_y,global_subdomain_range_with_halos_z,number_of_fields]), ("integer", []), ("real",[global_subdomain_range_x]),("integer",[])]),
+        "derij_main": str([("real",[global_subdomain_range_with_halos_x,global_subdomain_range_with_halos_y,global_subdomain_range_with_halos_z,number_of_fields]), ("integer", []), ("real",[global_subdomain_range_x]),("integer",[]),("integer",[])]),
+        "der2_main": str([("real",[global_subdomain_range_with_halos_x,global_subdomain_range_with_halos_y,global_subdomain_range_with_halos_z,number_of_fields]), ("integer", []), ("real",[global_subdomain_range_x]),("integer",[])]),
+        "der6_main": [
+                str([("real",[global_subdomain_range_with_halos_x,global_subdomain_range_with_halos_y,global_subdomain_range_with_halos_z,number_of_fields]), ("integer", []), ("real",[global_subdomain_range_x]),("integer",[])]),
+                str([("real",[global_subdomain_range_with_halos_x,global_subdomain_range_with_halos_y,global_subdomain_range_with_halos_z,number_of_fields]), ("integer", []), ("real",[global_subdomain_range_x]),("integer",[]),("logical",[])]),
+        ],
+        "der5": str([("real",[global_subdomain_range_with_halos_x,global_subdomain_range_with_halos_y,global_subdomain_range_with_halos_z,number_of_fields]), ("integer", []), ("real",[global_subdomain_range_x]),("integer",[])]),
+        "der4": str([("real",[global_subdomain_range_with_halos_x,global_subdomain_range_with_halos_y,global_subdomain_range_with_halos_z,number_of_fields]), ("integer", []), ("real",[global_subdomain_range_x]),("integer",[])]),
+        "der4i2j": str([("real",[global_subdomain_range_with_halos_x,global_subdomain_range_with_halos_y,global_subdomain_range_with_halos_z,number_of_fields]), ("integer", []), ("real",[global_subdomain_range_x]),("integer",[]),("integer",[])]),
+    }
+
+    #for our purposes l2,n2,m2 and etc. can be parameters since their values depend on MPI what we don't care about
+    for param in ["l2","n2","m2","l2i","n2i","m2i"]:
+        parser.static_variables[f"{param}__mod__cparam"]["parameter"] = True
+    line = "dx_1(l1__mod__cparam:l2__mod__cparam)"
+    lines = [line]
+    lines  = parser.inline_known_parameters(lines,also_local_variables=True)
+    lines  = parser.inline_known_parameters(lines,also_local_variables=True)
+    print(lines)
+
+    print(parser.static_variables["nx__mod__cparam"])
+    print("global subdomain range x",global_subdomain_range_x)
 
     #for Pencil Code get variables added by scripts
     parser.get_variables(mk_param_lines,parser.static_variables,f"{parser.directory}/cparam.f90",False,True)
@@ -6052,7 +6564,15 @@ def main():
         # module_lines = parser.get_pars_lines("_init", "density", params_lines)
         # print("density init lines",module_lines)
         # exit()
+        # res_lines = []
+        # for line in params_lines:
+        #     res_lines.extend(split_line_nml(line))
+        # for line in res_lines:
+        #     print(line)
+        # exit()
         parser.get_flags_from_lines(parser.get_lines(f"{parser.sample_dir}/data/params.log"))
+        parser.get_flags_from_lines(parser.get_lines(f"{parser.sample_dir}/data/param2.nml"))
+        # parser.get_flags_from_lines(parser.get_lines(f"./params.log"))
         print("\nMappings\n")
         for x in parser.flag_mappings:
             print(x)
@@ -6070,6 +6590,8 @@ def main():
         parser.ignored_subroutines.append("farray_index_append")
         parser.ignored_subroutines.append("save_analysis_info")
         parser.ignored_subroutines.append("information")
+        for func in sub_funcs:
+            parser.ignored_subroutines.append(func)
         #for testing
         # parser.flag_mappings["topbot"] = "top"
         # parser.flag_mappings["lone_sided"] = ".false."
@@ -6083,14 +6605,14 @@ def main():
                     for i in [x[0] for x in enumerate(arr)]:
                         parser.flag_mappings[f"{x}({i+1})"] = arr[i]
                 del parser.flag_mappings[x]
-        for index in ["1","2","3"]:
-          print(parser.flag_mappings[f"grads0_imposed__mod__energy({index})"])
-          if eval(parser.flag_mappings[f"beta_glnrho_global__mod__density({index})"]) == 0:
-            parser.flag_mappings[f"beta_glnrho_scaled__mod__density({index})"] = "0."
-          print(parser.flag_mappings[f"beta_glnrho_scaled__mod__density({index})"])
-        for index in ["1","2","3"]:
-          if parser.flag_mappings[f"grid_func__mod__cdata({index})"] == '"linear"':
-           parser.flag_mappings[f"lequidist__mod__cdata({index})"] = ".true."
+        # for index in ["1","2","3"]:
+        #   print(parser.flag_mappings[f"grads0_imposed__mod__energy({index})"])
+        #   if eval(parser.flag_mappings[f"beta_glnrho_global__mod__density({index})"]) == 0:
+            # parser.flag_mappings[f"beta_glnrho_scaled__mod__density({index})"] = "0."
+        #   print(parser.flag_mappings[f"beta_glnrho_scaled__mod__density({index})"])
+        # for index in ["1","2","3"]:
+        #   if parser.flag_mappings[f"grid_func__mod__cdata({index})"] == '"linear"':
+        #    parser.flag_mappings[f"lequidist__mod__cdata({index})"] = ".true."
         parser.get_default_flags_from_file(f"{parser.directory}/cdata.f90",parser.default_mappings)
         for mod in ["eos","viscosity","hydro","gravity","density","energy"]:
           parser.get_default_flags_from_file(f"{parser.directory}/{parser.chosen_modules[get_mod_from_physics_name(mod)]}.f90",parser.default_mappings)
@@ -6127,11 +6649,11 @@ def main():
         print(parser.flag_mappings["lconservative__mod__density"])
         print(parser.flag_mappings["lheatc_kprof__mod__energy"])
         # exit()
-        for i in ["1","2","3"]:
-          print(parser.flag_mappings[f"beta_glnrho_scaled__mod__energy({i})"])
-        print(parser.flag_mappings[f"lweno_transport__mod__cdata"])
-        if parser.chosen_modules["density"] == "density":
-          parser.flag_mappings["lupdate_mass_source__mod__density"] =  "lmass_source__mod__density .and. t>=tstart_mass_source .and. (tstop_mass_source==-1.0 .or. t<=tstop_mass_source)"
+        # for i in ["1","2","3"]:
+        #   print(parser.flag_mappings[f"beta_glnrho_scaled__mod__energy({i})"])
+        # print(parser.flag_mappings[f"lweno_transport__mod__cdata"])
+        # if parser.chosen_modules["density"] == "density":
+        #   parser.flag_mappings["lupdate_mass_source__mod__density"] =  "lmass_source__mod__density .and. t>=tstart_mass_source .and. (tstop_mass_source==-1.0 .or. t<=tstop_mass_source)"
         assert(len(parser.select_eos_variable_calls) == 2)
         lnrho_val = 2**0
         rho_val = 2**1
@@ -6340,6 +6862,7 @@ def main():
         new_lines = parser.eliminate_while(new_lines)
         new_lines = parser.eliminate_while(new_lines)
         orig_lines = new_lines.copy()
+        variables = merge_dictionaries(variables,local_variables)
         for line_index, line in enumerate(new_lines):
                 func_calls = parser.get_function_calls_in_line(line,local_variables)
                 where_func_calls = [call for call in func_calls if call["function_name"] == "where"]
@@ -6357,7 +6880,9 @@ def main():
                     is_scalar_if = is_scalar_if or (param_info[3] in  [[global_subdomain_range_x],[global_subdomain_range_x,"3"]])
                   if not is_scalar_if:
                     print("what to about where")
+                    print(parser.get_array_segments_in_line(line,variables))
                     print(param_info)
+                    print(local_variables["vdrift_175"])
                     pexit(line)
                   else:
                     where_map_vals.append(line[call["range"][0]:call["range"][1]].replace("where","if",1) + " then")
