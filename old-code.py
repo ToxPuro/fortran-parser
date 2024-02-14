@@ -138,3 +138,44 @@
     #             break
     #         elif in_struct:
     #             self.get_variables_from_line(line, self.struct_table[struct], file_path, self.get_own_module(file_path))
+
+#used in transform_line_stencil for structs
+            # #For time being commented out
+            # if "%" in res_line:
+            #     res_line = res_line.replace(";","")
+            #     res_final_line = ""
+            #     last_index = 0
+            #     struct_segs = self.get_struct_segments_in_line(res_line,variables)
+            #     for seg in struct_segs:
+            #         var_name,field = [part.strip() for part in seg[0].split("%",1)]
+            #         if var_name in local_variables:
+            #             src = local_variables
+            #         elif var_name in self.static_variables:
+            #             src = self.static_variables
+            #         if src[var_name]["type"] != "pencil_case":
+            #             print("what to do non pencil_case struct ?")
+            #             print("struct seg", seg[0], res_line[seg[1]:seg[2]])
+            #             exit()
+            #         else:
+            #             indexes = [self.evaluate_indexes(index) for index in get_segment_indexes(seg, res_line, 0)]
+            #             #replace 1:n -> with : if an index dim is n
+            #             for i,index in enumerate(indexes):
+            #                 if ":" in index and index != ":":
+            #                     lower,upper = [part.strip() for part in index.split(":")]
+            #                     if lower == "1" and upper == self.struct_table[src[var_name]["type"]][field]["dims"][i]:
+            #                         indexes[i] = ":"
+            #             ##Pencil case will become a x dimensional profile.
+            #             ##If vec make three x dimensional profiles
+            #             if "(" not in res_line[seg[1]:seg[2]] or indexes == [":"] or (len(indexes) == 2 and indexes[0] == ":" and (indexes[1].isnumeric() or indexes[1] == ":")):
+            #                 res = "AC_PROFILE_" + field.upper()
+            #             else:
+            #                 print("weird array access in pencil case")
+            #                 print(res_line[seg[1]:seg[2]])
+            #                 print(indexes)
+            #                 print(line)
+            #                 exit()
+            #         res_final_line= res_final_line + res_line[last_index:seg[1]]
+            #         res_final_line = res_final_line + res 
+            #         last_index = seg[2]
+            #     res_final_line= res_final_line + res_line[last_index:]
+            #     res_line = res_final_line + ";"

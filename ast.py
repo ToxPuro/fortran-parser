@@ -115,6 +115,8 @@ def combine_values(root):
     
    
 def simplify(equation):
+    if equation == "":
+        return equation
     if equation.isnumeric() or is_float(equation):
         return equation
     if all([x not in equation for x in all_ops]):
