@@ -2010,6 +2010,8 @@ class Parser:
                         self.file_info[filename]["variables"][variable_name] = var_object
 
     def get_lines(self, filepath, start_range=0, end_range=math.inf, include_comments=False):
+        if not os.path.isfile(filepath):
+            return []
         if filepath not in self.lines.keys():
             in_sub_name = None 
             lines = []
