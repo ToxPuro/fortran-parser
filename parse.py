@@ -240,10 +240,13 @@ def map_multm2_sym_mn(func_call):
     params = func_call["parameters"]
     return [f"{params[1]} = multm2_sym({params[0]})"]
 def map_u_dot_grad_vec(func_call):
-    params = func_call["parameters"]
-    if len(params)>5:
+    params = func_call["new_param_list"]
+    if len(params) == 6 and params[5][-1] == "upwind" and params[5][0] == ".false.":
+        pass
+    elif len(params)>5:
+        print(params)
         pexit("optional params not supported\n")
-    return [f"{params[4]} = {params[2]}*{params[1]}"]
+    return [f"{params[4][0]} = {params[2][0]}*{params[3][0]}"]
 def map_u_dot_grad_scl(func_call):
     params = func_call["parameters"]
     if len(params)>6:
@@ -3463,7 +3466,7 @@ class Parser:
         filepaths = unique_list(filepaths)
         if len(filepaths) == 1:
             return filepaths[0]
-        print("CHOOSING RIGHT MODULE")
+        # print("CHOOSING RIGHT MODULE")
         for i, path in enumerate(filepaths):
             for module in self.chosen_modules:
                 if path.lower() == f"{self.directory}/{self.chosen_modules[module]}.f90":
@@ -3620,7 +3623,7 @@ class Parser:
     def get_replaced_body(self, filename, parameter_list, function_call_to_replace, variables_in_scope,global_init_lines,subs_not_to_inline,elim_lines):
         original_subroutine_name = function_call_to_replace["function_name"]
         ##in case is interfaced call get the correct subroutine
-        print("GETTING REPLACED BODY FOR: ", function_call_to_replace)
+        # print("GETTING REPLACED BODY FOR: ", function_call_to_replace)
         if function_call_to_replace["function_name"][:3] == "fft":
           pexit("probably shouldn't inline fft func")
         interfaced_functions = self.get_interfaced_functions(filename,original_subroutine_name)
@@ -3734,7 +3737,7 @@ class Parser:
         init_lines = self.replace_vars_in_lines(init_lines, new_local_var_names)
         new_lines = self.replace_vars_in_lines(new_lines, new_local_var_names)
 
-        print("PARAMS:",subroutine_lines,params)
+        # print("PARAMS:",subroutine_lines,params)
         #replace variables with passed values
         for i, passed_param in enumerate(function_call_to_replace["parameters"]):
             #in case was passed as a named param
@@ -4677,13 +4680,12 @@ class Parser:
                             indexes[i] = self.map_to_new_index(indexes[i],i,local_variables,line)
                         else:
                             #convert from 1 to 0 based index
-                            indexes[i] = f"{indexes[i]}-1"
+                            indexes[i] = self.evaluate_integer(f"{indexes[i]}-1")
                     res = f"{new_var}[DEVICE_VTXBUF_IDX({','.join(indexes)})]"
                 ##Value local to kernel i.e. from the viewpoint of a thread a scalar
                 elif segment[0] in local_variables and len(local_variables[segment[0]]["dims"]) == 2 and num_of_looped_dims == 2:
                     res = segment[0] 
                 else:
-
                     indexes = [self.evaluate_indexes(index) for index in get_segment_indexes(segment,line,len(src[segment[0]]["dims"]))]
                     num_of_looping_dim = -1
                     for i,index in enumerate(indexes):
@@ -4698,9 +4700,13 @@ class Parser:
                             indexes[i] = self.map_to_new_index(indexes[i],local_variables)
                         else:
                             indexes[i] = index
-                    res = segment[0]
-                    for index in indexes:
-                        res = res + f"[{index}]"
+                    #for now consider only 1d real arrays
+                    assert(len(indexes) == 1)
+                    assert(src[segment[0]]["type"] == "real")
+                    #translate to zero based indexing by decreasing by one
+                    new_index = self.evaluate_integer(f"{indexes[0]}-1")
+                    #1d real arrays are found in real_arrays
+                    res = f"vba.real_arrays[{segment[0]}][{new_index}]"
                 res_line = res_line + line[last_index:segment[1]]
                 res_line = res_line + res 
                 if ":" in res or "explicit_index" in res or ("(" in res and "DEVICE" not in res) or "'" in res:
@@ -5387,6 +5393,33 @@ class Parser:
                 lines[line_index] = res
         return lines
 
+    def trans_to_normal_indexing(self,segment,segment_index,line,local_variables,info):
+        dims = info["dims"]
+        first_part = dims[0].split(":")[0]
+        assert(first_part[0] == "-")
+        negative_offset = first_part[1:]
+        if segment[0] == info["var"]:
+            indexes = get_segment_indexes(segment,line,len(dims))
+            assert(len(indexes) == 1)
+            #don't want to consider it for now
+            assert(":" not in indexes[0])
+            #plus 1 since normal Fortran indexing is 1 based indexing
+            indexes = [f"{indexes[0]}+{negative_offset}+1"]
+            res = build_new_access(segment[0],indexes)
+            print(line[segment[1]:segment[2]])
+            print("--->")
+            print(res)
+            return res
+        return line[segment[1]:segment[2]]
+
+    def translate_negative_indexing_to_normal_indexing(self,lines,local_variables, variables):
+        for var in variables:
+            dims = variables[var]["dims"]
+            if len(dims) == 1 and all([x in dims[0] for x in "-:"]):
+                for line_index,_ in enumerate(lines):
+                    arr_segs_in_line = self.get_array_segments_in_line(lines[line_index],variables)
+                    lines[line_index] = self.replace_segments(arr_segs_in_line,lines[line_index],self.trans_to_normal_indexing,local_variables,{"var": var, "dims":dims})
+        return lines
     def transform_lines(self,lines,all_inlined_lines,local_variables,transform_func):
         for i,line in enumerate(lines):
             if not has_balanced_parens(line) and "print*" not in line:
@@ -5578,6 +5611,10 @@ class Parser:
         for line in lines:
             file.write(f"{line}\n")
         file.close()
+        
+
+        #if we have vars that have the dimension (-nghost:nghost) f.e. dz2_bounds these have to be translated to C style 0 based indexing
+        lines = self.translate_negative_indexing_to_normal_indexing(lines,local_variables,variables)
 
         #add some static vars to local vars
         for var in ["dline_1__mod__cdata","lcoarse_mn__mod__cdata"]:
@@ -5673,11 +5710,15 @@ class Parser:
             static_variables_in_line= unique_list([var for var in get_used_variables_from_line(line) if var.lower() in self.static_variables])
             res_line = line
             for var in static_variables_in_line:
-                ##all uppercase means that it is a profile
                 #pow is a function in this context not a parameter
                 if var.lower() not in ["bot","top","nghost","pow"] and var.lower() not in local_variables and var.upper() != var:
                   if self.offload_type == "boundcond":
-                    res_line = replace_variable(res_line, var, f"DCONST(AC_{var.lower()})")
+                    if self.static_variables[var]["dims"] == []:
+                        res_line = replace_variable(res_line, var, f"DCONST(AC_{var.lower()})")
+                    elif len(self.static_variables[var]["dims"]) == 1:
+                        res_line = replace_variable(res_line, var, f"AC_{var.lower()}")
+                    else:
+                        pexit("what to do?\n")
                   elif self.offload_type == "stencil":
                     res_line = replace_variable(res_line, var, f"AC_{var.lower()}")
             lines[i] = res_line
@@ -7017,7 +7058,7 @@ def main():
             new_lines[line_index] = line
           new_lines = [x[1] for x in enumerate(new_lines) if x[0] not in remove_indexes]
         local_variables = {parameter:v for parameter,v in parser.get_variables(new_lines, {},filename,True).items() }
-
+        variables = merge_dictionaries(local_variables,parser.static_variables)
         for line_index, _ in enumerate(new_lines):
             new_lines[line_index] = parser.transform_get_shared_variable_line(new_lines[line_index],local_variables)
 

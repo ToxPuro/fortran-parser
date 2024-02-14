@@ -23,8 +23,12 @@ def print_AST(root,nest_level=0):
 
 
 def is_number(val):
+    if val == "":
+        return False
     return is_float(val) or val.isnumeric()
 def is_float(string):
+    if string== "":
+        return False
     if string[0] == "-":
         string = string[1:]
     return string.replace(".","").isnumeric()
