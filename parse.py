@@ -1598,7 +1598,6 @@ class Parser:
         self.used_static_variables = []
         self.functions_in_file = {}
         self.static_writes = []
-        self.rewritten_functions = {}
         self.directory = config["directory"]
         self.subroutine_modifies_param = {}
         self.struct_table = {}
@@ -7672,7 +7671,6 @@ def main():
         for line in new_lines:
           file.write(f"{remove_mod(line)}\n")
         file.close()
-        exit()
             
 
         #TODO remove this quick test hack
