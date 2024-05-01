@@ -3702,7 +3702,7 @@ class Parser:
             return filepaths[0]
         for i, path in enumerate(filepaths):
             for module in self.chosen_modules:
-                if path.lower() == f"{self.directory}/{self.chosen_modules[module]}.f90":
+                if path.lower() == f"{self.directory}/{self.chosen_modules[module]}.f90".lower():
                     return filepaths[i]
         if original_file in self.func_info[call["function_name"]]["lines"]:
           return original_file
@@ -5550,6 +5550,9 @@ class Parser:
         print("len possible modules:", len(possible_modules))
         print("possible modules:",possible_modules)
         print("modules: ",modules)
+        #Note: if in wrong order in general.f90 won't parse correctly
+        #
+        #print("general vars: ",self.rename_dict["general"])
         for x in possible_modules:
             print(x, static_var in self.rename_dict[x])
             print(x, static_var in self.rename_dict[x])
@@ -7376,13 +7379,13 @@ def main():
             for index in ["1","2","3"]:
                 parser.flag_mappings[f"lfrozen_bb_bot__mod__magnetic({index})"] = ".false."
                 parser.flag_mappings[f"lfrozen_bb_top__mod__magnetic({index})"] = ".false."
-        print(parser.flag_mappings["lfrozen_bb_bot__mod__magnetic(1)"])
-        print(parser.flag_mappings["lfrozen_bb_bot__mod__magnetic(2)"])
-        print(parser.flag_mappings["lfrozen_bb_bot__mod__magnetic(3)"])
+        #print(parser.flag_mappings["lfrozen_bb_bot__mod__magnetic(1)"])
+        #print(parser.flag_mappings["lfrozen_bb_bot__mod__magnetic(2)"])
+        #print(parser.flag_mappings["lfrozen_bb_bot__mod__magnetic(3)"])
 
-        print(parser.flag_mappings["lfrozen_bb_top__mod__magnetic(1)"])
-        print(parser.flag_mappings["lfrozen_bb_top__mod__magnetic(2)"])
-        print(parser.flag_mappings["lfrozen_bb_top__mod__magnetic(3)"])
+        #print(parser.flag_mappings["lfrozen_bb_top__mod__magnetic(1)"])
+        #print(parser.flag_mappings["lfrozen_bb_top__mod__magnetic(2)"])
+        #print(parser.flag_mappings["lfrozen_bb_top__mod__magnetic(3)"])
 
         parser.flag_mappings["ioo__mod__cdata"] = "0"
         parser.get_flags_from_initialization_func("set_coorsys_dimmask",f"{parser.directory}/grid.f90")
