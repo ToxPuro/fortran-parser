@@ -335,6 +335,8 @@ def gen_field3(index):
     return f"Field3(Field({index}), Field({index}+1), Field({index}+2))"
 def map_curl(func_call):
     params = func_call["parameters"]
+    print("HMM CURL PARAMS: ",params)
+    print("HMM CURL LINE: ",func_call["line"])
     if len(params)>3:
         pexit("optional params not supported")
     return [f"{params[2]} = curl({gen_field3(params[1])})"]
@@ -345,7 +347,7 @@ def map_curl_mn(func_call):
     #other_params = func_call["parameters"][:1] + func_call["parameters"][2:]
     #return f"{func_call['parameters'][1]}=curl_from_matrix({','.join(other_params)})"
 
-    return [f"{func_call['parameters'][1]}=curl_from_matrix({func_call['parameters'][0]})"]
+    return [f"{func_call['parameters'][1]}=curl({func_call['parameters'][0]})"]
 
 def map_dot_mn(func_call):
     params = func_call["parameters"]
@@ -365,7 +367,7 @@ def map_del2v(func_call):
     params = func_call["parameters"]
     if len(params)>3:
         pexit("optional params not supported")
-    return [f"{params[2]} = veclaplace({gen_field3(params[1])})"]
+    return [f"{params[2]} = laplace({gen_field3(params[1])})"]
 
 def map_del4v(func_call):
     params = func_call["parameters"]
@@ -375,7 +377,7 @@ def map_del6v(func_call):
     params = func_call["new_param_list"]
     if len(params)>3:
         if(params[-1][0] == ".true."):
-            return [f"{params[2][0]} = del6v_strict({gen_field3(params[1][0])})"]
+            return [f"{params[2][0]} = del6_strict({gen_field3(params[1][0])})"]
         print(params)
         pexit("optional params not supported")
     return [f"{params[2][0]} = del6({gen_field3(params[1][0])})"]
@@ -410,15 +412,15 @@ def map_gij(func_call):
     if(params[3] == "1"):
         return [f"{params[2]} = gradient({gen_field3(params[1])})"]
     if(params[3] == "2"):
-        return [f"{params[2]} = gradient_2({gen_field3(params[1])})"]
+        return [f"{params[2]} = gradient2({gen_field3(params[1])})"]
     if(params[3] == "3"):
-        return [f"{params[2]} = gradient_3({gen_field3(params[1])})"]
+        return [f"{params[2]} = gradient3({gen_field3(params[1])})"]
     if(params[3] == "4"):
-        return [f"{params[2]} = gradient_4({gen_field3(params[1])})"]
+        return [f"{params[2]} = gradient4({gen_field3(params[1])})"]
     if(params[3] == "5"):
-        return [f"{params[2]} = gradient_5({gen_field3(params[1])})"]
+        return [f"{params[2]} = gradient5({gen_field3(params[1])})"]
     if(params[3] == "6"):
-        return [f"{params[2]} = gradient_6({gen_field3(params[1])})"]
+        return [f"{params[2]} = gradient6({gen_field3(params[1])})"]
     print(params)
     pexit("what to do")
 
@@ -699,31 +701,29 @@ def map_del4graddiv(func_call):
 def map_del6fj(func_call):
     params = func_call["parameters"]
     return [f"{params[3]}  = del6fj(Field({params[2]}), {params[1]})"]
+
+def index_to_der_name(i):
+    if i == 1:
+        return "x"
+    elif i == 2:
+        return "y"
+    elif i == 3:
+        return "z"
+    pexit("Weird index: ",i)
 def map_der5i1j(func_call):
     params = func_call["new_param_list"]
     i = int(pc_parser.evaluate_integer(params[3][0]))
     j = int(pc_parser.evaluate_integer(params[4][0]))
     if i == 1 and j == 1:
         return [f"{params[2][0]} = der6x(Field({params[1][0]}))"]
-    elif i == 1 and j == 2:
-        return [f"{params[2][0]} = der5x1y(Field({params[1][0]}))"]
-    elif i == 1 and j == 3:
-        return [f"{params[2][0]} = der5x1z(Field({params[1][0]}))"]
-
-    elif i == 2 and j == 1:
-        return [f"{params[2][0]} = der5x1y(Field({params[1][0]}))"]
     elif i == 2 and j == 2:
         return [f"{params[2][0]} = der6y(Field({params[1][0]}))"]
-    elif i == 2 and j == 3:
-        return [f"{params[2][0]} = der5y1z(Field({params[1][0]}))"]
-
-
-    elif i == 3 and j == 1:
-        return [f"{params[2][0]} = der5x1z(Field({params[1][0]}))"]
-    elif i == 3 and j == 2:
-        return [f"{params[2][0]} = der5y1z(Field({params[1][0]}))"]
     elif i == 3 and j == 3:
         return [f"{params[2][0]} = der6z(Field({params[1][0]}))"]
+    else:
+        first_der_name  = index_to_der_name(i)
+        second_der_name  = index_to_der_name(j)
+        return [f"{params[2][0]} = der5{first_der_name}{second_der_name}(Field({params[1][0]}))"]
     print(params)
     pexit("what to do?")
 def map_der2i2j2k(func_call):
@@ -733,28 +733,20 @@ def map_der4i2j(func_call):
     params = func_call["new_param_list"]
     i = int(pc_parser.evaluate_integer(params[3][0]))
     j = int(pc_parser.evaluate_integer(params[4][0]))
+    print(params)
+    params = func_call["new_param_list"]
+    i = int(pc_parser.evaluate_integer(params[3][0]))
+    j = int(pc_parser.evaluate_integer(params[4][0]))
     if i == 1 and j == 1:
         return [f"{params[2][0]} = der6x(Field({params[1][0]}))"]
-    elif i == 1 and j == 2:
-        return [f"{params[2][0]} = der4x2y(Field({params[1][0]}))"]
-    elif i == 1 and j == 3:
-        return [f"{params[2][0]} = der4x2z(Field({params[1][0]}))"]
-
-    elif i == 2 and j == 1:
-        return [f"{params[2][0]} = der4y2x(Field({params[1][0]}))"]
     elif i == 2 and j == 2:
         return [f"{params[2][0]} = der6y(Field({params[1][0]}))"]
-    elif i == 2 and j == 3:
-        return [f"{params[2][0]} = der4y2z(Field({params[1][0]}))"]
-
-
-    elif i == 3 and j == 1:
-        return [f"{params[2][0]} = der4z2x(Field({params[1][0]}))"]
-    elif i == 3 and j == 2:
-        return [f"{params[2][0]} = der4z2y(Field({params[1][0]}))"]
     elif i == 3 and j == 3:
         return [f"{params[2][0]} = der6z(Field({params[1][0]}))"]
-    print(params)
+    else:
+        first_der_name  = index_to_der_name(i)
+        second_der_name  = index_to_der_name(j)
+        return [f"{params[2][0]} = der4{first_der_name}2{second_der_name}(Field({params[1][0]}))"]
     pexit("what to do?")
 
 def map_multmm_sc_mn(func_call):
@@ -1064,6 +1056,11 @@ sub_funcs = {
         "output_params_indexes": [2],
         "map_func": map_cross_mn
     },
+    ##TP: curl has to come before curl_mn since otherwise curl_mn -> curl and would be picked up by map_curl
+    "curl":{
+        "output_params_indexes": [2],
+        "map_func": map_curl
+    },
     "curl_mn":
     {
         "output_params_indexes": [1],
@@ -1139,10 +1136,6 @@ sub_funcs = {
     {
         "output_params_indexes": [1],
         "map_func": map_div_mn
-    },
-    "curl":{
-        "output_params_indexes": [2],
-        "map_func": map_curl
     },
     "del2v_etc":{
         "output_params_indexes": [2,3,4,5],
@@ -2673,7 +2666,7 @@ class Parser:
                     profile_type = "x"
                 elif dims in [["mz"],["nz"]]:
                     profile_type = "z"
-                elif dims in [["mx","3"],["nx","3"]]:
+                elif len(dims) == 2 and dims[0] in ["mx","nx"] and dims[1].isnumeric():
                     profile_type = "x_vec"
                 elif dims in [["my","3"],["ny","3"]]:
                     profile_type = "y_vec"
@@ -6639,6 +6632,7 @@ class Parser:
                 #get local var info to map funcs
                 func_calls[0]["local_variables"] = local_variables
                 func_calls[0]["static_variables"] = self.static_variables
+                func_calls[0]["line"]             = lines[line_index]
                 res.extend(sub_funcs[func_calls[0]["function_name"]]["map_func"](func_calls[0]))
             else:
                 res.append(lines[line_index])
@@ -6851,20 +6845,21 @@ class Parser:
         return lines
 
     def trans_to_normal_indexing(self,segment,segment_index,line,local_variables,info):
+        if segment[0] != info["var"]:
+            return line[segment[1]:segment[2]]
         dims = info["dims"]
         first_part = dims[0].split(":")[0]
-        assert(first_part[0] == "-")
+        if not (first_part[0] == "-"):
+            pexit("HMM ",line)
         negative_offset = first_part[1:]
-        if segment[0] == info["var"]:
-            indexes = get_segment_indexes(segment,line,len(dims))
-            assert(len(indexes) == 1)
-            #don't want to consider it for now
-            assert(":" not in indexes[0])
-            #plus 1 since normal Fortran indexing is 1 based indexing
-            indexes = [f"{indexes[0]}+{negative_offset}+1"]
-            res = build_new_access(segment[0],indexes)
-            return res
-        return line[segment[1]:segment[2]]
+        indexes = get_segment_indexes(segment,line,len(dims))
+        assert(len(indexes) == 1)
+        #don't want to consider it for now
+        assert(":" not in indexes[0])
+        #plus 1 since normal Fortran indexing is 1 based indexing
+        indexes = [f"{indexes[0]}+{negative_offset}+1"]
+        res = build_new_access(segment[0],indexes)
+        return res
     def elim_leftover_lines(self,lines):
         res = []
         for line in lines:
@@ -8254,17 +8249,17 @@ def main():
     argparser.add_argument("-f", "--function", help="function to be parsed", required=True)
     argparser.add_argument("-F", "--file", help="File where to parse the function", required=True)
     argparser.add_argument("-m", "--use-make-output",type=str, help="Pass a file path if want to only analyze the files used in build process. Takes in the print output of make. If not given traverses the file structure to find all .f90 files in /src")
-    argparser.add_argument("-c", "--communication",default=True,action=argparse.BooleanOptionalAction, help="Whether to check for mpi calls, can be used to check if code to be multithreaded is safe")
-    argparser.add_argument("-o", "--offload",default=False,action=argparse.BooleanOptionalAction, help="Whether to offload the current code. Cannot multithread and offload at the same time")
-    argparser.add_argument("-t", "--test",default=False,action=argparse.BooleanOptionalAction, help="Whether to generate an inlined version of the given subroutine (mainly used for testing)")
+    argparser.add_argument("-c", "--communication",default=True,action="store_true", help="Whether to check for mpi calls, can be used to check if code to be multithreaded is safe")
+    argparser.add_argument("-o", "--offload",default=False,action="store_true", help="Whether to offload the current code. Cannot multithread and offload at the same time")
+    argparser.add_argument("-t", "--test",default=False,action="store_true", help="Whether to generate an inlined version of the given subroutine (mainly used for testing)")
     argparser.add_argument("-d", "--directory",required=True, help="From which directory to look for files")
     argparser.add_argument("--sample-dir", required=False, help="Sample")
     # argparser.add_argument("-od", "--out-directory",required=True, help="To which directory write include files")
     argparser.add_argument("-M", "--Makefile", help="Makefile.local from which used modules are parsed")
-    argparser.add_argument("-b", "--boundcond",default=False,action=argparse.BooleanOptionalAction, help="Whether the subroutine to offload is a boundcond or not")
-    argparser.add_argument("-s", "--stencil",default=False,action=argparse.BooleanOptionalAction, help="Whether the subroutine to offload is a stencil op e.g. RK3 or not")
-    argparser.add_argument("--to-c",default=False,action=argparse.BooleanOptionalAction, help="Whether to translate offloadable function to single threaded C for testing")
-    argparser.add_argument("--diagnostics",default=False,action=argparse.BooleanOptionalAction, help="Whether to include diagnostics calculations in rhs calc")
+    argparser.add_argument("-b", "--boundcond",default=False,action="store_true", help="Whether the subroutine to offload is a boundcond or not")
+    argparser.add_argument("-s", "--stencil",default=False,action="store_true", help="Whether the subroutine to offload is a stencil op e.g. RK3 or not")
+    argparser.add_argument("--to-c",default=False,action="store_true", help="Whether to translate offloadable function to single threaded C for testing")
+    argparser.add_argument("--diagnostics",default=False,action="store_true", help="Whether to include diagnostics calculations in rhs calc")
     
     args = argparser.parse_args()
     config = vars(args)
@@ -9063,6 +9058,7 @@ def main():
         local_variables = {parameter:v for parameter,v in parser.get_variables(new_lines, {},filename,True).items() }
         
         res = parser.transform_lines(new_lines,new_lines, local_variables,transform_func)
+        print("DONE TRANSFORMING LINES\n")
         res = [normalize_reals(line).replace("(:,1)",".x").replace("(:,2)",".y").replace("(:,3)",".z") for line in res]
         file = open("static_var_declares.h","w")
         for var in parser.static_variables_to_declare: 
@@ -9098,11 +9094,11 @@ def main():
             elif dims  == [f"n{dim}__mod__cparam"]:
               file.write(f"gmem {translate_to_DSL(type)} AC_{name}[AC_n{dim}]\n")
               declared_vars.append(var)
-            elif dims  == [f"m{dim}__mod__cparam","3"]:
-              file.write(f"gmem {translate_to_DSL(type)} AC_{name}[AC_m{dim}][3]\n")
+            elif len(dims) == 2 and dims[0]  == f"m{dim}__mod__cparam" and dims[1].isnumeric():
+              file.write(f"gmem {translate_to_DSL(type)} AC_{name}[AC_m{dim}][{dims[1]}]\n")
               declared_vars.append(var)
-            elif dims  == [f"n{dim}__mod__cparam","3"]:
-              file.write(f"gmem {translate_to_DSL(type)} AC_{name}[AC_n{dim}][3]\n")
+            elif len(dims) == 2 and dims[0]  == f"n{dim}__mod__cparam" and dims[1].isnumeric():
+              file.write(f"gmem {translate_to_DSL(type)} AC_{name}[AC_n{dim}][{dims[1]}]\n")
               declared_vars.append(var)
             for second_dim in ["x","y","z"]:
               for p_1 in ["m","n"]:
@@ -9115,10 +9111,12 @@ def main():
                 for p_1 in ["m","n"]:
                     for p_2 in ["m","n"]:
                         for p_3 in ["m","n"]:
-                            if parser.static_variables[var]["profile_type"] == "vtxbuf":
-                              file.write(f"Field {name}")
-                            elif parser.static_variables[var]["profile_type"] == "vtxbuf_bundle":
-                              file.write(f"Field {name}{dims[3]}")
+                            if var not in declared_vars and parser.static_variables[var]["profile_type"] == "vtxbuf":
+                              file.write(f"Field {name}\n")
+                              declared_vars.append(var)
+                            elif var not in declared_vars and parser.static_variables[var]["profile_type"] == "vtxbuf_bundle":
+                              file.write(f"Field {name}{dims[3]}\n")
+                              declared_vars.append(var)
                             elif dims == [f"{p_1}{dim}__mod__cparam",f"{p_2}{second_dim}__mod__cparam",f"{p_3}{third_dim}__mod__cparam"]:
                                 file.write(f"gmem {translate_to_DSL(type)} AC_{name}[AC_{p_1}{dim}][AC_{p_2}{second_dim}][AC_{p_3}{third_dim}]\n")
                             elif dims == [f"{p_1}{dim}__mod__cparam",f"{p_2}{second_dim}__mod__cparam",f"{p_3}{third_dim}__mod__cparam","3"]:
