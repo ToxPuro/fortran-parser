@@ -461,7 +461,7 @@ def map_del2v_etc(func_call):
     res = []
     for param in enumerate(params):
         if param[-1] == "del2":
-            res.append[f"{param[0]} = veclaplace({gen_field3(params[1][0])})"]
+            res.append[f"{param[0]} = laplace({gen_field3(params[1][0])})"]
         elif param[-1] == "graddiv":
             res.append[f"{param[0]} = gradient_of_divergence({gen_field3(params[1][0])})"]
     return res
@@ -536,10 +536,10 @@ def map_del6(func_call):
     return [f"{params[2]} = del6(Field({params[1]}))"]
 def map_del2fi_dxjk(func_call):
     params = func_call["new_param_list"]
-    return [f"{params[2][0]} = del2fi_dxjk(Field({params[1][0]}))"]
+    return [f"{params[2][0]} = del2fi_dxjk({gen_field3(params[1][0])})"]
 def map_d2fi_dxj(func_call):
     params = func_call["new_param_list"]
-    return [f"{params[2][0]} = d2fi_dxj(Field({params[1][0]}))"]
+    return [f"{params[2][0]} = d2fi_dxj({gen_field3(params[1][0])})"]
 def map_d2f_dxj(func_call):
     params = func_call["new_param_list"]
     return [f"{params[2][0]} = d2f_dxj(Field({params[1][0]}))"]
@@ -674,7 +674,7 @@ def map_gij_etc(func_call):
             res.append(bij_line)
         #del2
         elif mapping == 5:
-            del2_line = f"{param[0]} = veclaplace({gen_field3(params[1][0])})"
+            del2_line = f"{param[0]} = laplace({gen_field3(params[1][0])})"
             res.append(del2_line)
         #graddiv
         elif mapping == 6:
@@ -723,7 +723,7 @@ def map_der5i1j(func_call):
     else:
         first_der_name  = index_to_der_name(i)
         second_der_name  = index_to_der_name(j)
-        return [f"{params[2][0]} = der5{first_der_name}{second_der_name}(Field({params[1][0]}))"]
+        return [f"{params[2][0]} = der5{first_der_name}1{second_der_name}(Field({params[1][0]}))"]
     print(params)
     pexit("what to do?")
 def map_der2i2j2k(func_call):
@@ -4972,7 +4972,7 @@ class Parser:
             return build_new_access(segment[0],sg_indexes)
         return line[segment[1]:segment[2]]
 
-    def transform_pencils(self,lines,all_inlined_lines,local_variables):
+    def transform_pencils(self,lines,local_variables):
         profile_replacements = {}
         #assuming all profiles are written in mn loop; if not use the lower
         for field in self.struct_table["pencil_case"]:
@@ -5651,6 +5651,82 @@ class Parser:
         if segment[0] == "uu_average__mod__hydro":
           pexit("HMM: ",res_index)
         return f"{segment[0]}{res_index}"
+    def gen_var_declares(self,file):
+        declared_vars= ["AC_npencils__mod__cparam"]
+        print("GEN VAR DECLARATIONS\n")
+        for var in self.static_variables:
+    
+          dims = self.static_variables[var]["dims"]
+          #if self.static_variables[var]["type"] in ["scattered_array","farray_contents_list","ode_vars_list"]:
+          #  continue
+          type = self.static_variables[var]["type"]
+          name = var
+          for dim in ["x","y","z"]:
+            if dims  == [f"m{dim}__mod__cparam"]:
+              file.write(f"gmem {translate_to_DSL(type)} AC_{name}[AC_m{dim}]\n")
+              declared_vars.append(var)
+            elif dims  == [f"n{dim}__mod__cparam"]:
+              file.write(f"gmem {translate_to_DSL(type)} AC_{name}[AC_n{dim}]\n")
+              declared_vars.append(var)
+            elif len(dims) == 2 and dims[0]  == f"m{dim}__mod__cparam" and dims[1].isnumeric():
+              file.write(f"gmem {translate_to_DSL(type)} AC_{name}[AC_m{dim}][{dims[1]}]\n")
+              declared_vars.append(var)
+            elif len(dims) == 2 and dims[0]  == f"n{dim}__mod__cparam" and dims[1].isnumeric():
+              file.write(f"gmem {translate_to_DSL(type)} AC_{name}[AC_n{dim}][{dims[1]}]\n")
+              declared_vars.append(var)
+            for second_dim in ["x","y","z"]:
+              for p_1 in ["m","n"]:
+                for p_2 in ["m","n"]:
+                  if dims == [f"{p_1}{dim}__mod__cparam",f"{p_2}{second_dim}__mod__cparam"]:
+                    file.write(f"gmem {translate_to_DSL(type)} AC_{name}[AC_{p_1}{dim}][AC_{p_2}{second_dim}]\n")
+                  elif dims == [f"{p_1}{dim}__mod__cparam",f"{p_2}{second_dim}__mod__cparam","3"]:
+                    file.write(f"gmem {translate_to_DSL(type)} AC_{name}[AC_{p_1}{dim}][AC_{p_2}{second_dim}][3]\n")
+              for third_dim in ["x","y","z"]:
+                for p_1 in ["m","n"]:
+                    for p_2 in ["m","n"]:
+                        for p_3 in ["m","n"]:
+                            if var not in declared_vars and self.static_variables[var]["profile_type"] == "vtxbuf":
+                              file.write(f"Field {name}\n")
+                              declared_vars.append(var)
+                            elif var not in declared_vars and self.static_variables[var]["profile_type"] == "vtxbuf_bundle":
+                              file.write(f"Field {name}{dims[3]}\n")
+                              declared_vars.append(var)
+                            elif dims == [f"{p_1}{dim}__mod__cparam",f"{p_2}{second_dim}__mod__cparam",f"{p_3}{third_dim}__mod__cparam"]:
+                                file.write(f"gmem {translate_to_DSL(type)} AC_{name}[AC_{p_1}{dim}][AC_{p_2}{second_dim}][AC_{p_3}{third_dim}]\n")
+                            elif dims == [f"{p_1}{dim}__mod__cparam",f"{p_2}{second_dim}__mod__cparam",f"{p_3}{third_dim}__mod__cparam","3"]:
+                                file.write(f"gmem {translate_to_DSL(type)} AC_{name}[AC_{p_1}{dim}][AC_{p_2}{second_dim}][AC_{p_3}{third_dim}][3]\n")
+
+                  
+          if dims == [] and type in ["integer","real","double","logical"] and var not in ["n__mod__cparam","m__mod__cparam"]:
+              if self.static_variables[var]["parameter"] and "value" in self.static_variables[var]:
+                val = self.static_variables[var]["value"]
+                if is_arithmetic_expression(val) or val in [".false.",".true."]:
+                  val = val.replace(".false.","false").replace(".true.","true")
+                  file.write(f"const {translate_to_DSL(type)} {name} = {val}\n")
+                  file.write(f"#define AC_{name} {name}\n")
+              else:
+                file.write(f"{translate_to_DSL(type)} AC_{name}\n")
+              declared_vars.append(var)
+          if dims == ["3"] and type in ["integer","real","double","logical"]:
+              file.write(f"{translate_to_DSL(type)}3 AC_{name}\n")
+              declared_vars.append(var)
+          elif dims == ["3","3"] and type in ["integer","real","double","logical"]:
+              file.write(f"{translate_to_DSL(type)} AC_{name}[3][3]\n")
+              declared_vars.append(var)
+        #TP: done after the first loop that loop dims are defined first
+        for var in [var for var in self.static_variables if var not in declared_vars]:
+          dims = self.static_variables[var]["dims"]
+          type = self.static_variables[var]["type"]
+          name = var
+          if len(dims) == 1 and type in ["integer","real","double","logical"] and dims[0] in self.static_variables and self.static_variables[dims[0]]["parameter"]:
+              val = self.static_variables[dims[0]]["value"]
+              if val.isnumeric():
+                file.write(f"{translate_to_DSL(type)} AC_{name}[{val}]\n")
+              declared_vars.append(var)
+          elif len(dims) == 1 and type in ["integer","real","double","logical"] and dims[0].isnumeric():
+              file.write(f"{translate_to_DSL(type)} AC_{name}[{dims[0]}]\n")
+              declared_vars.append(var)
+        
     def transform_line_stencil(self,line,num_of_looped_dims, local_variables, array_segments_indexes,rhs_var,vectors_to_replace, writes, loop_indexes):
         variables = merge_dictionaries(self.static_variables, local_variables)
         last_index = 0
@@ -5743,8 +5819,10 @@ class Parser:
                     elif segment[0] in local_variables and  len(indexes) == 3 and var_dims[0] == global_subdomain_range_x and var_dims[1] in bundle_dims and var_dims[2] in bundle_dims and indexes[0] == ":" and ":" not in indexes[1] and ":" not in indexes[2]:
                         res = f"{segment[0]}[{indexes[1]} -1][{indexes[2]} -1]"
                     #becomes a vector to vector indexes
-                    elif segment[0] in local_variables and var_dims[:-1] ==  [global_subdomain_range_x,"3"] and var_dims[-1] in bundle_dims and indexes[:-1] in [[],[":",":"]]:
+                    elif segment[0] in local_variables and var_dims[:-1] ==  [global_subdomain_range_x,"3"] and var_dims[-1] in bundle_dims and indexes in [[],[":",":",":"]]:
                         res = segment[0]
+                    elif segment[0] in local_variables and var_dims[:-1] ==  [global_subdomain_range_x,"3"] and var_dims[-1] in bundle_dims and indexes[:-1] in [[],[":",":"]]:
+                        res = f"{segment[0]}[{indexes[-1]}-1]"
                     elif segment[0] in local_variables and var_dims[:-1] ==  [global_subdomain_range_x,"3"] and var_dims[-1] in bundle_dims and ":" not in indexes[1] and ":" not in indexes[2]:
                         res = f"{segment[0]}[{indexes[1]}][{indexes[2]}]"
                     elif segment[0] in local_variables and  var_dims[:-1] == [global_subdomain_range_x,"3"] and var_dims[-1] in bundle_dims and indexes[:-1] in [[],[":","1"]]:
@@ -5842,6 +5920,8 @@ class Parser:
                           pexit("HMM: ",res)
                     elif len(var_dims) == 1 and num_of_looped_dims == 0 and len(indexes) == 0:
                         res = f"{line[segment[1]:segment[2]]}"
+                    elif len(var_dims) == 1 and var_dims[0] == global_subdomain_range_x and len(indexes) == 1 and indexes[0] == global_subdomain_range_x_inner:
+                        res = f"{segment[0]}"
                     elif len(var_dims) == 1 and len(indexes) == 1 and indexes[0] == global_subdomain_range_x_inner:
                         res = f"{segment[0]}[vertexIdx.x]"
                     elif len(var_dims) == 2 and num_of_looped_dims == 1 and indexes[1] == ":" and var_dims[1] == "nx__mod__cparam":
@@ -6160,6 +6240,7 @@ class Parser:
                 pexit("HMM var",var)
             if len(vars_to_declare) == 0  or local_variables[vars_to_declare[0]]["type"] != "real":
                 return ""
+            dims = local_variables[vars_to_declare[0]]["dims"]
             if local_variables[vars_to_declare[0]]["dims"] in [[],[global_subdomain_range_x]]:
                 return "real " + ", ".join(vars_to_declare)
             if local_variables[vars_to_declare[0]]["dims"] == [global_subdomain_range_x,"3","3"]:
@@ -6168,18 +6249,18 @@ class Parser:
                 return "real3 " + ", ".join(vars_to_declare)
             if local_variables[vars_to_declare[0]]["dims"] == [global_subdomain_range_x,"3","3","3"]:
                 #tensors are not yet supported
-                return "tensor " + ", ".join(vars_to_declare)
-            if local_variables[vars_to_declare[0]]["dims"] == [global_subdomain_range_x,"3","npscalar__mod__cparam"]:
+                return "Tensor " + ", ".join(vars_to_declare)
+            if dims[:-1] ==  [global_subdomain_range_x,"3"] and dims[-1] in bundle_dims:
                 #tensors are not yet supported
                 res = ""
                 for var in vars_to_declare:
-                  res = res + "real3 " + var + "[AC_npscalar]\n"
+                  res = res + "real3 " + var + f"[AC_{dims[-1]}]\n"
                 return res
-            if local_variables[vars_to_declare[0]]["dims"] == [global_subdomain_range_x,"npscalar__mod__cparam"]:
+            if dims[:-1] ==  [global_subdomain_range_x] and dims[-1] in bundle_dims:
                 #tensors are not yet supported
                 res = ""
                 for var in vars_to_declare:
-                  res = res + "real " + var + "[AC_npscalar]\n"
+                  res = res + "real " + var + f"[AC_{dims[-1]}]\n"
                 return res
             if "der_step_return_value_37_38_65" in vars_to_declare:
               pexit("HI")
@@ -6388,7 +6469,25 @@ class Parser:
                         }
                     res_lines.append("do spread_index=1,3")
                     new_rhs = f"{var_name}(:,spread_index)"
-                    res_lines.append(new_rhs + res_line[rhs_segment[2]:])
+                    new_res = new_rhs + res_line[rhs_segment[2]:]
+                    #TP: we skip the first one since no need to transform it
+                    arr_segs_in_res  = self.get_array_segments_in_line(new_res,variables)[1:]
+                    map_vals = []
+                    for seg in arr_segs_in_res:
+                        dims = variables[seg[0]]["dims"]
+                        indexes = get_segment_indexes(seg,new_res,0)
+                        if dims == ["nx__mod__cparam"]:
+                            map_vals.append(new_res[seg[1]:seg[2]])
+                        #TP this was previously a broadcast op so need to add the spread index to the end of this also
+                        elif dims == ["nx__mod__cparam","3"] and indexes == []:
+                            map_vals.append(f"{new_res[seg[1]:seg[2]]}(:,spread_index)")
+                        else:
+                            pexit("Don't know how to handle array in expression involving spread","line: ",line,"array: ",new_res[seg[1]:seg[2]])
+                    if(len(map_vals) < len(arr_segs_in_res)):
+                        pexit(f"LENS do not match: {len(map_vals)} {len(arr_segs_in_res)}\n")
+
+                    new_res =  self.replace_segments(arr_segs_in_res,new_res,self.map_val_func,{},{"map_val": map_vals})
+                    res_lines.append(new_res)
                     res_lines.append("enddo")
 
                 #not really a spread since would be legal without the spread
@@ -6917,17 +7016,16 @@ class Parser:
         #  print(line)
         #exit()
         return res_lines
-    def transform_lines(self,lines,all_inlined_lines,local_variables,transform_func):
-        lines = self.transform_pointers(lines,merge_dictionaries(local_variables,self.static_variables))
-        lines = self.transform_case(lines)
-        lines = self.normalize_if_calls(lines, local_variables)
-        lines = self.normalize_where_calls(lines, local_variables)
-        lines = self.normalize_if_calls(lines, local_variables)
 
-        #move written profiles to local_vars since we know their values
-        if self.offload_type == "stencil":
-            lines = self.transform_pencils(lines,all_inlined_lines,local_variables)
-            variables = merge_dictionaries(local_variables,self.static_variables)
+    def replace_field_index_arithmetic(self,lines,variables):
+        res = []
+        for line in lines:
+            line = line.replace("iux__mod__cdata+1-1","iux__mod__cdata")
+            line = line.replace("iux__mod__cdata+2-1","iuy__mod__cdata")
+            line = line.replace("iux__mod__cdata+3-1","iuy__mod__cdata")
+            res.append(line)
+        return res
+    def transform_lines(self,lines,all_inlined_lines,local_variables,transform_func):
 
         self.normalize_impossible_val()
         for i,line in enumerate(lines):
@@ -7045,6 +7143,7 @@ class Parser:
         for line in lines:
             file.write(f"{line}\n")
         file.close()
+        lines = self.replace_field_index_arithmetic(lines,variables)
         #transform spreads into do loops
         lines = self.transform_spreads(lines,local_variables,variables)
         file = open("res-inlined-spread.txt","w")
@@ -7170,8 +7269,6 @@ class Parser:
         for line in lines:
             file.write(f"{line}\n")
         file.close()
-        lines = [line.replace("iuu__mod__cdata","F_UX") for line in lines]
-        lines = [line.replace("F_UX","F_UU.x").replace("F_UY","F_UU.y").replace("F_UZ","F_UU.z") for line in lines]
 
         lines = translate_fortran_ops_to_c(lines)
 
@@ -8073,7 +8170,20 @@ class Parser:
                     res_lines.append(line)
             else:
                 res_lines.append(line)
+        lines = res_lines
+        res_lines = []
+        #TP: remove names from elseifs
+        for line in [x.strip() for x in lines]:
+            if len(line) >= len("elseif") and line[0:len("elseif")] == "elseif" and line[-len("then"):len(line)] != "then":
+                parts = line.split("then")
+                if(len(parts) != 2):
+                    pexit("HMM ",line)
+                res = parts[0] + " then"
+                res_lines.append(res)
+            else:
+                res_lines.append(line)
         return res_lines
+    
     def normalize_where_calls(self,lines,local_variables):
       res_lines = []
       for line_index, line in enumerate(lines):
@@ -8092,6 +8202,19 @@ class Parser:
         else:
           res_lines.append(line)
       return res_lines
+
+    def normalize(self, lines):
+        local_variables = {parameter:v for parameter,v in self.get_variables(lines, {},self.file,True).items() }
+        lines = self.transform_pointers(lines,merge_dictionaries(local_variables,self.static_variables))
+        lines = self.transform_case(lines)
+        lines = self.normalize_if_calls(lines, local_variables)
+        lines = self.normalize_where_calls(lines, local_variables)
+        lines = self.normalize_if_calls(lines, local_variables)
+
+        #move written profiles to local_vars since we know their values
+        if self.offload_type == "stencil":
+            lines = self.transform_pencils(lines,local_variables)
+        return lines
 
     def add_vtxbuf_indexes(self,func_name,auxiliaries=False):
         calls = [call for call in self.farray_register_calls if call["function_name"] == func_name]
@@ -8889,6 +9012,7 @@ def main():
         if not os.path.isfile("res-inlined.txt"):
             parser.inline_all_function_calls(filename,subroutine_name,orig_lines,subs_not_to_inline) 
             new_lines = parser.func_info[subroutine_name]["inlined_lines"][filename]
+            new_lines = parser.normalize(new_lines)
             file = open("res-inlined.txt","w")
             for line in new_lines:
                 file.write(f"{line}\n")
@@ -9079,80 +9203,12 @@ def main():
         file.write("gmem real AC_nphis1__mod__cdata[AC_mx__mod__cparam]\n")
         file.write("gmem real AC_nphis2__mod__cdata[AC_mx__mod__cparam]\n")
         file.write("//\n")
-        declared_vars= ["AC_npencils__mod__cparam"]
-        for var in parser.static_variables:
-    
-          dims = parser.static_variables[var]["dims"]
-          #if parser.static_variables[var]["type"] in ["scattered_array","farray_contents_list","ode_vars_list"]:
-          #  continue
-          type = parser.static_variables[var]["type"]
-          name = var
-          for dim in ["x","y","z"]:
-            if dims  == [f"m{dim}__mod__cparam"]:
-              file.write(f"gmem {translate_to_DSL(type)} AC_{name}[AC_m{dim}]\n")
-              declared_vars.append(var)
-            elif dims  == [f"n{dim}__mod__cparam"]:
-              file.write(f"gmem {translate_to_DSL(type)} AC_{name}[AC_n{dim}]\n")
-              declared_vars.append(var)
-            elif len(dims) == 2 and dims[0]  == f"m{dim}__mod__cparam" and dims[1].isnumeric():
-              file.write(f"gmem {translate_to_DSL(type)} AC_{name}[AC_m{dim}][{dims[1]}]\n")
-              declared_vars.append(var)
-            elif len(dims) == 2 and dims[0]  == f"n{dim}__mod__cparam" and dims[1].isnumeric():
-              file.write(f"gmem {translate_to_DSL(type)} AC_{name}[AC_n{dim}][{dims[1]}]\n")
-              declared_vars.append(var)
-            for second_dim in ["x","y","z"]:
-              for p_1 in ["m","n"]:
-                for p_2 in ["m","n"]:
-                  if dims == [f"{p_1}{dim}__mod__cparam",f"{p_2}{second_dim}__mod__cparam"]:
-                    file.write(f"gmem {translate_to_DSL(type)} AC_{name}[AC_{p_1}{dim}][AC_{p_2}{second_dim}]\n")
-                  elif dims == [f"{p_1}{dim}__mod__cparam",f"{p_2}{second_dim}__mod__cparam","3"]:
-                    file.write(f"gmem {translate_to_DSL(type)} AC_{name}[AC_{p_1}{dim}][AC_{p_2}{second_dim}][3]\n")
-              for third_dim in ["x","y","z"]:
-                for p_1 in ["m","n"]:
-                    for p_2 in ["m","n"]:
-                        for p_3 in ["m","n"]:
-                            if var not in declared_vars and parser.static_variables[var]["profile_type"] == "vtxbuf":
-                              file.write(f"Field {name}\n")
-                              declared_vars.append(var)
-                            elif var not in declared_vars and parser.static_variables[var]["profile_type"] == "vtxbuf_bundle":
-                              file.write(f"Field {name}{dims[3]}\n")
-                              declared_vars.append(var)
-                            elif dims == [f"{p_1}{dim}__mod__cparam",f"{p_2}{second_dim}__mod__cparam",f"{p_3}{third_dim}__mod__cparam"]:
-                                file.write(f"gmem {translate_to_DSL(type)} AC_{name}[AC_{p_1}{dim}][AC_{p_2}{second_dim}][AC_{p_3}{third_dim}]\n")
-                            elif dims == [f"{p_1}{dim}__mod__cparam",f"{p_2}{second_dim}__mod__cparam",f"{p_3}{third_dim}__mod__cparam","3"]:
-                                file.write(f"gmem {translate_to_DSL(type)} AC_{name}[AC_{p_1}{dim}][AC_{p_2}{second_dim}][AC_{p_3}{third_dim}][3]\n")
-
-                  
-          if dims == [] and type in ["integer","real","double","logical"] and var not in ["n__mod__cparam","m__mod__cparam"]:
-              if parser.static_variables[var]["parameter"] and "value" in parser.static_variables[var]:
-                val = parser.static_variables[var]["value"]
-                if is_arithmetic_expression(val) or val in [".false.",".true."]:
-                  val = val.replace(".false.","false").replace(".true.","true")
-                  file.write(f"const {translate_to_DSL(type)} {name} = {val}\n")
-                  file.write(f"#define AC_{name} {name}\n")
-              else:
-                file.write(f"{translate_to_DSL(type)} AC_{name}\n")
-              declared_vars.append(var)
-          if dims == ["3"] and type in ["integer","real","double","logical"]:
-              file.write(f"{translate_to_DSL(type)}3 AC_{name}\n")
-              declared_vars.append(var)
-          elif dims == ["3","3"] and type in ["integer","real","double","logical"]:
-              file.write(f"{translate_to_DSL(type)} AC_{name}[3][3]\n")
-              declared_vars.append(var)
-        #TP: done after the first loop that loop dims are defined first
-        for var in [var for var in parser.static_variables if var not in declared_vars]:
-          dims = parser.static_variables[var]["dims"]
-          type = parser.static_variables[var]["type"]
-          name = var
-          if len(dims) == 1 and type in ["integer","real","double","logical"] and dims[0] in parser.static_variables and parser.static_variables[dims[0]]["parameter"]:
-              val = parser.static_variables[dims[0]]["value"]
-              if val.isnumeric():
-                file.write(f"{translate_to_DSL(type)} AC_{name}[{val}]\n")
-              declared_vars.append(var)
-          elif len(dims) == 1 and type in ["integer","real","double","logical"] and dims[0].isnumeric():
-              file.write(f"{translate_to_DSL(type)} AC_{name}[{dims[0]}]\n")
-              declared_vars.append(var)
-        
+        file.write("#include \"var_declares.h\"\n")
+        ##TP this is slow for some reason but can cache it to an include file
+        if not os.path.isfile("var_declares.h"):
+            var_declares_file = open("var_declares.h","w")
+            parser.gen_var_declares(var_declares_file)
+            var_declares_file.close()
         file.write("bool AC_lpencil__mod__cparam[AC_npencils__mod__cparam]\n")
         for line in res:
   
