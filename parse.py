@@ -37,6 +37,31 @@ bundle_dims = [
 multiplicative_ops = "*/"
 additive_ops = "+-"
 all_ops = "*/+-"
+
+def get_if_in_global_loop(indexes):
+    for i in range(len(indexes)):
+        if indexes[i][1]:
+            return True
+    return False
+def inside_nx_loop(indexes):
+    for i in range(len(indexes)):
+        if indexes[i][1] and indexes[i][2] == "nx__mod__cparam":
+            return True
+    return False
+def get_nx_loop_index(indexes):
+    for i in range(len(indexes)):
+        if indexes[i][1] and indexes[i][2] == "nx__mod__cparam":
+            return indexes[i][0]
+    return ""
+def get_if_compatible(first_index,loop_index,loop_range):
+        if(first_index == loop_index):
+            return True
+        if loop_range != "nx__mod__cparam":
+            return False
+        #TP: if loop 1,nx then offsetting with nghost gives the correct val
+        if first_index != f"{loop_index}+nghost__mod__cparam":
+            return False
+        return True
 class ASTNode:
     def __init__(self,val,ast_type,lhs,rhs,parent):
         self.val = val
@@ -207,7 +232,7 @@ nghost_val = "3"
 global_subdomain_range_with_halos_x = f"{global_subdomain_range_x}+2*{nghost_val}"
 global_subdomain_range_with_halos_y = f"{global_subdomain_range_y}+2*{nghost_val}"
 global_subdomain_range_with_halos_z = f"{global_subdomain_range_z}+2*{nghost_val}"
-global_subdomain_ranges = [global_subdomain_range_with_halos_x,global_subdomain_range_with_halos_y,global_subdomain_range_with_halos_z]
+global_subdomain_ranges = [global_subdomain_range_x,global_subdomain_range_with_halos_x,global_subdomain_range_with_halos_y,global_subdomain_range_with_halos_z]
 global_subdomain_range_x_upper = "l2__mod__cparam"
 global_subdomain_range_x_lower= "l1__mod__cparam"
 global_subdomain_range_x_inner = f"{global_subdomain_range_x_lower}:{global_subdomain_range_x_upper}"
@@ -810,8 +835,18 @@ def return_false(func_call):
 def map_u_grad_kurganov_tadmore(func_call):
     params = func_call["parameters"]
     return [f"{params[2]} = u_grad_kurganov_tadmore({params[1]},{params[3]})"]
-    
-
+def map_spline_derivative(func_call):
+    line = func_call["line"]
+    pexit("HMM: ",line)
+def map_spline_integral(func_call):
+    line = func_call["line"]
+    pexit("HMM: ",line)
+def map_shear_advection(func_call):
+    return ["#include  \"shear_advection.h\""]
+def map_hyper3x_mesh(func_call):
+    return ["#include  \"hyper3x_mesh.h\""]
+def map_test_field_shear(func_call):
+    return ["#include  \"test_field_shear.h\""]
 
 
 
@@ -827,6 +862,31 @@ def map_u_grad_kurganov_tadmore(func_call):
 
 
 sub_funcs = {
+    "test_field_shear":
+    {
+        "output_param_indexes": [],
+        "map_func": map_test_field_shear
+    },
+    "shear_advection":
+    {
+        "output_param_indexes": [],
+        "map_func": map_shear_advection
+    },
+    "do_hyper3x_mesh":
+    {
+        "output_param_indexes": [],
+        "map_func": map_hyper3x_mesh
+    },
+    "spline_derivative":
+    {
+        "output_param_indexes": [],
+        "map_func": map_spline_derivative
+    },
+    "spline_integral":
+    {
+        "output_param_indexes": [],
+        "map_func": map_spline_integral
+    },
     "u_grad_kurganov_tadmore":
     {
       "output_params_indexes": [2],
@@ -5533,30 +5593,9 @@ class Parser:
           print("unsupported matrix read/write")
           print(line[segment[1]:segment[2]])
           print(indexes)
-    def get_f_array_access(self,line,segment,local_variables,i,rhs_var):
-        src = local_variables
-        orig_indexes = get_segment_indexes(segment,line, len([src[segment[0]]["dims"]]))
-        indexes = [self.evaluate_indexes(index) for index  in orig_indexes]
-        if not all([okay_stencil_index(self.evaluate_indexes(x[1]),x[0]) for x in enumerate(orig_indexes[:-1])]):
-            print("How how to handle stencil indexes?")
-            print(line[segment[1]:segment[2]])
-            print(indexes)
-            print([self.evaluate_indexes(index) for index in orig_indexes])
-            pexit(line)
-        if ":" in indexes[-1]:
-            lower,upper = indexes[-1].split(":")
-            print("HMM LINE: ",line)
-            if is_vector_stencil_index(indexes[-1]) or indexes[-1] == "icc__mod__cdata:icc__mod__cdata+npscalar__mod__cparam-1" or upper == f"2+{lower}" or indexes[-1] in ["ibb_sphr__mod__cdata:ibb_sphp__mod__cdata","iglobal_ax_ext__mod__cdata:iglobal_az_ext__mod__cdata","ibxt__mod__cdata:ibzt__mod__cdata","ijxt__mod__cdata:ijzt__mod__cdata"""]:
-                make_vector_copies = True
-            else:
-                print("range in df index 3")
-                print(line[segment[1]:segment[2]])
-                print(indexes)
-                print(orig_indexes)
-                print("INDEX PAIR: ",lower,upper,upper == f"2+{lower}")
-                pexit("LINE: ",line)
+    def gen_f_access(self,i,rhs_var,segment,index):
         if segment[0] == "df":
-            vtxbuf_name = get_vtxbuf_name_from_index("DF_", remove_mod(indexes[-1]))
+            vtxbuf_name = get_vtxbuf_name_from_index("DF_", index)
             if "VEC" in vtxbuf_name:
               #return vtxbuf_name.replace("VEC",vtxbuf_name[-4])
               return vtxbuf_name
@@ -5564,7 +5603,7 @@ class Parser:
               return vtxbuf_name
         elif segment[0] == "f":
             #split in case range
-            vtxbuf_name = get_vtxbuf_name_from_index("F_",remove_mod(indexes[-1]))
+            vtxbuf_name = get_vtxbuf_name_from_index("F_",index)
             #if "VEC" in vtxbuf_name:
             #  vtxbuf_name = vtxbuf_name.replace("VEC",vtxbuf_name[-4])
             if i > 0 or rhs_var is None:
@@ -5577,7 +5616,57 @@ class Parser:
               #write to f variable, presumably this is because auxiliary variables
               #reuse DF_variable for now
               return f"D{vtxbuf_name}"
-        pexit("OH NO")
+
+    def get_f_array_access(self,line,segment,local_variables,i,rhs_var,loop_indexes,writes):
+        in_global_loop = get_if_in_global_loop(loop_indexes)
+        src = merge_dictionaries(local_variables,self.static_variables)
+        if in_global_loop:
+            orig_indexes = get_segment_indexes(segment,line, len([src[segment[0]]["dims"]]))
+            first_index = orig_indexes[0]
+            #TP: do not consider loop writes
+            writes_to_index = [x for x in writes if x["variable"] == first_index and len(x["value"]) >= 2 and x["value"][:2] != "1,"]
+            if len(writes_to_index) > 0 and all([x["value"] == writes_to_index[0]["value"] for x in writes_to_index]):
+                first_index = writes_to_index[0]["value"]
+
+            if all([not get_if_compatible(first_index,loop_indexes[i][0],loop_indexes[i][2]) for i in range(len(loop_indexes))]):
+                pexit("WEIRD FIRST DIM: ",first_index,line)
+            if(orig_indexes[1] != "m__mod__cdata"):
+                pexit("WEIRD SECOND DIM: ",orig_indexes[1])
+            if(orig_indexes[2] != "n__mod__cdata"):
+                pexit("WEIRD THIRD DIM: ",orig_indexes[2])
+            if ":" in orig_indexes[3]:
+                parts = [x.split("(")[0].strip() for x in orig_indexes[3].split(":")]
+                if len(parts) == 2:
+                    f_arr_index = orig_indexes[3].split(":")[0].split("(")[-1].split(")")[0].strip()
+                    if parts[0] == "iudx__mod__cdata":
+                        return f"value(F_DUSTVEC[{f_arr_index}])"
+                    
+                pexit("WEIRD FOURTH DIM: ",orig_indexes[3])
+            indexes = [self.evaluate_indexes(index) for index  in orig_indexes]
+            return self.gen_f_access(i,rhs_var,segment,remove_mod(indexes[-1]))
+
+
+        orig_indexes = get_segment_indexes(segment,line, len([src[segment[0]]["dims"]]))
+        indexes = [self.evaluate_indexes(index) for index  in orig_indexes]
+        if not all([okay_stencil_index(self.evaluate_indexes(x[1]),x[0]) for x in enumerate(orig_indexes[:-1])]):
+            print("How how to handle stencil indexes?")
+            print(line[segment[1]:segment[2]])
+            print(indexes)
+            print([self.evaluate_indexes(index) for index in orig_indexes])
+            pexit(line)
+        if ":" in indexes[-1]:
+            lower,upper = indexes[-1].split(":")
+            print("HMM LINE: ",line)
+            if is_vector_stencil_index(indexes[-1]) or indexes[-1] == "icc__mod__cdata:icc__mod__cdata+npscalar__mod__cparam-1" or upper == f"2+{lower}" or indexes[-1] in ["ibb_sphr__mod__cdata:ibb_sphp__mod__cdata","iglobal_ax_ext__mod__cdata:iglobal_az_ext__mod__cdata","ibxt__mod__cdata:ibzt__mod__cdata","ijxt__mod__cdata:ijzt__mod__cdata"""]:
+                pass
+            else:
+                print("range in df index 3")
+                print(line[segment[1]:segment[2]])
+                print(indexes)
+                print(orig_indexes)
+                print("INDEX PAIR: ",lower,upper,upper == f"2+{lower}")
+                pexit("LINE: ",line)
+        return self.gen_f_access(i,rhs_var,segment,remove_mod(indexes[-1]))
     def get_profile_access(self,var_dims,indexes,segment,src,line):
         prof_type = src[segment[0]]["profile_type"]
         res_index = None
@@ -5823,7 +5912,7 @@ class Parser:
             ((rhs_var in local_variables and
                 (
                     (num_of_looped_dims == 0 and len(rhs_dim) == 0)
-                    or (num_of_looped_dims == 1 and rhs_dim in bundle_dims)
+                    or (num_of_looped_dims == 1 and len(rhs_dim) == 1 and rhs_dim[0] in bundle_dims)
                     or (num_of_looped_dims == 3 and rhs_dim[1] in bundle_dims and rhs_dim[2] in bundle_dims and rhs_dim[0] == global_subdomain_range_x)
                     or (num_of_looped_dims == 1 and rhs_dim == ["3"])
                     or (num_of_looped_dims == 1 and rhs_dim in [[global_subdomain_range_x,"3"],[global_subdomain_range_x]])
@@ -5845,7 +5934,7 @@ class Parser:
                 else:
                     src = self.static_variables
                 if segment[0] == "df" or segment[0] == "f":
-                  res = self.get_f_array_access(line,segment,local_variables,i,rhs_var)
+                  res = self.get_f_array_access(line,segment,local_variables,i,rhs_var,loop_indexes,writes)
                 else:
                     var_dims = src[segment[0]]["dims"]
                     if var_dims == ['nx__mod__cparam,9']:
@@ -6003,7 +6092,14 @@ class Parser:
                     elif len(var_dims) == 2 and len(indexes) == 2:
                         res = f"{segment[0]}[{indexes[0]}-1][{indexes[1]}-1]"
                     elif len(var_dims) == 4 and len(indexes) == 4:
-                        res = f"{segment[0]}[{indexes[0]}][{indexes[1]}]{indexes[2]}[{indexes[3]}]"
+                        res = f"{segment[0]}[{indexes[0]}-1][{indexes[1]}-1][{indexes[2]}-1][{indexes[3]}-1]"
+                    elif inside_nx_loop(loop_indexes):
+                        nx_index = get_nx_loop_index(loop_indexes)
+                        #becomes a write to 2d array of bundle dims
+                        if len(var_dims) == 3 and len(indexes) == 3 and indexes[0] == nx_index and var_dims[1] in bundle_dims and var_dims[2] in bundle_dims:
+                            res = f"{segment[0]}[{indexes[1]}-1][{indexes[2]}-1]"
+                        else:
+                            pexit("nx loop what to do?")
                     else:
                         print("what to do?")
                         print(line[segment[1]:segment[2]])
@@ -6021,6 +6117,8 @@ class Parser:
             # res_line += line[last_index:] + ";"
             res_line += line[last_index:]
             #res_line = self.replace_fortran_indexing_to_c(res_line,variables)
+            if "DF_LNNDK_249VEC" in res_line:
+                pexit("WRONG: ",line,"--->",res_line)
       
             return res_line
 
@@ -6399,7 +6497,7 @@ class Parser:
             print("HMM LINE: ",line)
             loop_index = self.get_writes_from_line(line)[0]["variable"]
             lower,upper= [part.strip() for part in line.split("=")[1].split(",",1)]
-            loop_indexes.append((loop_index, upper in global_subdomain_ranges))
+            loop_indexes.append((loop_index, lower == "1" and upper in global_subdomain_ranges,upper))
             if upper in global_subdomain_ranges:
                 return ""
             #to convert to C loops
@@ -7086,8 +7184,16 @@ class Parser:
             line = line.replace("iux__mod__cdata+3-1","iuy__mod__cdata")
             res.append(line)
         return res
+    def check_for_offset_do_loops(self,lines):
+        for line in [x.strip() for x in lines]:
+            if len(line) < 2 or line[:2] != "do":
+                continue
+            parts = line.split(",")
+            if len(parts) == 3:
+                pexit("Do loops with offset not supported: ",line)
     def transform_lines(self,lines,all_inlined_lines,local_variables,transform_func):
 
+        self.check_for_offset_do_loops(lines)
         self.normalize_impossible_val()
         for i,line in enumerate(lines):
             if not has_balanced_parens(line) and "print*" not in line:
