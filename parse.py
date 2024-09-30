@@ -400,12 +400,13 @@ def map_del4v(func_call):
 
 def map_del6v(func_call):
     params = func_call["new_param_list"]
+    names = func_call["parameters"]
     if len(params)>3:
         if(params[-1][0] == ".true."):
-            return [f"{params[2][0]} = del6_strict({gen_field3(params[1][0])})"]
+            return [f"{names[2]} = del6_strict({gen_field3(names[1])})"]
         print(params)
         pexit("optional params not supported")
-    return [f"{params[2][0]} = del6({gen_field3(params[1][0])})"]
+    return [f"{names[2]} = del6({gen_field3(names[1])})"]
 
 def map_traceless_strain(func_call):
     params = func_call["new_param_list"]
@@ -499,21 +500,21 @@ def map_multm2_sym_mn(func_call):
 def map_u_dot_grad_vec(func_call):
     params = func_call["new_param_list"]
     names  = func_call["parameters"]
-    upwind = f"del6({gen_field3(params[1][0])})"
+    upwind = f"del6({gen_field3(names[1])})"
     res = []
     add_line = ""
     if len(params) == 6 and params[5][-1] == "upwind" and params[5][0] == ".false.":
         pass
     elif len(params) == 6 and params[5][-1] == "upwind" and params[5][0] == ".true.":
-        add_line = f"{params[4][0]} = {params[4][0]} + {upwind}"
+        add_line = f"{names[4]} = {names[4]} + {upwind}"
     elif len(params) == 6 and params[5][-1] == "upwind":
         upwind_param = names[5].split("=")[-1].strip()
-        add_line = f"if ({upwind_param}) {params[4][0]} = {params[4][0]} + {upwind}"
+        add_line = f"if ({upwind_param}) {names[4]} = {names[4]} + {upwind}"
     elif len(params)>5:
         print("\n\n")
         print([x[0] for x in params])
         pexit("optional params not supported\n")
-    main_line = f"{params[4][0]} = {params[2][0]}*{params[3][0]}"
+    main_line = f"{names[4]} = {names[2]}*{names[3]}"
     res.append(main_line)
     if len(add_line) > 0:
         res.append(add_line)
@@ -560,14 +561,14 @@ def map_del6(func_call):
         pexit("optional params not supported\n")
     return [f"{params[2]} = del6(Field({params[1]}))"]
 def map_del2fi_dxjk(func_call):
-    params = func_call["new_param_list"]
-    return [f"{params[2][0]} = del2fi_dxjk({gen_field3(params[1][0])})"]
+    params = func_call["parameters"]
+    return [f"{params[2]} = del2fi_dxjk({gen_field3(params[1])})"]
 def map_d2fi_dxj(func_call):
-    params = func_call["new_param_list"]
-    return [f"{params[2][0]} = d2fi_dxj({gen_field3(params[1][0])})"]
+    params = func_call["parameters"]
+    return [f"{params[2]} = d2fi_dxj({gen_field3(params[1])})"]
 def map_d2f_dxj(func_call):
-    params = func_call["new_param_list"]
-    return [f"{params[2][0]} = d2f_dxj(Field({params[1][0]}))"]
+    params = func_call["parameters"]
+    return [f"{params[2]} = d2f_dxj(Field({params[1]}))"]
 def map_g2ij(func_call):
     params = func_call["parameters"]
     return [f"{params[2]} = hessian(Field({params[1]}))"]
@@ -687,6 +688,7 @@ def map_set_ghosts_for_onesided_ders(func_call):
 
 def map_gij_etc(func_call):
     params = func_call["new_param_list"]
+    names = func_call["parameters"]
     subroutine_lines = pc_parser.get_subroutine_lines(func_call["function_name"], f"{pc_parser.directory}/sub.f90")
     sub_parameters = pc_parser.get_parameters(subroutine_lines[0])
     mappings = pc_parser.get_parameter_mapping(sub_parameters,params)
@@ -695,15 +697,15 @@ def map_gij_etc(func_call):
         mapping = mappings[i]
         #bij
         if mapping == 4:
-            bij_line = f"{param[0]} = bij({gen_field3(params[1][0])})"
+            bij_line = f"{param[0]} = bij({gen_field3(names[1])})"
             res.append(bij_line)
         #del2
         elif mapping == 5:
-            del2_line = f"{param[0]} = laplace({gen_field3(params[1][0])})"
+            del2_line = f"{param[0]} = laplace({gen_field3(names[1])})"
             res.append(del2_line)
         #graddiv
         elif mapping == 6:
-            graddiv_line = f"{param[0]} = gradient_of_divergence({gen_field3(params[1][0])})"
+            graddiv_line = f"{param[0]} = gradient_of_divergence({gen_field3(names[1])})"
             res.append(graddiv_line)
         elif mapping > 6:
             return ['not_implemented("gij_etc with more than 6 params")']
@@ -737,41 +739,42 @@ def index_to_der_name(i):
     pexit("Weird index: ",i)
 def map_der5i1j(func_call):
     params = func_call["new_param_list"]
+    names  = func_call["parameters"]
     i = int(pc_parser.evaluate_integer(params[3][0]))
     j = int(pc_parser.evaluate_integer(params[4][0]))
     if i == 1 and j == 1:
-        return [f"{params[2][0]} = der6x(Field({params[1][0]}))"]
+        return [f"{names[2]} = der6x(Field({names[1]}))"]
     elif i == 2 and j == 2:
-        return [f"{params[2][0]} = der6y(Field({params[1][0]}))"]
+        return [f"{names[2]} = der6y(Field({names[1]}))"]
     elif i == 3 and j == 3:
-        return [f"{params[2][0]} = der6z(Field({params[1][0]}))"]
+        return [f"{names[2]} = der6z(Field({names[1]}))"]
     else:
         first_der_name  = index_to_der_name(i)
         second_der_name  = index_to_der_name(j)
-        return [f"{params[2][0]} = der5{first_der_name}1{second_der_name}(Field({params[1][0]}))"]
+        return [f"{names[2]} = der5{first_der_name}1{second_der_name}(Field({names[1]}))"]
     print(params)
     pexit("what to do?")
 def map_der2i2j2k(func_call):
-    params = func_call["new_param_list"]
-    return [f"{params[2][0]} = der2i2j2k(Field({params[1][0]}))"]
+    names = func_call["parameters"]
+    return [f"{names[2]} = der2i2j2k(Field({names[1]}))"]
 def map_der4i2j(func_call):
     params = func_call["new_param_list"]
     i = int(pc_parser.evaluate_integer(params[3][0]))
     j = int(pc_parser.evaluate_integer(params[4][0]))
     print(params)
-    params = func_call["new_param_list"]
+    names = func_call["parameters"]
     i = int(pc_parser.evaluate_integer(params[3][0]))
     j = int(pc_parser.evaluate_integer(params[4][0]))
     if i == 1 and j == 1:
-        return [f"{params[2][0]} = der6x(Field({params[1][0]}))"]
+        return [f"{names[2]} = der6x(Field({names[1]}))"]
     elif i == 2 and j == 2:
-        return [f"{params[2][0]} = der6y(Field({params[1][0]}))"]
+        return [f"{names[2]} = der6y(Field({names[1]}))"]
     elif i == 3 and j == 3:
-        return [f"{params[2][0]} = der6z(Field({params[1][0]}))"]
+        return [f"{names[2]} = der6z(Field({names[1]}))"]
     else:
         first_der_name  = index_to_der_name(i)
         second_der_name  = index_to_der_name(j)
-        return [f"{params[2][0]} = der4{first_der_name}2{second_der_name}(Field({params[1][0]}))"]
+        return [f"{names[2]} = der4{first_der_name}2{second_der_name}(Field({names[1]}))"]
     pexit("what to do?")
 
 def map_multmm_sc_mn(func_call):
@@ -783,15 +786,16 @@ def map_mult_matrix(func_call):
     return [f"{params[2]} = {params[0]}*{params[1]}"]
 def map_der_other(func_call):
     params = func_call["new_param_list"]
+    names  = func_call["parameters"]
     print(params)
     #is actually a normal der call
     if(params[0][0] == 'f'):
         if(params[2][0] == '1'):
-            return [f"{params[1][0]} = derx({params[0][0]},{params[2][0]})"]
+            return [f"{[1]} = derx({names[0]},{names[2]})"]
         if(params[2][0] == '2'):
-            return [f"{params[1][0]} = dery({params[0][0]},{params[2][0]})"]
+            return [f"{[1]} = dery({names[0]},{names[2]})"]
         if(params[2][0] == '3'):
-            return [f"{params[1][0]} = derz({params[0][0]},{params[2][0]})"]
+            return [f"{[1]} = derz({names[0]},{names[2]})"]
         pexit("unknown dim")
     pexit("what to do?\n")
 
@@ -835,12 +839,14 @@ def return_false(func_call):
 def map_u_grad_kurganov_tadmore(func_call):
     params = func_call["parameters"]
     return [f"{params[2]} = u_grad_kurganov_tadmore({params[1]},{params[3]})"]
+def map_u_dot_grad_scl_alt(func_call):
+    params = func_call["parameters"]
+    return [f"print(\"not implemented u_dot_grad_scl_alt\")"]
 def map_spline_derivative(func_call):
     line = func_call["line"]
     pexit("HMM: ",line)
 def map_spline_integral(func_call):
-    line = func_call["line"]
-    pexit("HMM: ",line)
+    return [func_call["line"]]
 def map_shear_advection(func_call):
     return ["#include  \"shear_advection.h\""]
 def map_hyper3x_mesh(func_call):
@@ -886,6 +892,12 @@ sub_funcs = {
     {
         "output_param_indexes": [],
         "map_func": map_spline_integral
+    },
+
+    "u_dot_grad_scl_alt":
+    {
+      "output_params_indexes": [],
+      "map_func": map_u_dot_grad_scl_alt
     },
     "u_grad_kurganov_tadmore":
     {
@@ -1501,6 +1513,28 @@ def is_vector_stencil_index(index):
         return True
     return False
 def get_vtxbuf_name_from_index(prefix, index):
+    if ":" in index and  "iudx__mod__cdata"  in index  and "iudz__mod__cdata" in index:
+        bundle_index = index.split("(")[-1].split(")")[0]
+        return f"{prefix}DUST_VELOCITY[{bundle_index}]"
+    elif "iudx__mod__cdata" in index:
+        bundle_index = index.split("(")[-1].split(")")[0]
+        return f"{prefix}DUST_VELOCITY[{bundle_index}].x"
+    elif "iudy__mod__cdata" in index:
+        bundle_index = index.split("(")[-1].split(")")[0]
+        return f"{prefix}DUST_VELOCITY[{bundle_index}].y"
+    elif "iudz__mod__cdata" in index:
+        bundle_index = index.split("(")[-1].split(")")[0]
+        return f"{prefix}DUST_VELOCITY[{bundle_index}].z"
+    if "ind__mod__cdata" in index or "ilnnd__mod__cdata" in index:
+        bundle_index = index.split("(")[-1].split(")")[0]
+        return f"{prefix}DUST_DENSITY[{bundle_index}]"
+    if "imd__mod__cdata" in index:
+        bundle_index = index.split("(")[-1].split(")")[0]
+        return f"{prefix}DUST_MASS[{bundle_index}]"
+    if "imi__mod__cdata" in index:
+        bundle_index = index.split("(")[-1].split(")")[0]
+        return f"{prefix}DUST_ICE_MASS[{bundle_index}]"
+    index = remove_mod(index)
     if index.isnumeric():
         return f"{prefix}{pc_parser.pde_names[index]}"
     ## VEC informs that it is a vector access 
@@ -5018,7 +5052,7 @@ class Parser:
             print(len(found_modules))
             print(len(info["modules"]))
             print(info["modules"])
-            print("ixbeam" in self.rename_dict["mpicomm"])
+            print(line[segment[1]:segment[2]])
             pexit("should be only a single module")
         return line[segment[1]:segment[2]].replace(segment[0],self.rename_dict[found_modules[0]][segment[0]])
 
@@ -5643,7 +5677,7 @@ class Parser:
                     
                 pexit("WEIRD FOURTH DIM: ",orig_indexes[3])
             indexes = [self.evaluate_indexes(index) for index  in orig_indexes]
-            return self.gen_f_access(i,rhs_var,segment,remove_mod(indexes[-1]))
+            return self.gen_f_access(i,rhs_var,segment,indexes[-1])
 
 
         orig_indexes = get_segment_indexes(segment,line, len([src[segment[0]]["dims"]]))
@@ -5666,7 +5700,7 @@ class Parser:
                 print(orig_indexes)
                 print("INDEX PAIR: ",lower,upper,upper == f"2+{lower}")
                 pexit("LINE: ",line)
-        return self.gen_f_access(i,rhs_var,segment,remove_mod(indexes[-1]))
+        return self.gen_f_access(i,rhs_var,segment,indexes[-1])
     def get_profile_access(self,var_dims,indexes,segment,src,line):
         prof_type = src[segment[0]]["profile_type"]
         res_index = None
@@ -5955,6 +5989,41 @@ class Parser:
                         src[segment[0]]["profile_type"] = prof_type
                     if src[segment[0]]["profile_type"]:
                         res = self.get_profile_access(var_dims,indexes,segment,src,line)
+                    elif len(var_dims) == 1 and var_dims[0] in bundle_dims and indexes == []:
+                        res = f"{segment[0]}"
+                    elif len(var_dims) == 1 and var_dims[0] in bundle_dims and len(indexes) == 1 and ":" not in indexes[0]:
+                        res = f"{segment[0]}[{indexes[0]}-1]"
+                    elif len(var_dims) == 2 and var_dims[0] in bundle_dims and var_dims[1] in bundle_dims and len(indexes) == 2 and ":" not in indexes[0] and ":" not in indexes[1]:
+                        res = f"{segment[0]}[{indexes[0]}-1][{indexes[1]}-1]"
+                    #vec
+                    elif src[segment[0]]["dims"] == ["3"] and indexes in [["1"],["2"],["3"],[]]:
+                        res = line[segment[1]:segment[2]].replace("(1)",".x").replace("(2)",".y").replace("(3)",".z")
+                    #constant local array
+                    elif len(src[segment[0]]["dims"]) == 1 and src[segment[0]]["dims"][0].isnumeric() and len(indexes) == 1:
+                        res = line[segment[1]:segment[2]]
+                        res = f"{segment[0]}[{indexes[0]}-1]"
+                    #TP: order is important that this comes after loop independent transformations
+                    elif inside_nx_loop(loop_indexes):
+                        nx_index = get_nx_loop_index(loop_indexes)
+                        #becomes a write to 2d array of bundle dims
+                        if len(var_dims) == 3 and len(indexes) == 3 and indexes[0] == nx_index and var_dims[1] in bundle_dims and var_dims[2] in bundle_dims:
+                            res = f"{segment[0]}[{indexes[1]}-1][{indexes[2]}-1]"
+                        elif len(var_dims) == 1 and len(indexes) == 1 and indexes[0] == nx_index and var_dims[0]  == "nx__mod__cparam":
+                            res = f"{segment[0]}"
+                        elif len(var_dims) == 2 and len(indexes) == 2 and indexes[0] == nx_index and var_dims[0]  == "nx__mod__cparam" and indexes[1] == ":":
+                            res = f"{segment[0]}"
+                        elif len(var_dims) == 2 and len(indexes) == 2 and indexes[0] == nx_index and var_dims[0]  == "nx__mod__cparam":
+                            res = f"{segment[0]}[{indexes[1]}-1]"
+                        elif i > 0 and len(var_dims) == 2 and len(indexes) == 2 and indexes[0] == "1" and var_dims[0]  == "nx__mod__cparam" and var_dims[1] in bundle_dims:
+                            res = f"{segment[0]}[0][{indexes[1]}-1]"
+                        elif len(var_dims) == 1 and len(indexes) == 0 and var_dims[0] in bundle_dims:
+                            res = f"{segment[0]}"
+                        else:
+                            print(var_dims)
+                            print(indexes)
+                            print(line[segment[1]:segment[2]])
+                            print(line)
+                            pexit("nx loop what to do?")
                     #assume that they are auxiliary variables that similar to pencils but not inside pencil case
                     elif segment[0] in self.static_variables and var_dims in [[global_subdomain_range_x],[global_subdomain_range_with_halos_x]]:
                       if indexes  in [[":"]]:
@@ -5987,19 +6056,12 @@ class Parser:
                         res = f"{segment[0]}"
                     elif segment[0] in local_variables and var_dims[:-1] == [global_subdomain_range_x,"3"] and var_dims[-1] in bundle_dims and indexes == []:
                         res = f"{segment[0]}"
-                    elif segment[0] in local_variables and len(var_dims) == 1 and var_dims[-1] in bundle_dims and indexes == []:
-                        res = f"{segment[0]}"
-                    elif i > 0 and len(var_dims) == 1 and var_dims[-1] in bundle_dims and indexes == []:
-                        res = f"{segment[0]}"
                     #these turn to scalar read/writes
                     #for pointers assume they are pointing to n[x|y|z] variables
                     elif segment[0] in local_variables and self.evaluate_indexes(src[segment[0]]["dims"][0]) in [global_subdomain_range_x,":"] and indexes in [[],[":"]]:
                         res = segment[0]
                     elif segment[0] in local_variables and self.evaluate_indexes(src[segment[0]]["dims"][0]) == global_subdomain_range_with_halos_x and indexes in [f"{global_subdomain_range_x_lower}:{global_subdomain_range_x_upper}"]:
                         res = segment[0]
-                    #vec
-                    elif src[segment[0]]["dims"] == ["3"] and indexes in [["1"],["2"],["3"],[]]:
-                        res = line[segment[1]:segment[2]].replace("(1)",".x").replace("(2)",".y").replace("(3)",".z")
                     elif var_dims == ["nx__mod__cparam","my__mod__cparam"] and indexes == [":",global_loop_y]:
                         res = f"{segment[0]}[vertexIdx.x][vertexIdx.y]"
                     elif src[segment[0]]["dims"] == [global_subdomain_range_x,"3"]:
@@ -6023,10 +6085,6 @@ class Parser:
                           print("what to do?")
                           print(indexes)
                           pexit(line)
-                    #constant local array
-                    elif len(src[segment[0]]["dims"]) == 1 and src[segment[0]]["dims"][0].isnumeric() and len(indexes) == 1:
-                        res = line[segment[1]:segment[2]]
-                        res = f"{segment[0]}[{indexes[0]}-1]"
                     #AcMatrix
                     elif src[segment[0]]["dims"] == ["3","3"]:
                       res = self.get_ac_matrix_res(segment,indexes)
@@ -6093,13 +6151,6 @@ class Parser:
                         res = f"{segment[0]}[{indexes[0]}-1][{indexes[1]}-1]"
                     elif len(var_dims) == 4 and len(indexes) == 4:
                         res = f"{segment[0]}[{indexes[0]}-1][{indexes[1]}-1][{indexes[2]}-1][{indexes[3]}-1]"
-                    elif inside_nx_loop(loop_indexes):
-                        nx_index = get_nx_loop_index(loop_indexes)
-                        #becomes a write to 2d array of bundle dims
-                        if len(var_dims) == 3 and len(indexes) == 3 and indexes[0] == nx_index and var_dims[1] in bundle_dims and var_dims[2] in bundle_dims:
-                            res = f"{segment[0]}[{indexes[1]}-1][{indexes[2]}-1]"
-                        else:
-                            pexit("nx loop what to do?")
                     else:
                         print("what to do?")
                         print(line[segment[1]:segment[2]])
@@ -6117,7 +6168,7 @@ class Parser:
             # res_line += line[last_index:] + ";"
             res_line += line[last_index:]
             #res_line = self.replace_fortran_indexing_to_c(res_line,variables)
-            if "DF_LNNDK_249VEC" in res_line:
+            if "DF_MDK_225_243VEC" in res_line:
                 pexit("WRONG: ",line,"--->",res_line)
       
             return res_line
@@ -6493,8 +6544,7 @@ class Parser:
         if is_use_line(line):
             return ""
 
-        if "do" in line[:2]:
-            print("HMM LINE: ",line)
+        if line.strip()[:2] == "do":
             loop_index = self.get_writes_from_line(line)[0]["variable"]
             lower,upper= [part.strip() for part in line.split("=")[1].split(",",1)]
             loop_indexes.append((loop_index, lower == "1" and upper in global_subdomain_ranges,upper))
