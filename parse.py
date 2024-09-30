@@ -1189,6 +1189,8 @@ def pexit(*args):
   print("TP: DEBUG EXIT")
   assert(False)
   exit()
+def get_mod(x):
+    return x.split("__mod__")[-1].strip()
 def remove_mod(x):
   remove_indexes = []
   buffer = ""
@@ -5651,6 +5653,65 @@ class Parser:
         if segment[0] == "uu_average__mod__hydro":
           pexit("HMM: ",res_index)
         return f"{segment[0]}{res_index}"
+    def gen_pushpars(self):
+        res = {}
+        for var in self.static_variables:
+          if self.static_variables[var]["parameter"]:
+                continue
+          if self.static_variables[var]["is_pointer"]:
+                continue
+          dims = self.static_variables[var]["dims"]
+          type = self.static_variables[var]["type"]
+          name = remove_mod(var)
+          mod  = get_mod(var)
+          if "particles" in mod:
+              continue
+          if dims == [] and type in ["logical","integer","real"]:
+              if mod not in res:
+                  res[mod] = [[],0]
+              res[mod][1] += 1
+              call = ""
+              if type == "real":
+                  call = f"call copy_addr({name},p_par({res[mod][1]}))"
+              elif type == "integer":
+                  call = f"call copy_addr({name},p_par({res[mod][1]})) ! int"
+              elif type == "logical":
+                  call = f"call copy_addr({name},p_par({res[mod][1]})) ! bool"
+              res[mod][0].append(call)
+        for var in self.static_variables:
+          if self.static_variables[var]["parameter"]:
+                continue
+          if self.static_variables[var]["is_pointer"]:
+                continue
+          dims = self.static_variables[var]["dims"]
+          type = self.static_variables[var]["type"]
+          name = remove_mod(var)
+          mod  = get_mod(var)
+          if "particles" in mod:
+              continue
+          if dims == ["3"] and type in ["logical","integer","real"]:
+              if mod not in res:
+                  res[mod] = [[],0]
+              res[mod][1] += 1
+              call = ""
+              if type == "real":
+                  call = f"call copy_addr({name},p_par({res[mod][1]})) ! real3"
+              elif type == "integer":
+                  call = f"call copy_addr({name},p_par({res[mod][1]})) ! int3"
+              elif type == "logical":
+                  call = f"call copy_addr({name},p_par({res[mod][1]})) ! bool3"
+              res[mod][0].append(call)
+        for mod in res:
+          print("CREATING PUSHPARS FOR: ",mod)
+          file = open(f"pushpar_{mod}","w")
+          for line in res[mod][0]:
+            file.write(f"{line}\n")
+          file.close()
+
+
+
+              
+
     def gen_var_declares(self,file):
         declared_vars= ["AC_npencils__mod__cparam"]
         print("GEN VAR DECLARATIONS\n")
@@ -9181,6 +9242,8 @@ def main():
         #print(new_lines)
         local_variables = {parameter:v for parameter,v in parser.get_variables(new_lines, {},filename,True).items() }
         
+        parser.gen_pushpars()
+        print("CREATED PUSHPARS\n")
         res = parser.transform_lines(new_lines,new_lines, local_variables,transform_func)
         print("DONE TRANSFORMING LINES\n")
         res = [normalize_reals(line).replace("(:,1)",".x").replace("(:,2)",".y").replace("(:,3)",".z") for line in res]
