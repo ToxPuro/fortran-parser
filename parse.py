@@ -59,9 +59,11 @@ def get_if_compatible(first_index,loop_index,loop_range):
         if loop_range != "nx__mod__cparam":
             return False
         #TP: if loop 1,nx then offsetting with nghost gives the correct val
-        if first_index != f"{loop_index}+nghost__mod__cparam":
-            return False
-        return True
+        if first_index == f"{loop_index}+nghost__mod__cparam":
+            return True
+        if first_index == "l1__mod__cparam":
+            return True
+        return False 
 class ASTNode:
     def __init__(self,val,ast_type,lhs,rhs,parent):
         self.val = val
@@ -1513,6 +1515,14 @@ def is_vector_stencil_index(index):
         return True
     return False
 def get_vtxbuf_name_from_index(prefix, index):
+    if index == "ireaci__mod__chemistry(1):ireaci__mod__chemistry(nchemspec__mod__cparam)":
+        return f"{prefix}CHEMISTRY_REACTIONS"
+    elif "ireaci__mod__chemistry" in index and ":" not in index:
+        bundle_index = index.split("(")[-1].split(")")[0]
+        return f"{prefix}CHEMISTRY_REACTIONS[{bundle_index}]"
+    elif "ichemspec__mod__cdata" in index and ":" not in index:
+        bundle_index = index.split("(")[-1].split(")")[0]
+        return f"{prefix}CHEMISTRY_SPECIES[{bundle_index}]"
     if ":" in index and  "iudx__mod__cdata"  in index  and "iudz__mod__cdata" in index:
         bundle_index = index.split("(")[-1].split(")")[0]
         return f"{prefix}DUST_VELOCITY[{bundle_index}]"
@@ -2735,6 +2745,8 @@ class Parser:
                 x["variable"] = get_mod_name(x["variable"],module)
         for i, variable_name in enumerate(variable_names):
             dims = dimension
+            if variable_name == "reaction_name__mod__chemistry":
+                dims  = ["mreactions__mod__chemistry"]
             search = re.search(f"{remove_mod(variable_name)}\(((.*?))\)",line) 
             ## check if line is only specifying intent(in) or intent(out)
             if search:
@@ -5693,6 +5705,8 @@ class Parser:
             print("HMM LINE: ",line)
             if is_vector_stencil_index(indexes[-1]) or indexes[-1] == "icc__mod__cdata:icc__mod__cdata+npscalar__mod__cparam-1" or upper == f"2+{lower}" or indexes[-1] in ["ibb_sphr__mod__cdata:ibb_sphp__mod__cdata","iglobal_ax_ext__mod__cdata:iglobal_az_ext__mod__cdata","ibxt__mod__cdata:ibzt__mod__cdata","ijxt__mod__cdata:ijzt__mod__cdata"""]:
                 pass
+            elif lower == "ireaci__mod__chemistry(1)" and upper == "ireaci__mod__chemistry(nchemspec__mod__cparam)":
+                pass
             else:
                 print("range in df index 3")
                 print(line[segment[1]:segment[2]])
@@ -5701,9 +5715,21 @@ class Parser:
                 print("INDEX PAIR: ",lower,upper,upper == f"2+{lower}")
                 pexit("LINE: ",line)
         return self.gen_f_access(i,rhs_var,segment,indexes[-1])
-    def get_profile_access(self,var_dims,indexes,segment,src,line):
+    def get_profile_access(self,var_dims,indexes,segment,src,line,loop_indexes):
         prof_type = src[segment[0]]["profile_type"]
         res_index = None
+        if inside_nx_loop(loop_indexes):
+            if prof_type == "vtxbuf":
+                nx_index = get_nx_loop_index(loop_indexes)
+                if all([not get_if_compatible(indexes[0],loop_indexes[i][0],loop_indexes[i][2]) for i in range(len(loop_indexes))]):
+                    pexit("How to handle vtxbuf access inside nx loop: ",line[segment[1]:segment[2]],prof_type)
+                if indexes[1] != "m__mod__cdata":
+                    pexit("WEIRD VTXBUF INDEX", indexes[1])
+                if indexes[2] != "n__mod__cdata":
+                    pexit("WEIRD VTXBUF INDEX", indexes[1])
+                return segment[0]
+
+            pexit("PROF ACCESS IN NX LOOP: ",line[segment[1]:segment[2]],prof_type)
         if prof_type == "vtxbuf":
           if indexes == ["l1__mod__cparam:l2__mod__cparam","m__mod__cdata","n__mod__cdata"]:
             return f"value({segment[0]})"
@@ -5988,18 +6014,20 @@ class Parser:
                             prof_type = "z"
                         src[segment[0]]["profile_type"] = prof_type
                     if src[segment[0]]["profile_type"]:
-                        res = self.get_profile_access(var_dims,indexes,segment,src,line)
+                        res = self.get_profile_access(var_dims,indexes,segment,src,line,loop_indexes)
                     elif len(var_dims) == 1 and var_dims[0] in bundle_dims and indexes == []:
                         res = f"{segment[0]}"
                     elif len(var_dims) == 1 and var_dims[0] in bundle_dims and len(indexes) == 1 and ":" not in indexes[0]:
                         res = f"{segment[0]}[{indexes[0]}-1]"
                     elif len(var_dims) == 2 and var_dims[0] in bundle_dims and var_dims[1] in bundle_dims and len(indexes) == 2 and ":" not in indexes[0] and ":" not in indexes[1]:
                         res = f"{segment[0]}[{indexes[0]}-1][{indexes[1]}-1]"
+                    elif len(var_dims) == 2 and var_dims[0] in bundle_dims and var_dims[1].isnumeric() and len(indexes) == 2 and ":" not in indexes[0] and ":" not in indexes[1]:
+                        res = f"{segment[0]}[{indexes[0]}-1][{indexes[1]}-1]"
                     #vec
                     elif src[segment[0]]["dims"] == ["3"] and indexes in [["1"],["2"],["3"],[]]:
                         res = line[segment[1]:segment[2]].replace("(1)",".x").replace("(2)",".y").replace("(3)",".z")
                     #constant local array
-                    elif len(src[segment[0]]["dims"]) == 1 and src[segment[0]]["dims"][0].isnumeric() and len(indexes) == 1:
+                    elif len(src[segment[0]]["dims"]) == 1 and (var_dims[0] == "mreactions__mod__chemistry" or var_dims[0].isnumeric()) and len(indexes) == 1:
                         res = line[segment[1]:segment[2]]
                         res = f"{segment[0]}[{indexes[0]}-1]"
                     #TP: order is important that this comes after loop independent transformations
