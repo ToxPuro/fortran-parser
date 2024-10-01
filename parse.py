@@ -6270,7 +6270,9 @@ class Parser:
             else:
                 res.append(index)
         return res
-    def transform_line_boundcond_DSL(self,line,num_of_looped_dims, local_variables, array_segments_indexes,rhs_var,vectors_to_replace, writes,loop_indexes):
+    def transform_line_boundcond_DSL(self,line,num_of_looped_dims, local_variables, rhs_var,vectors_to_replace, writes,loop_indexes):
+        variables = merge_dictionaries(self.static_variables, local_variables)
+        array_segments_indexes = self.get_array_segments_in_line(line,variables)
         last_index = 0
         res_line = ""
         assumed_boundary = None
