@@ -5937,8 +5937,9 @@ class Parser:
               file.write(f"{translate_to_DSL(type)} AC_{name}[{dims[0]}]\n")
               declared_vars.append(var)
         
-    def transform_line_stencil(self,line,num_of_looped_dims, local_variables, array_segments_indexes,rhs_var,vectors_to_replace, writes, loop_indexes):
+    def transform_line_stencil(self,line,num_of_looped_dims, local_variables, rhs_var,vectors_to_replace, writes, loop_indexes):
         variables = merge_dictionaries(self.static_variables, local_variables)
+        array_segments_indexes = self.get_array_segments_in_line(line,variables)
         last_index = 0
         res_line = ""
         #for testing remove later
@@ -6195,8 +6196,37 @@ class Parser:
                 last_index = segment[2]
             # res_line += line[last_index:] + ";"
             res_line += line[last_index:]
+            line = res_line
+            struct_segs = self.get_struct_segments_in_line(line,variables)
+            map_vals = []
+            for seg in struct_segs:
+                line_segment = line[seg[1]:seg[2]]
+                if "(" in line_segment:
+                    parts = [part.strip() for part in line_segment.split("%")]
+                    if len(parts) != 2:
+                        pexit("HMM ",line_segment)
+                    var_name,arr_access= parts
+                    member_name = parts[1].split("(")[0].strip()
+                    index = parts[1].split("(")[-1].split(")")[0].strip()
+                    struct_type = variables[var_name]["type"]
+                    member_type = self.struct_table[struct_type][member_name]
+                    member_dims = member_type["dims"]
+                    if(member_dims == ["3"] and index.isnumeric()): 
+                        if index == "1":
+                            map_vals.append(f"{var_name}.{member_name}.x")
+                        elif index == "2":
+                            map_vals.append(f"{var_name}.{member_name}.y")
+                        elif index == "3":
+                            map_vals.append(f"{var_name}.{member_name}.z")
+                        else:
+                            pexit("OUT OF BOUNDS: ",line_segment)
+                    else:
+                        pexit("STRUCT SEG ARR ACCESS: ",line_segment,member_name,index,member_type)
+                else:
+                    map_vals.append(line_segment.replace("%","."))
+            res_line =  self.replace_segments(struct_segs,line,self.map_val_func,{},{"map_val": map_vals})
             #res_line = self.replace_fortran_indexing_to_c(res_line,variables)
-            if "DF_MDK_225_243VEC" in res_line:
+            if "%" in res_line or "all(" in res_line or res_line.strip() == "return":
                 pexit("WRONG: ",line,"--->",res_line)
       
             return res_line
@@ -6670,8 +6700,7 @@ class Parser:
 
         #line = self.transform_spread(line,[f":" for i in range(num_of_looped_dims)],local_variables)
         #line = self.transform_spread(line,[f":" for i in range(num_of_looped_dims)],local_variables)
-        array_segments_indexes = self.get_array_segments_in_line(line,variables)
-        return transform_func(line,num_of_looped_dims, local_variables, array_segments_indexes,rhs_var,vectors_to_replace,writes, loop_indexes)
+        return transform_func(line,num_of_looped_dims, local_variables,rhs_var,vectors_to_replace,writes, loop_indexes)
     def transform_spreads(self,lines,local_variables,variables):
         res_lines = []
         for line_index, line in enumerate(lines):
@@ -7607,7 +7636,7 @@ class Parser:
         for line in lines:
             file.write(f"{line}\n")
         file.close()
-        allowed_func_calls = ["constexpr", "&&", "||","all","sqrt","abs","sinh","cosh","tanh","min","max","pow","DEVICE_VTXBUF_IDX".lower(),"DCONST".lower(),"exp","log","if","else","for","sin","cos","tan","atan2"]
+        allowed_func_calls = ["constexpr", "&&", "||","sqrt","abs","sinh","cosh","tanh","min","max","pow","DEVICE_VTXBUF_IDX".lower(),"DCONST".lower(),"exp","log","if","else","for","sin","cos","tan","atan2"]
         astaroth_funcs = ["der","der2","der3","der4","der5","der6","col","row","derx","dery","derz","derxx","deryy","derzz","der6x","der6y","der6z","der6x_upwd","der6y_upwd","der6z_upwd","sum","dot","gradient","gradients","laplace","divergence","veclaplace","value","vecvalue","field","field3","divergence_from_matrix","curl_from_matrix","traceless_strain","traceless_strain_without_divu","multm2_sym","del6_upwd","del6_upwd_vec","gradient_of_divergence","cross","bij","mult","multmm_sc_mn","del6v_strict","static_assert","d2fi_dxj","del2fi_dxjk","der5x1y","der5x1z","der5y1z","gradients_5","der6x_ignore_spacing","der6y_ignore_spacing","der6z_ignore_spacing","del6","der4x2y","der4y2z","der4x2z","hessian"]
         allowed_func_calls.extend(astaroth_funcs)
 
