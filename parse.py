@@ -673,20 +673,20 @@ def map_der5(func_call):
 
 def map_der6_pencil(func_call):
     #these have to be reformulated in Astaroth so return junk for now
-    return ['not_implemented("der6_pencil")']
+    return ['print("not implemented der6_pencil")']
 
 def map_getderlnrho_z(func_call):
     #these have to be reformulated in Astaroth so return junk for now
-    return ['not_implemented("getderlnrho_z")']
+    return ['print("not implemented getderlnrho_z")']
 def map_bval_from_neumann_scl(func_call):
     #these have to be reformulated in Astaroth so return junk for now
-    return ['not_implemented("bval_from_scl")']
+    return ['print("not implemented bval_from_scl")']
 def map_bval_from_neumann_arr(func_call):
     #these have to be reformulated in Astaroth so return junk for now
-    return ['not_implemented("bval_from_arr")']
+    return ['print("not implemented bval_from_arr")']
 def map_set_ghosts_for_onesided_ders(func_call):
     #these have to be reformulated in Astaroth so return junk for now
-    return ['not_implemented("set_ghosts_for_onesided_ders")']
+    return ['print("not implemented set_ghosts_for_onesided_ders")']
 
 def map_gij_etc(func_call):
     params = func_call["new_param_list"]
@@ -6120,21 +6120,6 @@ class Parser:
                     #nx var -> AcMatrix
                     elif src[segment[0]]["dims"] == [global_subdomain_range_x,"3","3"] and indexes[0] == ":": 
                       res = self.get_ac_matrix_res(segment,indexes[1:])
-                      # #read/write to matrix indexes
-                      # if indexes[0] ==":" and ":" not in indexes[1] != ":" and ":" not in indexes[2]:
-                      #   res =f"{segment[0]}.data[{indexes[1]}][{indexes[2]}]"
-                      # #Reading matrix row
-                      # elif indexes[0] == ":" and ":" not in indexes[1] and indexes[2] == ":":
-                      #   res =f"{segment[0]}.row({indexes[1]})"
-                      # #Reading matrix col
-                      # elif indexes[0] == ":" and indexes[1] == ":" and ":" not in indexes[2]:
-                      #   res =f"{segment[0]}.col({indexes[1]})"
-                      # else:
-                      #     print("unsupported matrix read/write")
-                      #     print(line[segment[1]:segment[2]])
-                      #     print(num_of_looped_dims)
-                      #     print(indexes)
-                      #     pexit(line)
                     #AcTensor
                     elif var_dims == [global_subdomain_range_x,"3","3","3"]:
                         var_info = self.get_param_info((line[segment[1]:segment[2]],False),local_variables,self.static_variables)
@@ -6276,7 +6261,7 @@ class Parser:
         last_index = 0
         res_line = ""
         assumed_boundary = None
-        if (num_of_looped_dims==0 or num_of_looped_dims==2) and (rhs_var in local_variables or rhs_var == "f"): 
+        if (num_of_looped_dims==0 or num_of_looped_dims==2 or num_of_looped_dims is None) and (rhs_var in local_variables or rhs_var == "f" or rhs_var is None): 
             for i in range(len(array_segments_indexes)):
                 segment = array_segments_indexes[i]
                 var = segment[0]
@@ -6284,6 +6269,7 @@ class Parser:
                     src = local_variables
                 else:
                     src = self.static_variables
+                var_dims = src[segment[0]]["dims"]
                 indexes = [self.evaluate_indexes(index) for index in get_segment_indexes(segment,line, len(src[var]["dims"]))]
                 print(num_of_looped_dims)
                 print(indexes)
@@ -6291,19 +6277,23 @@ class Parser:
                     res = segment[0]
                 elif(var == "f" and (assumed_boundary is None or assumed_boundary == "z") and len(indexes) == 4 and indexes[:2] in [[":",":"], [global_subdomain_range_x_inner,":"]]):
                     f_index = f"[vertexIdx.x][vertexIdx.y][{indexes[2]}-1]"
-                    res = f"{indexes[3]}{f_index}"
+                    vtxbuf_name = get_vtxbuf_name_from_index("",indexes[3])
+                    res = f"{vtxbuf_name}{f_index}"
                     assumed_boundary = "z"
-                elif(var == "f" and (assumed_boundary is None or assumed_boundary == "y") and len(indexes) == 4 and indexes[0] == ":" and indexes[2] == ":"):
+                elif(var == "f" and (assumed_boundary is None or assumed_boundary == "y") and len(indexes) == 4 and indexes[0] in [":",global_subdomain_range_x_inner] and indexes[2] == ":"):
                     f_index = f"[vertexIdx.x][{indexes[1]}-1][vertexIdx.z]"
-                    res = f"{indexes[3]}{f_index}"
+                    vtxbuf_name = get_vtxbuf_name_from_index("",indexes[3])
+                    res = f"{vtxbuf_name}{f_index}"
                     assumed_boundary = "y"
                 elif(var == "f" and (assumed_boundary is None or assumed_boundary == "x") and len(indexes) == 4 and indexes[1] == ":" and indexes[2] == ":"):
                     f_index = f"[{indexes[0]}-1][vertexIdx.y][vertexIdx.z]"
-                    res = f"{indexes[3]}{f_index}"
+                    vtxbuf_name = get_vtxbuf_name_from_index("",indexes[3])
+                    res = f"{vtxbuf_name}{f_index}"
                     assumed_boundary = "x"
                 elif(var == "f" and (assumed_boundary is None or assumed_boundary == "z") and len(indexes) == 4 and len(loop_indexes) >= 2 and all([x[1] == True for x in loop_indexes[:2]])):
                     f_index = f"[vertexIdx.x][vertexIdx.y][{indexes[2]}-1]"
-                    res = f"{indexes[3]}{f_index}"
+                    vtxbuf_name = get_vtxbuf_name_from_index("",indexes[3])
+                    res = f"{vtxbuf_name}{f_index}"
                     assumed_boundary = "z"
                 elif(len(indexes) == 1 and indexes != [":"] and len(src[var]["dims"]) == 1):
                     ##-1 since from 1 to 0-based indexing
@@ -6311,8 +6301,16 @@ class Parser:
                 #comes from spread statement
                 elif(len(indexes) == 2 and num_of_looped_dims == 2 and indexes[0] == ":" and indexes[1] != ":"):
                     res = f"{var}[{indexes[1]}]"
+                elif len(var_dims) == 2 and len(indexes) == 2:
+                    res = f"{segment[0]}[{indexes[0]}-1][{indexes[1]}-1]"
+                elif (var == "f" and all(":" not in x for x in indexes)):
+                    f_index = f"[{indexes[0]}-1][{indexes[1]}-1][{indexes[2]}-1]"
+                    vtxbuf_name = get_vtxbuf_name_from_index("",indexes[3])
+                    res = f"{vtxbuf_name}{f_index}"
                 else:
                     print(loop_indexes)
+                    print("Assumed boundary: ",assumed_boundary, assumed_boundary is None)
+                    print(line[segment[1]:segment[2]])
                     pexit("What to do",segment)
                 res_line = res_line + line[last_index:segment[1]]
                 res_line = res_line + res 
@@ -6322,13 +6320,12 @@ class Parser:
             if ":" in res_line or "explicit_index" in res_line or not has_balanced_parens(res_line) or ";" not in res_line or "()" in res_line:
                 print("NEED to transform more")
                 print("LINE",line)
-                print("RES_LINE",res_line)
-                pexit("RES: " + res)
+                pexit("RES_LINE",res_line)
             return res_line
 
         else:
-            print("NO case for",line)
-            exit()
+            print(num_of_looped_dims)
+            pexit("NO case for",line)
 
     def transform_line_boundcond(self,line,num_of_looped_dims, local_variables, array_segments_indexes,rhs_var,vectors_to_replace, writes):
         last_index = 0
@@ -6495,46 +6492,45 @@ class Parser:
         for var in vars_in_line:
             if var.strip() in local_variables and var.strip() not in orig_params:
                 vars_to_declare.append(var)
-        if self.offload_type == "stencil":
-            if len(vars_to_declare) == 1:
-              var = vars_to_declare[0]
-              if local_variables[var]["parameter"] and "value" in local_variables[var]:
-                dims = local_variables[var]["dims"]
-                value = local_variables[var]["value"]
-                if len(dims) == 0:
-                  return f"const {var} = {value}"
-                elif len(dims) == 1:
-                  value = value.replace("(/","[").replace("/)","]")
-                  return f"const {var} = {value}"
-                print(line)
-                pexit("HMM var",var)
-            if len(vars_to_declare) == 0  or local_variables[vars_to_declare[0]]["type"] != "real":
-                return ""
-            dims = local_variables[vars_to_declare[0]]["dims"]
-            if local_variables[vars_to_declare[0]]["dims"] in [[],[global_subdomain_range_x]]:
-                return "real " + ", ".join(vars_to_declare)
-            if local_variables[vars_to_declare[0]]["dims"] == [global_subdomain_range_x,"3","3"]:
-                return "Matrix " + ", ".join(vars_to_declare)
-            if local_variables[vars_to_declare[0]]["dims"] in [[global_subdomain_range_x,"3"],["3"]]:
-                return "real3 " + ", ".join(vars_to_declare)
-            if local_variables[vars_to_declare[0]]["dims"] == [global_subdomain_range_x,"3","3","3"]:
-                #tensors are not yet supported
-                return "Tensor " + ", ".join(vars_to_declare)
-            if dims[:-1] ==  [global_subdomain_range_x,"3"] and dims[-1] in bundle_dims:
-                #tensors are not yet supported
-                res = ""
-                for var in vars_to_declare:
-                  res = res + "real3 " + var + f"[AC_{dims[-1]}]\n"
-                return res
-            if dims[:-1] ==  [global_subdomain_range_x] and dims[-1] in bundle_dims:
-                #tensors are not yet supported
-                res = ""
-                for var in vars_to_declare:
-                  res = res + "real " + var + f"[AC_{dims[-1]}]\n"
-                return res
-            if "der_step_return_value_37_38_65" in vars_to_declare:
-              pexit("HI")
+        if len(vars_to_declare) == 1:
+          var = vars_to_declare[0]
+          if local_variables[var]["parameter"] and "value" in local_variables[var]:
+            dims = local_variables[var]["dims"]
+            value = local_variables[var]["value"]
+            if len(dims) == 0:
+              return f"const {var} = {value}"
+            elif len(dims) == 1:
+              value = value.replace("(/","[").replace("/)","]")
+              return f"const {var} = {value}"
+            print(line)
+            pexit("HMM var",var)
+        if len(vars_to_declare) == 0  or local_variables[vars_to_declare[0]]["type"] != "real":
             return ""
+        dims = local_variables[vars_to_declare[0]]["dims"]
+        if local_variables[vars_to_declare[0]]["dims"] in [[],[global_subdomain_range_x]]:
+            return "real " + ", ".join(vars_to_declare)
+        if local_variables[vars_to_declare[0]]["dims"] == [global_subdomain_range_x,"3","3"]:
+            return "Matrix " + ", ".join(vars_to_declare)
+        if local_variables[vars_to_declare[0]]["dims"] in [[global_subdomain_range_x,"3"],["3"]]:
+            return "real3 " + ", ".join(vars_to_declare)
+        if local_variables[vars_to_declare[0]]["dims"] == [global_subdomain_range_x,"3","3","3"]:
+            #tensors are not yet supported
+            return "Tensor " + ", ".join(vars_to_declare)
+        if dims[:-1] ==  [global_subdomain_range_x,"3"] and dims[-1] in bundle_dims:
+            #tensors are not yet supported
+            res = ""
+            for var in vars_to_declare:
+              res = res + "real3 " + var + f"[AC_{dims[-1]}]\n"
+            return res
+        if dims[:-1] ==  [global_subdomain_range_x] and dims[-1] in bundle_dims:
+            #tensors are not yet supported
+            res = ""
+            for var in vars_to_declare:
+              res = res + "real " + var + f"[AC_{dims[-1]}]\n"
+            return res
+        if "der_step_return_value_37_38_65" in vars_to_declare:
+          pexit("HI")
+        return ""
     def transform_line(self,i,lines,local_variables,loop_indexes,symbol_table,initialization_lines,orig_params,transform_func,vectors_to_replace,writes):
         line = lines[i]
         if line == "assert(.false.)":
@@ -6593,6 +6589,8 @@ class Parser:
                 print(local_variables[param]['type'])
                 if param == "j":
                     param_strings.append(f"VtxBuffer j")
+                elif param == "topbot":
+                    param_strings.append(f"AC_TOP_BOT topbot")
                 elif param != "f":
                     param_strings.append(f"{param}")
             if self.test_to_c:
@@ -6708,8 +6706,7 @@ class Parser:
         for line_index, line in enumerate(lines):
             spread_calls= [call for call in self.get_function_calls_in_line(line,variables) if call["function_name"] == "spread"]
             if len(spread_calls) > 1:
-                print("multiple spread calls",line)
-                exit()
+                pexit("multiple spread calls",line)
             elif len(spread_calls) == 1:
                 call = spread_calls[0]
                 lhs = call["parameters"][0]
@@ -7221,8 +7218,11 @@ class Parser:
         negative_offset = first_part[1:]
         indexes = get_segment_indexes(segment,line,len(dims))
         assert(len(indexes) == 1)
+        if indexes[0] == ":":
+            return line[segment[1]:segment[2]]
         #don't want to consider it for now
-        assert(":" not in indexes[0])
+        if ":" in indexes[0]:
+            pexit("HMM range in negative indexing: ",line[segment[1]:segment[2]],indexes)
         #plus 1 since normal Fortran indexing is 1 based indexing
         indexes = [f"{indexes[0]}+{negative_offset}+1"]
         res = build_new_access(segment[0],indexes)
@@ -7539,6 +7539,8 @@ class Parser:
         for i,line in enumerate(lines):
             res = self.transform_line(i,lines,local_variables,loop_indexes,symbol_table,initialization_lines,orig_params, transform_func,vectors_to_replace,writes)
             lines[i] = res
+            if res is None:
+                pexit("WRONG did not return anything for: ",line)
             if "lpencil__mod__cparam(" in res:
               pexit("WRONG",res)
         file = open("res-transform.txt","w")
@@ -8427,7 +8429,7 @@ class Parser:
                 if "value" in self.static_variables[var]:
                     self.static_variables[var]["value"] = self.static_variables[var]["value"].replace(val,impossible_val)
     def normalize_if_calls(self,lines,local_variables):
-        #lines = self.remove_named_ifs(lines,local_variables)
+        lines = self.remove_named_ifs(lines,local_variables)
         res_lines = []
         for line_index, line in enumerate(lines):
             #Consider only possible lines
@@ -9429,7 +9431,7 @@ def main():
         if parser.offload_type == "stencil":
           output_filename = "mhdsolver-rhs.inc"
         elif parser.offload_type == "boundcond":
-          output_filename = "res-boundcond.inc"
+          output_filename = subroutine_name
 
         if parser.offload_type == "boundcond":
             first_line = new_lines[0]
@@ -9440,8 +9442,9 @@ def main():
             res_lines = [remove_mod(line) for line in res_lines]
             file = open(output_filename,"w")
             for line in res_lines:
-                file.write(f"{line}")
+                file.write(f"{line}\n")
             file.close()
+            print("DONE Boundcond\n")
             print_ranges(parser)
             exit()
 
