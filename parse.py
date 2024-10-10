@@ -6270,43 +6270,70 @@ class Parser:
                 else:
                     src = self.static_variables
                 var_dims = src[segment[0]]["dims"]
+                for i in range(len(var_dims)):
+                    dim = var_dims[i]
+                    if dim in ["nx__mod__cparam+2*3"]:
+                        var_dims[i] = "mx__mod__cparam"
+                    elif dim in ["ny__mod__cparam+2*3"]:
+                        var_dims[i] = "my__mod__cparam"
+                    elif dim in ["nz__mod__cparam+2*3"]:
+                        var_dims[i] = "mz__mod__cparam"
                 indexes = [self.evaluate_indexes(index) for index in get_segment_indexes(segment,line, len(src[var]["dims"]))]
                 print(num_of_looped_dims)
                 print(indexes)
                 if(num_of_looped_dims == 2 and indexes in [[":",":"],[global_subdomain_range_x_inner,":"]]):
                     res = segment[0]
-                elif(var == "f" and (assumed_boundary is None or assumed_boundary == "z") and len(indexes) == 4 and indexes[:2] in [[":",":"], [global_subdomain_range_x_inner,":"]]):
-                    f_index = f"[vertexIdx.x][vertexIdx.y][{indexes[2]}-1]"
-                    vtxbuf_name = get_vtxbuf_name_from_index("",indexes[3])
-                    res = f"{vtxbuf_name}{f_index}"
-                    assumed_boundary = "z"
-                elif(var == "f" and (assumed_boundary is None or assumed_boundary == "y") and len(indexes) == 4 and indexes[0] in [":",global_subdomain_range_x_inner] and indexes[2] == ":"):
-                    f_index = f"[vertexIdx.x][{indexes[1]}-1][vertexIdx.z]"
-                    vtxbuf_name = get_vtxbuf_name_from_index("",indexes[3])
-                    res = f"{vtxbuf_name}{f_index}"
-                    assumed_boundary = "y"
-                elif(var == "f" and (assumed_boundary is None or assumed_boundary == "x") and len(indexes) == 4 and indexes[1] == ":" and indexes[2] == ":"):
-                    f_index = f"[{indexes[0]}-1][vertexIdx.y][vertexIdx.z]"
-                    vtxbuf_name = get_vtxbuf_name_from_index("",indexes[3])
-                    res = f"{vtxbuf_name}{f_index}"
-                    assumed_boundary = "x"
-                elif(var == "f" and (assumed_boundary is None or assumed_boundary == "z") and len(indexes) == 4 and len(loop_indexes) >= 2 and all([x[1] == True for x in loop_indexes[:2]])):
-                    f_index = f"[vertexIdx.x][vertexIdx.y][{indexes[2]}-1]"
-                    vtxbuf_name = get_vtxbuf_name_from_index("",indexes[3])
-                    res = f"{vtxbuf_name}{f_index}"
-                    assumed_boundary = "z"
+                if var == "f":
+                    if((assumed_boundary is None or assumed_boundary == "z") and len(indexes) == 4 and indexes[:2] in [[":",":"], [global_subdomain_range_x_inner,":"]]):
+                        f_index = f"[vertexIdx.x][vertexIdx.y][{indexes[2]}-1]"
+                        vtxbuf_name = get_vtxbuf_name_from_index("",indexes[3])
+                        res = f"{vtxbuf_name}{f_index}"
+                        assumed_boundary = "z"
+                    elif((assumed_boundary is None or assumed_boundary == "y") and len(indexes) == 4 and indexes[0] in [":",global_subdomain_range_x_inner] and indexes[2] == ":"):
+                        f_index = f"[vertexIdx.x][{indexes[1]}-1][vertexIdx.z]"
+                        vtxbuf_name = get_vtxbuf_name_from_index("",indexes[3])
+                        res = f"{vtxbuf_name}{f_index}"
+                        assumed_boundary = "y"
+                    elif((assumed_boundary is None or assumed_boundary == "x") and len(indexes) == 4 and indexes[1] == ":" and indexes[2] == ":"):
+                        f_index = f"[{indexes[0]}-1][vertexIdx.y][vertexIdx.z]"
+                        vtxbuf_name = get_vtxbuf_name_from_index("",indexes[3])
+                        res = f"{vtxbuf_name}{f_index}"
+                        assumed_boundary = "x"
+                    elif((assumed_boundary is None or assumed_boundary == "z") and len(indexes) == 4 and len(loop_indexes) >= 2 and all([x[1] == True for x in loop_indexes[:2]])):
+                        f_index = f"[vertexIdx.x][vertexIdx.y][{indexes[2]}-1]"
+                        vtxbuf_name = get_vtxbuf_name_from_index("",indexes[3])
+                        res = f"{vtxbuf_name}{f_index}"
+                        assumed_boundary = "z"
+                    elif (all(":" not in x for x in indexes)):
+                        f_index = f"[{indexes[0]}-1][{indexes[1]}-1][{indexes[2]}-1]"
+                        vtxbuf_name = get_vtxbuf_name_from_index("",indexes[3])
+                        res = f"{vtxbuf_name}{f_index}"
                 elif(len(indexes) == 1 and indexes != [":"] and len(src[var]["dims"]) == 1):
                     ##-1 since from 1 to 0-based indexing
                     res = f"{var}[{indexes[0]}-1]"
                 #comes from spread statement
-                elif(len(indexes) == 2 and num_of_looped_dims == 2 and indexes[0] == ":" and indexes[1] != ":"):
-                    res = f"{var}[{indexes[1]}]"
+                elif(len(indexes) == 2 and num_of_looped_dims == 2 and indexes[0] == ":" and ":" not in indexes[1]):
+                    if segment[0] in local_variables:
+                        res = f"{var}[{indexes[1]}]"
+                        pexit("HMM :", res)
+                    elif var_dims[0] == "mx__mod__cparam":
+                        res = f"{segment[0]}[vertexIdx.x][{indexes[1]}-1]"
+                    else:
+                       pexit("HMM: first loop  ",segment[0],line)
+                elif len(var_dims) == 2 and indexes == [":",":"] and segment[0] in local_variables:
+                    if (assumed_boundary == "x" or assumed_boundary is None) and var_dims == ["my__mod__cparam","mz__mod__cparam"]:
+                        assumed_boundary = "x"
+                        res = segment[0]
+                    elif (assumed_boundary == "y" or assumed_boundary is None) and var_dims == ["mx__mod__cparam","mz__mod__cparam"]:
+                        assumed_boundary = "y"
+                        res = segment[0]
+                    elif (assumed_boundary == "z" or assumed_boundary is None) and var_dims == ["mx__mod__cparam","my__mod__cparam"]:
+                        assumed_boundary = "z"
+                        res = segment[0]
+                    else:
+                        pexit("WHAT TO DO 2D looped? ",line[segment[1]:segment[2]],var_dims,assumed_boundary)
                 elif len(var_dims) == 2 and len(indexes) == 2:
                     res = f"{segment[0]}[{indexes[0]}-1][{indexes[1]}-1]"
-                elif (var == "f" and all(":" not in x for x in indexes)):
-                    f_index = f"[{indexes[0]}-1][{indexes[1]}-1][{indexes[2]}-1]"
-                    vtxbuf_name = get_vtxbuf_name_from_index("",indexes[3])
-                    res = f"{vtxbuf_name}{f_index}"
                 else:
                     print(loop_indexes)
                     print("Assumed boundary: ",assumed_boundary, assumed_boundary is None)
@@ -6321,6 +6348,13 @@ class Parser:
                 print("NEED to transform more")
                 print("LINE",line)
                 pexit("RES_LINE",res_line)
+            if assumed_boundary is not None:
+                if assumed_boundary == "x" and "vertexIdx.x" in res_line:
+                    pexit("USING vertexIdx.x on X_BOUNDCOND is dangerous",res_line)
+                if assumed_boundary == "y" and "vertexIdx.y" in res_line:
+                    pexit("USING vertexIdx.y on Y_BOUNDCOND is dangerous",res_line)
+                if assumed_boundary == "z" and "vertexIdx.z" in res_line:
+                    pexit("USING vertexIdx.z on Z_BOUNDCOND is dangerous",res_line)
             return res_line
 
         else:
@@ -6528,8 +6562,14 @@ class Parser:
             for var in vars_to_declare:
               res = res + "real " + var + f"[AC_{dims[-1]}]\n"
             return res
-        if "der_step_return_value_37_38_65" in vars_to_declare:
-          pexit("HI")
+        if self.offload_type == "boundcond":
+            res = ""
+            for var in [x for x in vars_to_declare if x in local_variables]:
+                dims = local_variables[var]["dims"]
+                var_type = local_variables[var]["type"]
+                if dims == ["mx__mod__cparam","my__mod__cparam"] and var_type == "real":
+                    res = res + f"real {var}\n"
+            return res
         return ""
     def transform_line(self,i,lines,local_variables,loop_indexes,symbol_table,initialization_lines,orig_params,transform_func,vectors_to_replace,writes):
         line = lines[i]
@@ -7635,7 +7675,7 @@ class Parser:
         # for param in orig_params:
         #     rest_params = rest_params + "," + translate_to_DSL(local_variables[param]["type"]) + " " + param
         # lines[1] = lines[1].replace("[rest_params_here]",rest_params)
-        lines = [line.replace("nghost","NGHOST_VAL") for line in lines]
+        lines = [line.replace("nghost","NGHOST") for line in lines]
         file = open("res-3.txt","w")
         for line in lines:
             file.write(f"{line}\n")
@@ -7682,7 +7722,7 @@ class Parser:
         elif self.offload_type == "stencil":
             res_lines = lines[:1] + dx_lines + lines[1:-1] + write_fields_lines + [lines[-1]]
             lines = res_lines
-        lines = [line.replace("nghost","NGHOST_VAL") for line in lines]
+        lines = [line.replace("nghost","NGHOST") for line in lines]
         formatted_lines = format_lines(lines)
         file = open("res.txt","w")
         for line in formatted_lines:
