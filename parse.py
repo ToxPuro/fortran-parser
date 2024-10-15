@@ -4568,6 +4568,12 @@ class Parser:
         params = func_call["parameters"]
         if params[0] == "f":
             return self.turn_f_size(params)
+        if params[0].split("(")[0] == "f":
+              indexes = get_indexes(params[0],"f",4)
+              dims = params[1][0]
+              print("DIMS: ",dims)
+              if dims == "2" and indexes[1] == ":":
+                  return "my__mod__cparam"
         elif params[0] in local_variables and all([":" not in dim and "size" not in dim for dim in local_variables[params[0]]['dims']]):
             sizes = local_variables[params[0]]["dims"]
         elif params[0] in local_variables and len(local_variables[params[0]]["dims"]) == 1 and "size" in local_variables[params[0]]["dims"][0]:
@@ -6809,6 +6815,14 @@ class Parser:
                        res_line = self.replace_func_call(line,call,call["parameters"][0])
                        print("RES: ",res_line)
                        res_lines.append(res_line)
+                    ##TP: hack
+                    elif len(param_info[3]) == 1 and rhs_var == "f" and param_info[3][0] == "mx__mod__cparam" and call["parameters"][2] == "my__mod__cparam":
+                       print("SAFE TO REMOVE SPREAD")
+                       res_line = self.replace_func_call(line,call,call["parameters"][0])
+                       print("RES: ",res_line)
+                       res_lines.append(res_line)
+                    else:
+                        pexit("WHAT TO DO? ",line)
                     #pexit("spread: what to do?")
                 #if spreading scalar to 1d there is only a single way to do it
                 #elif len(rhs_info[3]) == 1:
@@ -7792,6 +7806,7 @@ class Parser:
               line = self.replace_func_call(line, func_call,replacement)
             #don't replace if will can't return enough info
             else:
+              pexit("DO NOT HAVE ENOUGH INFO: ",line,func_call["parameters"],replacement);
               return line
             func_calls =self.get_function_calls_in_line(line,local_variables,False)
             need_to_transform_size = any([func_call["function_name"] == "size" for func_call in func_calls])
