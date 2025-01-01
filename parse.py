@@ -235,15 +235,15 @@ global_subdomain_range_with_halos_x = f"{global_subdomain_range_x}+2*{nghost_val
 global_subdomain_range_with_halos_y = f"{global_subdomain_range_y}+2*{nghost_val}"
 global_subdomain_range_with_halos_z = f"{global_subdomain_range_z}+2*{nghost_val}"
 global_subdomain_ranges = [global_subdomain_range_x,global_subdomain_range_with_halos_x,global_subdomain_range_with_halos_y,global_subdomain_range_with_halos_z]
-global_subdomain_range_x_upper = "l2__mod__cparam"
+global_subdomain_range_x_upper = "l2__mod__cdata"
 global_subdomain_range_x_lower= "l1__mod__cparam"
 global_subdomain_range_x_inner = f"{global_subdomain_range_x_lower}:{global_subdomain_range_x_upper}"
 impossible_val = ""
 
-global_subdomain_range_y_upper = "m2__mod__cparam"
+global_subdomain_range_y_upper = "m2__mod__cdata"
 global_subdomain_range_y_lower= "m1__mod__cparam"
 
-global_subdomain_range_z_upper = "n2__mod__cparam"
+global_subdomain_range_z_upper = "n2__mod__cdata"
 global_subdomain_range_z_lower= "n1__mod__cparam"
 pc_parser = ""
 # global_loop_y = ""
@@ -594,6 +594,12 @@ def map_der_main(func_call):
         return [f"{names[2]} = derz(Field({names[1]}))"]
     print("j=",j)
     pexit("don't know whic der to call")
+
+def map_smooth_mn(func_call):
+    params = func_call["new_param_list"]
+    names  = func_call["parameters"]
+    return [f"{names[3]} = gaussian_smooth(Field({names[1]}))"]
+    pexit("What to do?")
 
 def map_der2_main(func_call):
     params = func_call["new_param_list"]
@@ -1024,6 +1030,11 @@ sub_funcs = {
     {
         "output_params_indexes": [2],
         "map_func": map_der_main
+    },
+    "smooth_mn":
+    {
+        "output_params_indexes": [3],
+        "map_func": map_smooth_mn
     },
     "der_other":
     {
@@ -5737,7 +5748,7 @@ class Parser:
 
             pexit("PROF ACCESS IN NX LOOP: ",line[segment[1]:segment[2]],prof_type)
         if prof_type == "vtxbuf":
-          if indexes == ["l1__mod__cparam:l2__mod__cparam","m__mod__cdata","n__mod__cdata"]:
+          if indexes == ["l1__mod__cparam:l2__mod__cdata","m__mod__cdata","n__mod__cdata"]:
             return f"value({segment[0]})"
           elif indexes == []:
             return segment[0]
@@ -5761,9 +5772,9 @@ class Parser:
         elif len(indexes) == 1:
           if var_dims[0] == "nx__mod__cparam" and indexes[0] == ":":
             first_index = "vertexIdx.x-NGHOST_VAL"
-          elif var_dims[0] == "mx__mod__cparam" and indexes[0] == "l1__mod__cparam:l2__mod__cparam":
+          elif var_dims[0] == "mx__mod__cparam" and indexes[0] == "l1__mod__cparam:l2__mod__cdata":
             first_index = "vertexIdx.x"
-          elif var_dims[0] == "mx__mod__cparam" and indexes[0] == "l1__mod__cparam+nghost__mod__cparam:l2__mod__cparam+nghost__mod__cparam":
+          elif var_dims[0] == "mx__mod__cparam" and indexes[0] == "l1__mod__cparam+nghost__mod__cparam:l2__mod__cdata+nghost__mod__cparam":
             first_index = "vertexIdx.x+NGHOST_VAL"
           else:
             first_index = f"{indexes[0]}-1"
@@ -5771,7 +5782,7 @@ class Parser:
         elif len(indexes) == 2:
           if var_dims[0] == "nx__mod__cparam" and indexes[0] == ":":
             first_index = "vertexIdx.x-NGHOST_VAL"
-          elif var_dims[0] == "mx__mod__cparam" and indexes[0] == "l1__mod__cparam:l2__mod__cparam":
+          elif var_dims[0] == "mx__mod__cparam" and indexes[0] == "l1__mod__cparam:l2__mod__cdata":
             first_index = "vertexIdx.x"
           else:
             first_index = f"{indexes[0]}-1"
@@ -5780,7 +5791,7 @@ class Parser:
         elif len(indexes) == 3:
           if var_dims[0] == "nx__mod__cparam" and indexes[0] == ":":
             first_index = "vertexIdx.x-NGHOST_VAL"
-          elif var_dims[0] == "mx__mod__cparam" and indexes[0] == "l1__mod__cparam:l2__mod__cparam":
+          elif var_dims[0] == "mx__mod__cparam" and indexes[0] == "l1__mod__cparam:l2__mod__cdata":
             first_index = "vertexIdx.x"
           else:
             first_index = f"{indexes[0]}-1"
@@ -5790,7 +5801,7 @@ class Parser:
         elif len(indexes) == 4:
           if var_dims[0] == "nx__mod__cparam" and indexes[0] == ":":
             first_index = "vertexIdx.x-NGHOST_VAL"
-          elif var_dims[0] == "mx__mod__cparam" and indexes[0] == "l1__mod__cparam:l2__mod__cparam":
+          elif var_dims[0] == "mx__mod__cparam" and indexes[0] == "l1__mod__cparam:l2__mod__cdata":
             first_index = "vertexIdx.x"
           else:
             first_index = f"{indexes[0]}-1"
@@ -8886,7 +8897,7 @@ def main():
             pexit("transpiler not supported for spherical coords at the moment!\n")
         if(parser.static_variables["lcylindrical_coords__mod__cdata"]["value"] == ".true."):
             pexit("transpiler not supported for cylindrical coords at the moment!\n")
-    # parser.static_variables["l2__mod__cparam"]["value"] = "35"
+    # parser.static_variables["l2__mod__cdata"]["value"] = "35"
     # parser.static_variables["l1__mod__cparam"]["value"] = "4"
     # exit()
     #global global_subdomain_range_x
@@ -8946,9 +8957,9 @@ def main():
 
     #for our purposes l2,n2,m2 and etc. can be parameters since their values depend on MPI what we don't care about
     if config["offload"]:
-        for param in ["l2","n2","m2","l2i","n2i","m2i"]:
-            parser.static_variables[get_mod_name(param,"cparam")]["parameter"] = True
-        line = "dx_1(l1__mod__cparam:l2__mod__cparam)"
+        #for param in ["l2","n2","m2","l2i","n2i","m2i"]:
+        #    parser.static_variables[get_mod_name(param,"cparam")]["parameter"] = True
+        line = "dx_1(l1__mod__cparam:l2__mod__cdata)"
         lines = [line]
         lines  = parser.inline_known_parameters(lines,also_local_variables=True)
         lines  = parser.inline_known_parameters(lines,also_local_variables=True)
@@ -9444,7 +9455,8 @@ def main():
                   for seg in parser.get_array_segments_in_line(line,variables):
                     param_info = parser.get_param_info((line[seg[1]:seg[2]],False),local_variables,parser.static_variables)
                     assert(len(param_info[3]) <= 2)
-                    print("HMM: ",line)
+                    if(len(param_info[3]) == 0):
+                        continue
                     range_len = parser.evaluate_integer(param_info[3][0])
                     range_len_2nd = None
                     if(len(param_info[3]) == 1):
