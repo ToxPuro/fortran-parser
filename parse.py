@@ -8581,7 +8581,7 @@ class Parser:
         def replacement(match):
             content = match.group(1)
             modified_content = content.replace(" ", "_")
-            return remove_invalid_symbols(f"string_enum_{modified_content}")
+            return remove_invalid_symbols(f"string_enum_{modified_content}_string")
 
         res_lines = []
         all_strings = []
@@ -8594,11 +8594,20 @@ class Parser:
                     all_strings.append(string)
             result = re.sub(pattern, replacement, line)
             res_lines.append(result)
+        file = open("res-string-enums","w")
+        file.write(f"integer, parameter :: string_enum_unknown_string_string = 0\n")
         for i,string in enumerate(all_strings):
             string = remove_invalid_symbols(string.replace(" ","_"))
-            file = open("res-string-enums","w")
-            file.write(f"integer, parameter :: string_enum_{string} = {i}\n")
-            file.close()
+            file.write(f"integer, parameter :: string_enum_{string}_string = {i+1}\n")
+        file.close()
+        file = open("strings-to-enums","w")
+        file.write("select case(src)\n")
+        for string in all_strings:
+            enum = remove_invalid_symbols(string.replace(" ","_"))
+            file.write(f"case('{string}')\n\tdst = string_enum_{enum}_string\n")
+        file.write(f"case default\n\tdst = string_enum_unknown_string_string\n")
+        file.write(f"endselect\n")
+        file.close()
         return res_lines
     def normalize(self, lines):
         local_variables = {parameter:v for parameter,v in self.get_variables(lines, {},self.file,True).items() }
