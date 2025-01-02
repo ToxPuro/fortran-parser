@@ -2075,6 +2075,7 @@ class Parser:
 
     def __init__(self, files,config):
         self.pde_index_counter = 1
+        self.enum_strings = []
         self.known_ints = {
             "iux__mod__cdata-iuu__mod__cdata": "0",
             "iuz__mod__cdata-iux__mod__cdata": "2",
@@ -5047,10 +5048,31 @@ class Parser:
             del variables[var]
         var_segments = get_var_name_segments(line,variables)
         res = self.replace_segments(var_segments,line,self.rename_to_internal_module_name,local_variables,{"modules": modules,"own_module":own_module})
-        if "qbc_xy" in line:
-            print("SEGS: ",var_segments)
-            print("RES: ",line, "--->",res)
         return res
+
+    def change_strings_to_enums_replacer(self,segment,segment_index,line,local_variables,info):
+        src = self.static_variables
+        if segment[0] in local_variables:
+            return line[segment[1]:segment[2]]
+        type = self.static_variables[segment[0]]["type"]
+        if("character" in type):
+            res = f"string_enum_{segment[0]}"
+            mod = get_mod(segment[0])
+            if res not in self.enum_strings:
+                self.enum_strings.append(res)
+                file = open(f"{mod}_enum_strings","a")
+                file.write(f"integer :: {remove_mod(res)} = 0\n")
+                file.close()
+            return res
+        return line[segment[1]:segment[2]]
+
+    def change_strings_to_enums(self,lines,local_variables,variables):
+        res_lines = []
+        for line in lines:
+            var_segments = get_var_name_segments(line,variables)
+            res_lines.append(self.replace_segments(var_segments,line,self.change_strings_to_enums_replacer,local_variables,{}))
+        return res_lines
+    
 
     def rename_to_internal_module_name(self,segment,segment_index,line,local_variables,info):
 
@@ -7416,6 +7438,7 @@ class Parser:
         file.close()
 
         lines = self.unroll_forall(lines,local_variables,variables)
+        lines = self.change_strings_to_enums(lines,local_variables,variables)
 
         variables = merge_dictionaries(self.static_variables, local_variables)
         print("Unrolling constant loops")
@@ -8546,7 +8569,37 @@ class Parser:
         else:
           res_lines.append(line)
       return res_lines
+    
+    def remove_strings(self,lines,local_variables):
+        def remove_invalid_symbols(line):
+            # Define the pattern to match any invalid character
+            # This includes everything except alphanumeric characters and underscores
+            pattern = r'[^A-Za-z0-9_]'
+            # Replace invalid characters with 'Z'
+            return  re.sub(pattern, 'Z', line)
 
+        def replacement(match):
+            content = match.group(1)
+            modified_content = content.replace(" ", "_")
+            return remove_invalid_symbols(f"string_enum_{modified_content}")
+
+        res_lines = []
+        all_strings = []
+        for line in lines:
+            pattern = r"'([^']*)'"
+            # Replace the matches
+            strings = re.findall(pattern,line)
+            for string in strings:
+                if string not in all_strings:
+                    all_strings.append(string)
+            result = re.sub(pattern, replacement, line)
+            res_lines.append(result)
+        for i,string in enumerate(all_strings):
+            string = remove_invalid_symbols(string.replace(" ","_"))
+            file = open("res-string-enums","w")
+            file.write(f"integer, parameter :: string_enum_{string} = {i}\n")
+            file.close()
+        return res_lines
     def normalize(self, lines):
         local_variables = {parameter:v for parameter,v in self.get_variables(lines, {},self.file,True).items() }
         lines = self.transform_pointers(lines,merge_dictionaries(local_variables,self.static_variables))
@@ -8558,6 +8611,7 @@ class Parser:
         #move written profiles to local_vars since we know their values
         if self.offload_type == "stencil":
             lines = self.transform_pencils(lines,local_variables)
+            lines = self.remove_strings(lines,local_variables)
         return lines
 
     def add_vtxbuf_indexes(self,func_name,auxiliaries=False):
