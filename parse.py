@@ -359,11 +359,9 @@ der_func_map = {
 
 }
 def gen_field3(index):
-    return f"Field3(Field({index}), Field({index}+1), Field({index}+2))"
+    return f"(Field3){{Field({index}), Field({index}+1), Field({index}+2)}}"
 def map_curl(func_call):
     params = func_call["parameters"]
-    print("HMM CURL PARAMS: ",params)
-    print("HMM CURL LINE: ",func_call["line"])
     if len(params)>3:
         pexit("optional params not supported")
     return [f"{params[2]} = curl({gen_field3(params[1])})"]
@@ -438,7 +436,7 @@ def map_traceless_strain(func_call):
 def map_gij(func_call):
     params = func_call["parameters"]
     if(params[3] == "1"):
-        return [f"{params[2]} = gradient({gen_field3(params[1])})"]
+        return [f"{params[2]} = gradient_tensor({gen_field3(params[1])})"]
     if(params[3] == "2"):
         return [f"{params[2]} = gradient2({gen_field3(params[1])})"]
     if(params[3] == "3"):
@@ -574,7 +572,7 @@ def map_d2f_dxj(func_call):
 def map_g2ij(func_call):
     params = func_call["parameters"]
     return [f"{params[2]} = hessian(Field({params[1]}))"]
-def map_multmv_mn(func_call):
+def map_multmv(func_call):
     params = func_call["parameters"]
     if len(params)>3:
         pexit("optional params not supported\n")
@@ -765,6 +763,16 @@ def map_der5i1j(func_call):
 def map_der2i2j2k(func_call):
     names = func_call["parameters"]
     return [f"{names[2]} = der2i2j2k(Field({names[1]}))"]
+def map_random_number_wrapper_arr(func_call):
+    params = func_call["new_param_list"]
+    names  = func_call["parameters"]
+    assert(len(params) == 1)
+    if(params[0][3] == ["2"]):
+        first  =  f"{names[0]}(1) = rand_uniform()"
+        second =  f"{names[0]}(2) = rand_uniform()"
+        return [first,second]
+    pexit("WHAT TO DO? ", params)
+
 def map_der4i2j(func_call):
     params = func_call["new_param_list"]
     i = int(pc_parser.evaluate_integer(params[3][0]))
@@ -828,6 +836,7 @@ def map_multsv_mn_add(func_call):
 
 
 def map_directly(func_call):
+    print("HMM MAP DIRECT: ",func_call["new_param_list"])
     params = func_call["parameters"]
     name = func_call["function_name"]
     res = f"{params[0]} = {name}("
@@ -876,6 +885,11 @@ def map_test_field_shear(func_call):
 
 
 sub_funcs = {
+    "random_number_wrapper_1":
+    {
+        "output_param_indexes": [0],
+        "map_func": map_random_number_wrapper_arr
+    },
     "test_field_shear":
     {
         "output_param_indexes": [],
@@ -953,6 +967,11 @@ sub_funcs = {
       "map_func": map_epsilon
     },
     "set_min_val":
+    {
+      "output_param_indexes": [0],
+      "map_func": map_directly
+    },
+    "set_max_val":
     {
       "output_param_indexes": [0],
       "map_func": map_directly
@@ -1094,7 +1113,17 @@ sub_funcs = {
     "multmv_mn":
     {
         "output_params_indexes": [2],
-        "map_func": map_multmv_mn
+        "map_func": map_multmv
+    },
+    "multmv_mixed":
+    {
+        "output_params_indexes": [2],
+        "map_func": map_multmv
+    },
+    "multmv_scalar":
+    {
+        "output_params_indexes": [2],
+        "map_func": map_multmv
     },
     "g2ij":
     {
@@ -2923,7 +2952,6 @@ class Parser:
                                   self.not_chosen_files.append(filepath)
                                   return
                                 elif "deriv_8th" in filepath: 
-                                  print("HMM: ",self.chosen_modules[module_name])
                                   pexit("WRONG", filepath)
                                 if module_name not in self.module_info:
                                     self.module_info[module_name] = {"public_variables": []}
@@ -4422,7 +4450,6 @@ class Parser:
             local_variables = {parameter:v for parameter,v in self.get_variables(subroutine_lines, {},file_path, True).items() }
             parameters = self.get_parameters(subroutine_lines[0])
             mandatory_vars = [var for var in parameters if not local_variables[var]["optional"]]
-            print("HMM: ",interfaced_functions[0], parameters,parameter_list,mandatory_vars)
             if len(mandatory_vars) > len(parameter_list):
                 return []
             #if "pic" in interfaced_functions[0] and len(parameters) == len(parameter_list):
@@ -5123,6 +5150,10 @@ class Parser:
         profile_replacements = {}
         #assuming all profiles are written in mn loop; if not use the lower
         for field in self.struct_table["pencil_case"]:
+          dims = self.struct_table["pencil_case"][field]["dims"]
+          #TP: this is because in nopscalar.f90 there is pencil case of dims (3,0)
+          if "0" in dims:
+              continue
           new_name = f"ac_transformed_pencil_{field}"
           if new_name not in local_variables:
             local_variables[new_name] = self.struct_table["pencil_case"][field]
@@ -5227,7 +5258,6 @@ class Parser:
           writes = self.get_writes([line])
           if len(writes) == 1:
             write = writes[0]
-            print("HMM ",write)
             var_segments = get_variable_segments(line, [write["variable"]])
             if len(var_segments) == 0:
               continue
@@ -5666,6 +5696,8 @@ class Parser:
         
     def get_ac_matrix_res(self,segment,indexes):
       #read/write to matrix indexes
+      if len(indexes) == 0:
+          return segment[0]
       if ":" not in indexes[0] and ":" not in indexes[1]:
         return f"{segment[0]}[{indexes[0]}-1][{indexes[1]}-1]"
       #Reading matrix row
@@ -5688,7 +5720,9 @@ class Parser:
               return vtxbuf_name
         elif segment[0] == "f":
             #split in case range
-            vtxbuf_name = get_vtxbuf_name_from_index("F_",index)
+            vtxbuf_name = get_vtxbuf_name_from_index("F_",index.split("(")[0])
+            if "(" in index:
+                vtxbuf_name += "[" + index.split("(")[-1].split(")")[0] +"]"
             #if "VEC" in vtxbuf_name:
             #  vtxbuf_name = vtxbuf_name.replace("VEC",vtxbuf_name[-4])
             if i > 0 or rhs_var is None:
@@ -5741,7 +5775,6 @@ class Parser:
             pexit(line)
         if ":" in indexes[-1]:
             lower,upper = indexes[-1].split(":")
-            print("HMM LINE: ",line)
             if is_vector_stencil_index(indexes[-1]) or indexes[-1] == "icc__mod__cdata:icc__mod__cdata+npscalar__mod__cparam-1" or upper == f"2+{lower}" or indexes[-1] in ["ibb_sphr__mod__cdata:ibb_sphp__mod__cdata","iglobal_ax_ext__mod__cdata:iglobal_az_ext__mod__cdata","ibxt__mod__cdata:ibzt__mod__cdata","ijxt__mod__cdata:ijzt__mod__cdata"""]:
                 pass
             elif lower == "ireaci__mod__chemistry(1)" and upper == "ireaci__mod__chemistry(nchemspec__mod__cparam)":
@@ -6502,6 +6535,15 @@ class Parser:
                             while add_replacement <= int(upper):
                                 replacements.append(str(add_replacement))
                                 add_replacement += 1
+                        for index in ["u","a"]:
+                            if lower == f"i{index}x__mod__cdata" and upper == f"i{index}z__mod__cdata":
+                                loop_index = write["variable"]
+                                in_constant_loop = True
+                                do_nest_num = 1
+                                constant_loops_indexes = []
+                                loop_start_index = line_index
+                                replacements = [f"i{index}x__mod__cdata",f"i{index}y__mod__cdata",f"i{index}z__mod__cdata"]
+
 
                 if "do" in line and "end" in line and in_constant_loop:
                     do_nest_num -= 1
@@ -6650,7 +6692,6 @@ class Parser:
             select_case_var = line.split("(")[1].split(")")[0]
             return f"case {select_case_var}:\n"
         if "end" in line and "do" in line:
-            print("HMM ",line)
             is_global_index = loop_indexes.pop()[1]
             if(is_global_index): return ""
             return "}\n"
@@ -7078,7 +7119,8 @@ class Parser:
         res = []
         for line_index,_ in enumerate(lines):
             func_calls = self.get_function_calls_in_line(lines[line_index],variables)
-            if(len(func_calls) == 1 and func_calls[0]["function_name"] == func):
+            #if(len(func_calls) == 1 and func_calls[0]["function_name"] == func):
+            if(len(func_calls) >= 1 and func_calls[0]["function_name"] == func):
                 func_calls[0]["new_param_list"] = self.get_static_passed_parameters(func_calls[0]["parameters"],local_variables,self.static_variables)
                 #get local var info to map funcs
                 func_calls[0]["local_variables"] = local_variables
@@ -8581,7 +8623,7 @@ class Parser:
         def replacement(match):
             content = match.group(1)
             modified_content = content.replace(" ", "_")
-            return remove_invalid_symbols(f"string_enum_{modified_content}_string")
+            return remove_invalid_symbols(f"string_enum_{modified_content}_string__mod__cparam")
 
         res_lines = []
         all_strings = []
@@ -9605,10 +9647,14 @@ def main():
           else:
             file.write(f"{type} {name}\n")
         file = open(output_filename,"w")
+        file.write("const int NGHOST_VAL = 3\n")
         file.write("#include \"../../stdlib/math\"\n")
         file.write("#include \"../../stdlib/derivs.h\"\n")
         file.write("#include \"../../stdlib/operators.h\"\n")
         file.write("#include \"fieldecs.h\"\n")
+        file.write("#define AC_lenergy__mod__cparam (lentropy__mod__cparam || ltemperature__mod__cparam || lthermal_energy__mod__cparam)\n")
+        file.write("#define AC_NGHOST__mod__cparam nghost__mod__cparam\n")
+
         file.write("const int AC_npencils__mod__cparam = 200\n")
         file.write("//TP: nphis1 and nphis2 don't actually work. simply declared to compile the code\n")
         file.write("gmem real AC_nphis1__mod__cdata[AC_mx__mod__cparam]\n")
