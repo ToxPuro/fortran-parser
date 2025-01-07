@@ -6175,6 +6175,7 @@ class Parser:
                             print(line)
                             print(indexes)
                             print(line[segment[1]:segment[2]])
+                            print(var_dims)
                             assert(False)
                           elif indexes[1]  == "1":
                             res = f"{segment[0]}.x"
@@ -6197,7 +6198,7 @@ class Parser:
                         var_info = self.get_param_info((line[segment[1]:segment[2]],False),local_variables,self.static_variables)
                         #read/write to tensor indexes:
                         if len(var_info[3]) == 1 and indexes[0] == ":":
-                            res = f"{segment[0]}[{indexes[1]}][{indexes[2]}][{indexes[3]}]"
+                            res = f"{segment[0]}[{indexes[1]}-1][{indexes[2]}-1][{indexes[3]}-1]"
                         else:
                           print("unsupported tensor read/write")
                           print("NUM of looped dims: ",num_of_looped_dims)
@@ -6622,6 +6623,11 @@ class Parser:
         if len(vars_to_declare) == 0  or local_variables[vars_to_declare[0]]["type"] != "real":
             return ""
         dims = local_variables[vars_to_declare[0]]["dims"]
+        if local_variables[vars_to_declare[0]]["dims"] in [["2"]]:
+            res = ""
+            for var in vars_to_declare:
+                res = res + "real " + var + "[2]\n"
+            return res
         if local_variables[vars_to_declare[0]]["dims"] in [[],[global_subdomain_range_x]]:
             return "real " + ", ".join(vars_to_declare)
         if local_variables[vars_to_declare[0]]["dims"] == [global_subdomain_range_x,"3","3"]:
