@@ -1,0 +1,158 @@
+bc_ss_flux(AC_TOP_BOT topbot,bool lone_sided)
+{
+
+
+
+
+
+
+
+real tmp_xy
+real cs2_xy
+real rho_xy
+
+int i
+bool loptest_return_value_1
+bool loptest_return_value_4
+if(topbot == bot__mod__cparam) {
+if (pretend_lntt__mod__cdata) {
+tmp_xy=-fbotkbot__mod__energy/exp(SS[vertexIdx.x][vertexIdx.y][n1__mod__cparam-1])
+for i in 1:nghost__mod__cparam+1 {
+SS[vertexIdx.x][vertexIdx.y][n1__mod__cparam-i-1]=SS[vertexIdx.x][vertexIdx.y][n1__mod__cparam+i-1]-dz2_bound__mod__cdata[-i+nghost__mod__cparam+1-1]*tmp_xy
+}
+
+}
+else {
+if (ldensity_nolog__mod__cdata) {
+if (lreference_state__mod__cdata) {
+rho_xy= LNRHO[vertexIdx.x][vertexIdx.y][n1__mod__cparam-1]  +reference_state_padded__mod__density[vertexIdx.x][iref_rho__mod__cparam-1]
+}
+else {
+rho_xy=LNRHO[vertexIdx.x][vertexIdx.y][n1__mod__cparam-1]
+}
+}
+else {
+rho_xy=exp(LNRHO[vertexIdx.x][vertexIdx.y][n1__mod__cparam-1])
+}
+cs2_xy = SS[vertexIdx.x][vertexIdx.y][n1__mod__cparam-1]
+if (lreference_state__mod__cdata) {
+cs2_xy = cs2_xy + reference_state_padded__mod__density[vertexIdx.x][iref_s__mod__cparam-1]
+}
+if (ldensity_nolog__mod__cdata) {
+cs2_xy=cs20__mod__equationofstate*exp(gamma_m1__mod__energybcs*(log(rho_xy)-lnrho0__mod__equationofstate)+cv1__mod__energybcs*cs2_xy)
+}
+else {
+cs2_xy=cs20__mod__equationofstate*exp(gamma_m1__mod__energybcs*(LNRHO[vertexIdx.x][vertexIdx.y][n1__mod__cparam-1]-lnrho0__mod__equationofstate)+cv1__mod__energybcs*cs2_xy)
+}
+if (lheatc_chiconst__mod__energy) {
+tmp_xy=fbot__mod__energy/(rho_xy*chi__mod__energy*cs2_xy)
+}
+else if (lheatc_kramers__mod__energy) {
+tmp_xy=fbot__mod__energy*pow(rho_xy,(2*nkramers__mod__energy))*pow((cp__mod__energybcs*gamma_m1__mod__energybcs),(6.5*nkramers__mod__energy))  /(hcond0_kramers__mod__energy*pow(cs2_xy,(6.5*nkramers__mod__energy+1.)))
+}
+else {
+tmp_xy=cp__mod__energybcs*fbotkbot__mod__energy/cs2_xy
+}
+if (present(lone_sided)) {
+loptest_return_value_1=lone_sided
+}
+else if (false) {
+}
+else {
+loptest_return_value_1=false
+}
+if (loptest_return_value_1) {
+print("not implemented getderlnrho_z")
+print("not implemented bval_from_arr")
+print("not implemented set_ghosts_for_onesided_ders")
+}
+else {
+for i in 1:nghost__mod__cparam+1 {
+rho_xy = LNRHO[vertexIdx.x][vertexIdx.y][n1__mod__cparam+i-1]-LNRHO[vertexIdx.x][vertexIdx.y][n1__mod__cparam-i-1]
+if (ldensity_nolog__mod__cdata) {
+if (lreference_state__mod__cdata) {
+rho_xy = rho_xy/(LNRHO[vertexIdx.x][vertexIdx.y][n1__mod__cparam-1]  +reference_state_padded__mod__density[vertexIdx.x][iref_rho__mod__cparam-1])
+}
+else {
+rho_xy = rho_xy/LNRHO[vertexIdx.x][vertexIdx.y][n1__mod__cparam-1]
+}
+}
+SS[vertexIdx.x][vertexIdx.y][n1__mod__cparam-i-1]=SS[vertexIdx.x][vertexIdx.y][n1__mod__cparam+i-1]+(cp__mod__energybcs-cv__mod__energybcs)*(rho_xy+dz2_bound__mod__cdata[-i+nghost__mod__cparam+1-1]*tmp_xy)
+}
+
+}
+}
+}
+else if(topbot == top__mod__cparam) {
+if (pretend_lntt__mod__cdata) {
+tmp_xy=-ftopktop__mod__energy/exp(SS[vertexIdx.x][vertexIdx.y][n2__mod__cdata-1])
+for i in 1:nghost__mod__cparam+1 {
+SS[vertexIdx.x][vertexIdx.y][n2__mod__cdata-i-1]=SS[vertexIdx.x][vertexIdx.y][n2__mod__cdata+i-1]-dz2_bound__mod__cdata[i+1+nghost__mod__cparam-1]*tmp_xy
+}
+
+}
+else {
+if (ldensity_nolog__mod__cdata) {
+if (lreference_state__mod__cdata) {
+rho_xy= LNRHO[vertexIdx.x][vertexIdx.y][n2__mod__cdata-1]  +reference_state_padded__mod__density[vertexIdx.x][iref_rho__mod__cparam-1]
+}
+else {
+rho_xy=LNRHO[vertexIdx.x][vertexIdx.y][n2__mod__cdata-1]
+}
+}
+else {
+rho_xy=exp(LNRHO[vertexIdx.x][vertexIdx.y][n2__mod__cdata-1])
+}
+cs2_xy = SS[vertexIdx.x][vertexIdx.y][n2__mod__cdata-1]
+if (lreference_state__mod__cdata) {
+cs2_xy = cs2_xy + reference_state_padded__mod__density[vertexIdx.x][iref_s__mod__cparam-1]
+}
+if (ldensity_nolog__mod__cdata) {
+cs2_xy=cs20__mod__equationofstate*exp(gamma_m1__mod__energybcs*(log(rho_xy)-lnrho0__mod__equationofstate)+cv1__mod__energybcs*cs2_xy)
+}
+else {
+cs2_xy=cs20__mod__equationofstate*exp(gamma_m1__mod__energybcs*(LNRHO[vertexIdx.x][vertexIdx.y][n2__mod__cdata-1]-lnrho0__mod__equationofstate)+cv1__mod__energybcs*cs2_xy)
+}
+if (lheatc_chiconst__mod__energy) {
+tmp_xy=ftop__mod__energy/(rho_xy*chi__mod__energy*cs2_xy)
+}
+else if (lheatc_kramers__mod__energy) {
+tmp_xy=ftop__mod__energy*pow(rho_xy,(2*nkramers__mod__energy))*pow((cp__mod__energybcs*gamma_m1__mod__energybcs),(6.5*nkramers__mod__energy))  /(hcond0_kramers__mod__energy*pow(cs2_xy,(6.5*nkramers__mod__energy+1.)))
+}
+else {
+tmp_xy=cp__mod__energybcs*ftopktop__mod__energy/cs2_xy
+}
+if (present(lone_sided)) {
+loptest_return_value_4=lone_sided
+}
+else if (false) {
+}
+else {
+loptest_return_value_4=false
+}
+if (loptest_return_value_4) {
+print("not implemented getderlnrho_z")
+print("not implemented bval_from_arr")
+print("not implemented set_ghosts_for_onesided_ders")
+}
+else {
+for i in 1:nghost__mod__cparam+1 {
+rho_xy = LNRHO[vertexIdx.x][vertexIdx.y][n2__mod__cdata+i-1]-LNRHO[vertexIdx.x][vertexIdx.y][n2__mod__cdata-i-1]
+if (ldensity_nolog__mod__cdata) {
+if (lreference_state__mod__cdata) {
+rho_xy = rho_xy/(LNRHO[vertexIdx.x][vertexIdx.y][n2__mod__cdata-1]  +reference_state_padded__mod__density[vertexIdx.x][iref_rho__mod__cparam-1])
+}
+else {
+rho_xy = rho_xy/LNRHO[vertexIdx.x][vertexIdx.y][n2__mod__cdata-1]
+}
+}
+SS[vertexIdx.x][vertexIdx.y][n2__mod__cdata+i-1]=SS[vertexIdx.x][vertexIdx.y][n2__mod__cdata-i-1]+(cp__mod__energybcs-cv__mod__energybcs)*(-rho_xy-dz2_bound__mod__cdata[i+1+nghost__mod__cparam-1]*tmp_xy)
+}
+
+}
+}
+}
+else {
+}
+}
+

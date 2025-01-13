@@ -1,0 +1,132 @@
+subroutine bc_ss_flux(f,topbot,lone_sided)
+use densitymethods
+use deriv
+use general
+integer, intent(in) :: topbot
+real, dimension (:,:,:,:) :: f
+logical, optional :: lone_sided
+real, dimension (size(f,1),size(f,2)) :: tmp_xy,cs2_xy,rho_xy
+integer :: i
+logical :: loptest_return_value_1
+logical :: loptest_return_value_4
+if (ldebug) then
+print*,string_enum_bc_ss_fluxZ_enter_Z_cs20Z_string,cs20
+endif
+if(topbot == bot) then
+if (pretend_lntt) then
+tmp_xy=-fbotkbot/exp(f(:,:,n1,iss))
+do i=1,nghost
+f(:,:,n1-i,iss)=f(:,:,n1+i,iss)-dz2_bound(-i)*tmp_xy
+enddo
+else
+if (ldensity_nolog) then
+if (lreference_state) then
+rho_xy(l1:l2,:)= f(l1:l2,:,n1,ilnrho)  +spread(reference_state(:,iref_rho),2,size(f(:,:,n1,ilnrho),2))
+else
+rho_xy=f(:,:,n1,ilnrho)
+endif
+else
+rho_xy=exp(f(:,:,n1,ilnrho))
+endif
+cs2_xy = f(:,:,n1,iss)
+if (lreference_state) then
+cs2_xy(l1:l2,:) = cs2_xy(l1:l2,:) + spread(reference_state(:,iref_s),2,my)
+endif
+if (ldensity_nolog) then
+cs2_xy=cs20*exp(gamma_m1*(log(rho_xy)-lnrho0)+cv1*cs2_xy)
+else
+cs2_xy=cs20*exp(gamma_m1*(f(:,:,n1,ilnrho)-lnrho0)+cv1*cs2_xy)
+endif
+if (lheatc_chiconst) then
+tmp_xy=fbot/(rho_xy*chi*cs2_xy)
+else if (lheatc_kramers) then
+tmp_xy=fbot*rho_xy**(2*nkramers)*(cp*gamma_m1)**(6.5*nkramers)  /(hcond0_kramers*cs2_xy**(6.5*nkramers+1.))
+else
+tmp_xy=cp*fbotkbot/cs2_xy
+endif
+if (present(lone_sided)) then
+loptest_return_value_1=lone_sided
+else if (.false.) then
+else
+loptest_return_value_1=.false.
+endif
+if (loptest_return_value_1) then
+call not_implemented(string_enum_bc_ss_flux_string, string_enum_oneZsided_bc_string)
+call getderlnrho_z(f,n1,rho_xy)
+call bval_from_neumann(f,topbot,iss,3,rho_xy)
+call set_ghosts_for_onesided_ders(f,topbot,iss,3,.true.)
+else
+do i=1,nghost
+rho_xy = f(:,:,n1+i,ilnrho)-f(:,:,n1-i,ilnrho)
+if (ldensity_nolog) then
+if (lreference_state) then
+rho_xy(l1:l2,:) = rho_xy(l1:l2,:)/(f(l1:l2,:,n1,ilnrho)  +spread(reference_state(:,iref_rho),2,my))
+else
+rho_xy = rho_xy/f(:,:,n1,ilnrho)
+endif
+endif
+f(:,:,n1-i,iss)=f(:,:,n1+i,iss)+(cp-cv)*(rho_xy+dz2_bound(-i)*tmp_xy)
+enddo
+endif
+endif
+else if(topbot == top) then
+if (pretend_lntt) then
+tmp_xy=-ftopktop/exp(f(:,:,n2,iss))
+do i=1,nghost
+f(:,:,n2-i,iss)=f(:,:,n2+i,iss)-dz2_bound(i)*tmp_xy
+enddo
+else
+if (ldensity_nolog) then
+if (lreference_state) then
+rho_xy(l1:l2,:)= f(l1:l2,:,n2,ilnrho)  +spread(reference_state(:,iref_rho),2,size(f(:,:,n2,ilnrho),2))
+else
+rho_xy=f(:,:,n2,ilnrho)
+endif
+else
+rho_xy=exp(f(:,:,n2,ilnrho))
+endif
+cs2_xy = f(:,:,n2,iss)
+if (lreference_state) then
+cs2_xy(l1:l2,:) = cs2_xy(l1:l2,:) + spread(reference_state(:,iref_s),2,my)
+endif
+if (ldensity_nolog) then
+cs2_xy=cs20*exp(gamma_m1*(log(rho_xy)-lnrho0)+cv1*cs2_xy)
+else
+cs2_xy=cs20*exp(gamma_m1*(f(:,:,n2,ilnrho)-lnrho0)+cv1*cs2_xy)
+endif
+if (lheatc_chiconst) then
+tmp_xy=ftop/(rho_xy*chi*cs2_xy)
+else if (lheatc_kramers) then
+tmp_xy=ftop*rho_xy**(2*nkramers)*(cp*gamma_m1)**(6.5*nkramers)  /(hcond0_kramers*cs2_xy**(6.5*nkramers+1.))
+else
+tmp_xy=cp*ftopktop/cs2_xy
+endif
+if (present(lone_sided)) then
+loptest_return_value_4=lone_sided
+else if (.false.) then
+else
+loptest_return_value_4=.false.
+endif
+if (loptest_return_value_4) then
+call not_implemented(string_enum_bc_ss_flux_string, string_enum_oneZsided_bc_string)
+call getderlnrho_z(f,n2,rho_xy)
+call bval_from_neumann(f,topbot,iss,3,rho_xy)
+call set_ghosts_for_onesided_ders(f,topbot,iss,3,.true.)
+else
+do i=1,nghost
+rho_xy = f(:,:,n2+i,ilnrho)-f(:,:,n2-i,ilnrho)
+if (ldensity_nolog) then
+if (lreference_state) then
+rho_xy(l1:l2,:) = rho_xy(l1:l2,:)/(f(l1:l2,:,n2,ilnrho)  +spread(reference_state(:,iref_rho),2,my))
+else
+rho_xy = rho_xy/f(:,:,n2,ilnrho)
+endif
+endif
+f(:,:,n2+i,iss)=f(:,:,n2-i,iss)+(cp-cv)*(-rho_xy-dz2_bound(i)*tmp_xy)
+enddo
+endif
+endif
+else
+call fatal_error(string_enum_bc_ss_flux_string,string_enum_invalid_value_of_topbot_string)
+endif
+endsubroutine bc_ss_flux

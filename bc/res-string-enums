@@ -1,0 +1,5 @@
+integer, parameter :: string_enum_unknown_string_string = 0
+integer, parameter :: string_enum_bc_ss_fluxZ_enter_Z_cs20Z_string = 1
+integer, parameter :: string_enum_bc_ss_flux_string = 2
+integer, parameter :: string_enum_oneZsided_bc_string = 3
+integer, parameter :: string_enum_invalid_value_of_topbot_string = 4

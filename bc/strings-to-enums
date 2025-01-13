@@ -1,0 +1,12 @@
+select case(src)
+case('bc_ss_flux: enter - cs20=')
+	dst = string_enum_bc_ss_fluxZ_enter_Z_cs20Z_string
+case('bc_ss_flux')
+	dst = string_enum_bc_ss_flux_string
+case('one-sided bc')
+	dst = string_enum_oneZsided_bc_string
+case('invalid value of topbot')
+	dst = string_enum_invalid_value_of_topbot_string
+case default
+	dst = string_enum_unknown_string_string
+endselect

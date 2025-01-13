@@ -1,0 +1,132 @@
+subroutine bc_ss_flux(f,topbot,lone_sided)
+use densitymethods
+use deriv
+use general
+integer, intent(in) :: topbot
+real, dimension (:,:,:,:) :: f
+logical, optional :: lone_sided
+real, dimension (size(f,1),size(f,2)) :: tmp_xy,cs2_xy,rho_xy
+integer :: i
+logical :: loptest_return_value_1
+logical :: loptest_return_value_4
+if (ldebug__mod__cdata) then
+print*,string_enum_bc_ss_fluxZ_enter_Z_cs20Z_string__mod__cparam,cs20__mod__equationofstate
+endif
+if(topbot == bot__mod__cparam) then
+if (pretend_lntt__mod__cdata) then
+tmp_xy=-fbotkbot__mod__energy/exp(f(:,:,n1__mod__cparam,iss__mod__cdata))
+do i=1,nghost__mod__cparam
+f(:,:,n1__mod__cparam-i,iss__mod__cdata)=f(:,:,n1__mod__cparam+i,iss__mod__cdata)-dz2_bound__mod__cdata(-i)*tmp_xy
+enddo
+else
+if (ldensity_nolog__mod__cdata) then
+if (lreference_state__mod__cdata) then
+rho_xy(l1__mod__cparam:l2__mod__cdata,:)= f(l1__mod__cparam:l2__mod__cdata,:,n1__mod__cparam,ilnrho__mod__cdata)  +spread(reference_state__mod__density(:,iref_rho__mod__cparam),2,size(f(:,:,n1__mod__cparam,ilnrho__mod__cdata),2))
+else
+rho_xy=f(:,:,n1__mod__cparam,ilnrho__mod__cdata)
+endif
+else
+rho_xy=exp(f(:,:,n1__mod__cparam,ilnrho__mod__cdata))
+endif
+cs2_xy = f(:,:,n1__mod__cparam,iss__mod__cdata)
+if (lreference_state__mod__cdata) then
+cs2_xy(l1__mod__cparam:l2__mod__cdata,:) = cs2_xy(l1__mod__cparam:l2__mod__cdata,:) + spread(reference_state__mod__density(:,iref_s__mod__cparam),2,my__mod__cparam)
+endif
+if (ldensity_nolog__mod__cdata) then
+cs2_xy=cs20__mod__equationofstate*exp(gamma_m1__mod__energybcs*(log(rho_xy)-lnrho0__mod__equationofstate)+cv1__mod__energybcs*cs2_xy)
+else
+cs2_xy=cs20__mod__equationofstate*exp(gamma_m1__mod__energybcs*(f(:,:,n1__mod__cparam,ilnrho__mod__cdata)-lnrho0__mod__equationofstate)+cv1__mod__energybcs*cs2_xy)
+endif
+if (lheatc_chiconst__mod__energy) then
+tmp_xy=fbot__mod__energy/(rho_xy*chi__mod__energy*cs2_xy)
+else if (lheatc_kramers__mod__energy) then
+tmp_xy=fbot__mod__energy*rho_xy**(2*nkramers__mod__energy)*(cp__mod__energybcs*gamma_m1__mod__energybcs)**(6.5*nkramers__mod__energy)  /(hcond0_kramers__mod__energy*cs2_xy**(6.5*nkramers__mod__energy+1.))
+else
+tmp_xy=cp__mod__energybcs*fbotkbot__mod__energy/cs2_xy
+endif
+if (present(lone_sided)) then
+loptest_return_value_1=lone_sided
+else if (.false.) then
+else
+loptest_return_value_1=.false.
+endif
+if (loptest_return_value_1) then
+call not_implemented(string_enum_bc_ss_flux_string__mod__cparam, string_enum_oneZsided_bc_string__mod__cparam)
+call getderlnrho_z(f,n1__mod__cparam,rho_xy)
+call bval_from_neumann(f,topbot,iss__mod__cdata,3,rho_xy)
+call set_ghosts_for_onesided_ders(f,topbot,iss__mod__cdata,3,.true.)
+else
+do i=1,nghost__mod__cparam
+rho_xy = f(:,:,n1__mod__cparam+i,ilnrho__mod__cdata)-f(:,:,n1__mod__cparam-i,ilnrho__mod__cdata)
+if (ldensity_nolog__mod__cdata) then
+if (lreference_state__mod__cdata) then
+rho_xy(l1__mod__cparam:l2__mod__cdata,:) = rho_xy(l1__mod__cparam:l2__mod__cdata,:)/(f(l1__mod__cparam:l2__mod__cdata,:,n1__mod__cparam,ilnrho__mod__cdata)  +spread(reference_state__mod__density(:,iref_rho__mod__cparam),2,my__mod__cparam))
+else
+rho_xy = rho_xy/f(:,:,n1__mod__cparam,ilnrho__mod__cdata)
+endif
+endif
+f(:,:,n1__mod__cparam-i,iss__mod__cdata)=f(:,:,n1__mod__cparam+i,iss__mod__cdata)+(cp__mod__energybcs-cv__mod__energybcs)*(rho_xy+dz2_bound__mod__cdata(-i)*tmp_xy)
+enddo
+endif
+endif
+else if(topbot == top__mod__cparam) then
+if (pretend_lntt__mod__cdata) then
+tmp_xy=-ftopktop__mod__energy/exp(f(:,:,n2__mod__cdata,iss__mod__cdata))
+do i=1,nghost__mod__cparam
+f(:,:,n2__mod__cdata-i,iss__mod__cdata)=f(:,:,n2__mod__cdata+i,iss__mod__cdata)-dz2_bound__mod__cdata(i)*tmp_xy
+enddo
+else
+if (ldensity_nolog__mod__cdata) then
+if (lreference_state__mod__cdata) then
+rho_xy(l1__mod__cparam:l2__mod__cdata,:)= f(l1__mod__cparam:l2__mod__cdata,:,n2__mod__cdata,ilnrho__mod__cdata)  +spread(reference_state__mod__density(:,iref_rho__mod__cparam),2,size(f(:,:,n2__mod__cdata,ilnrho__mod__cdata),2))
+else
+rho_xy=f(:,:,n2__mod__cdata,ilnrho__mod__cdata)
+endif
+else
+rho_xy=exp(f(:,:,n2__mod__cdata,ilnrho__mod__cdata))
+endif
+cs2_xy = f(:,:,n2__mod__cdata,iss__mod__cdata)
+if (lreference_state__mod__cdata) then
+cs2_xy(l1__mod__cparam:l2__mod__cdata,:) = cs2_xy(l1__mod__cparam:l2__mod__cdata,:) + spread(reference_state__mod__density(:,iref_s__mod__cparam),2,my__mod__cparam)
+endif
+if (ldensity_nolog__mod__cdata) then
+cs2_xy=cs20__mod__equationofstate*exp(gamma_m1__mod__energybcs*(log(rho_xy)-lnrho0__mod__equationofstate)+cv1__mod__energybcs*cs2_xy)
+else
+cs2_xy=cs20__mod__equationofstate*exp(gamma_m1__mod__energybcs*(f(:,:,n2__mod__cdata,ilnrho__mod__cdata)-lnrho0__mod__equationofstate)+cv1__mod__energybcs*cs2_xy)
+endif
+if (lheatc_chiconst__mod__energy) then
+tmp_xy=ftop__mod__energy/(rho_xy*chi__mod__energy*cs2_xy)
+else if (lheatc_kramers__mod__energy) then
+tmp_xy=ftop__mod__energy*rho_xy**(2*nkramers__mod__energy)*(cp__mod__energybcs*gamma_m1__mod__energybcs)**(6.5*nkramers__mod__energy)  /(hcond0_kramers__mod__energy*cs2_xy**(6.5*nkramers__mod__energy+1.))
+else
+tmp_xy=cp__mod__energybcs*ftopktop__mod__energy/cs2_xy
+endif
+if (present(lone_sided)) then
+loptest_return_value_4=lone_sided
+else if (.false.) then
+else
+loptest_return_value_4=.false.
+endif
+if (loptest_return_value_4) then
+call not_implemented(string_enum_bc_ss_flux_string__mod__cparam, string_enum_oneZsided_bc_string__mod__cparam)
+call getderlnrho_z(f,n2__mod__cdata,rho_xy)
+call bval_from_neumann(f,topbot,iss__mod__cdata,3,rho_xy)
+call set_ghosts_for_onesided_ders(f,topbot,iss__mod__cdata,3,.true.)
+else
+do i=1,nghost__mod__cparam
+rho_xy = f(:,:,n2__mod__cdata+i,ilnrho__mod__cdata)-f(:,:,n2__mod__cdata-i,ilnrho__mod__cdata)
+if (ldensity_nolog__mod__cdata) then
+if (lreference_state__mod__cdata) then
+rho_xy(l1__mod__cparam:l2__mod__cdata,:) = rho_xy(l1__mod__cparam:l2__mod__cdata,:)/(f(l1__mod__cparam:l2__mod__cdata,:,n2__mod__cdata,ilnrho__mod__cdata)  +spread(reference_state__mod__density(:,iref_rho__mod__cparam),2,my__mod__cparam))
+else
+rho_xy = rho_xy/f(:,:,n2__mod__cdata,ilnrho__mod__cdata)
+endif
+endif
+f(:,:,n2__mod__cdata+i,iss__mod__cdata)=f(:,:,n2__mod__cdata-i,iss__mod__cdata)+(cp__mod__energybcs-cv__mod__energybcs)*(-rho_xy-dz2_bound__mod__cdata(i)*tmp_xy)
+enddo
+endif
+endif
+else
+call fatal_error(string_enum_bc_ss_flux_string__mod__cparam,string_enum_invalid_value_of_topbot_string__mod__cparam)
+endif
+endsubroutine bc_ss_flux
