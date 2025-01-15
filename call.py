@@ -35,8 +35,10 @@ def main():
             #"daa_dt"
             #"my_test"
         ]
-    sample = "MRI-turbulence_hyper"
+    #sample = "MRI-turbulence_hyper"
+    #sample = "convection"
     #sample = "magnetic-decay"
+    sample = "new"
     #sample = "turbulent_flame"
     #sample = "geodynamo"
     #sample = "cartesian-convection-kramers"

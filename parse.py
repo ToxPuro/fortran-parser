@@ -510,7 +510,18 @@ def map_dot2_mn(func_call):
             return [f"{params[1]} = sqrt(dot({params[0]},{params[0]}))"]
 
         pexit("optional params not supported\n")
-    return [f"{params[1]} = dot({params[0]},{params[0]})"]
+    res = [f"{params[1]} = dot({params[0]},{params[0]})"]
+    var = params[0].split("(",1)[0].strip()
+    indexes = get_indexes(params[0],var,0)
+    if len(indexes) > 0:
+        if len(indexes) == 3 and var in func_call["local_variables"] and indexes[:2] == [":",":"]:
+            dims = func_call["local_variables"][var]["dims"]
+            if dims[0] == "nx__mod__cparam" and dims[1] == "3":
+                res = [f"{params[1]} = dot({var},{var})"]
+                return res
+    elif len(indexes) == 0:
+        return res
+    pexit("HMM: ",res, var, indexes)
 def map_del2v_etc(func_call):
     params = func_call["new_param_list"]
     res = []
@@ -595,6 +606,14 @@ def map_del6(func_call):
     if len(params)>3:
         pexit("optional params not supported\n")
     return [f"{params[2]} = del6({gen_field(params[1])})"]
+
+def map_del6_exp(func_call):
+    params = func_call["parameters"]
+    #print("DEL6 params: ",params)
+    if len(params)>3:
+        pexit("optional params not supported\n")
+    return [f"{params[2]} = del6_exp({gen_field(params[1])})"]
+    pexit("WHAT TO DO ?",params)
 def map_del2fi_dxjk(func_call):
     params = func_call["parameters"]
     return [f"{params[2]} = del2fi_dxjk({gen_field3(params[1])})"]
@@ -1206,6 +1225,11 @@ sub_funcs = {
     {
         "output_params_indexes": [2],
         "map_func": map_del6
+    },
+    "del6_exp":
+    {
+        "output_params_indexes": [2],
+        "map_func": map_del6_exp
     },
     "calc_del6_for_upwind":
     {
@@ -5829,12 +5853,12 @@ class Parser:
             #TP: do not consider loop writes
             writes_to_index = [x for x in writes if x["variable"] == first_index and len(x["value"]) >= 2 and x["value"][:2] != "1,"]
             if len(writes_to_index) > 0 and all([x["value"] == writes_to_index[0]["value"] for x in writes_to_index]):
-                pass
-                #first_index = writes_to_index[0]["value"]
+                first_index = writes_to_index[0]["value"]
 
             if all([not get_if_compatible(first_index,loop_indexes[i][0],loop_indexes[i][2]) for i in range(len(loop_indexes))]):
                 print("FIRST INDEX: ",first_index);
-                pexit("WEIRD FIRST DIM: ",first_index,line,loop_indexes)
+                print("LINE: ",line)
+                pexit("WEIRD FIRST DIM: ",loop_indexes)
             if(orig_indexes[1] != "m__mod__cdata"):
                 pexit("WEIRD SECOND DIM: ",orig_indexes[1])
             if(orig_indexes[2] != "n__mod__cdata"):
@@ -6551,7 +6575,8 @@ class Parser:
                     elif var_dims[0] == "nx__mod__cparam":
                         if segment[0] in self.static_variables:
                             self.vars_to_pad.append(segment[0])
-                        res = f"{segment[0]}[vertexIdx.x][{indexes[1]}-1]"
+                        new_name = f"{remove_mod(segment[0])}_padded__mod__{get_mod(segment[0])}"
+                        res = f"{new_name}[vertexIdx.x][{indexes[1]}-1]"
                     else:
                        pexit("HMM: first loop  ",segment[0],line)
                 #TP: loop across l1:l2 is assumed to be padded access
@@ -6590,8 +6615,8 @@ class Parser:
                     pexit("USING vertexIdx.y on Y_BOUNDCOND is dangerous",res_line)
                 if assumed_boundary == "z" and "vertexIdx.z" in res_line:
                     pexit("USING vertexIdx.z on Z_BOUNDCOND is dangerous",res_line)
-            for var in self.vars_to_pad:
-                res_line = res_line.replace(var,f"{remove_mod(var)}_padded__mod__{get_mod(var)}")
+            #for var in self.vars_to_pad:
+            #    res_line = res_line.replace(var,f"{remove_mod(var)}_padded__mod__{get_mod(var)}")
             return res_line
 
         else:
@@ -6849,7 +6874,7 @@ class Parser:
             else:
                 return ""
         if line.strip()  == "exit":
-            return "continue"
+            return "break"
         if "else" in line and "if" in line:
             line =  "}\n" + line.replace("then","{").replace("elseif","else if")
         elif "else" in line:
@@ -6888,7 +6913,10 @@ class Parser:
                 elif param == "topbot":
                     param_strings.append(f"AC_TOP_BOT topbot")
                 elif param != "f":
-                    param_strings.append(f"{translate_to_DSL(type)} {param}")
+                    if self.offload_type == "boundcond":
+                        param_strings.append(f"{translate_to_DSL(type)} {param}")
+                    else:
+                        param_strings.append(f"{param}")
             if self.test_to_c:
                 return ""
             elif self.offload_type == "boundcond":
@@ -8819,10 +8847,22 @@ class Parser:
         #TP: filter too long strings out
         all_strings = [x for x in all_strings if len(x) < 40]
         file = open("res-string-enums","w")
-        file.write(f"integer, parameter :: string_enum_unknown_string_string = 0\n")
+        #file.write(f"integer, parameter :: string_enum_unknown_string_string = 0\n")
+        largest_string_int = 0
+        for var in self.static_variables:
+            if "__mod__cparam" in var:
+                if "string_enum" in var and self.static_variables[var]["parameter"]:
+                    largest_string_int = max(largest_string_int,int(self.static_variables[var]["value"]))
+
+
         for i,string in enumerate(all_strings):
             string = remove_invalid_symbols(string.replace(" ","_"))
-            file.write(f"integer, parameter :: string_enum_{string}_string = {i+1}\n")
+            res = f"string_enum_{string}_string"
+            if f"{res}__mod__cparam".lower() not in self.static_variables:
+                if res == "string_enum_nonZcartesian_coordinates_string":
+                    pexit("WRONG!")
+                largest_string_int += 1
+                file.write(f"integer, parameter :: {res} = {largest_string_int}\n")
         file.close()
         file = open("strings-to-enums","w")
         file.write("select case(src)\n")
