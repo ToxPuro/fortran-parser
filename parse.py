@@ -437,7 +437,10 @@ def map_traceless_strain(func_call):
     params = func_call["new_param_list"]
     #all params are given in default order
     res = []
-    line = f"{params[2][0]} = traceless_strain({params[0][0]},{params[1][0]})"
+    if len(params) == 2:
+        line = f"{params[2][0]} = traceless_strain({params[0][0]},{params[1][0]})"
+    else:
+        line = f"{params[2][0]} = traceless_strain({params[0][0]},{params[1][0]},{params[3][0]})"
     res.append(line)
     if len(params)==5 and all(x[-1] is None for x in params):
         shear_param = params[4][0]
@@ -486,7 +489,7 @@ def map_grad_other(func_call):
     elif (first_param_name in func_call["static_variables"] and func_call["static_variables"][first_param_name]["profile_type"] == "vtxbuf_bundle"): 
       indexes =get_indexes(params[0],first_param_name,0)
       if len(indexes) == 4 and indexes[:-1] == [":",":",":"]:
-         return [f"{params[1]} = gradient(Field({first_param_name}[{indexes[3]}]))"]
+         return [f"{params[1]} = gradient(Field({first_param_name}[{indexes[3]}-1]))"]
     elif (first_param_name == "f"): 
       indexes =get_indexes(params[0],first_param_name,0)
       if len(indexes) == 4 and indexes[:-1] == [":",":",":"]:
@@ -502,7 +505,7 @@ def map_div_mn(func_call):
     params = func_call["parameters"]
     if len(params)>3:
         pexit("optional params not supported\n")
-    return [f"{params[1]} = divergence({params[0]})"]
+    return [f"{params[1]} = divergence({params[0]},{params[2]})"]
 def map_dot2_mn(func_call):
     params = func_call["parameters"]
     if len(params)>2:
@@ -576,10 +579,10 @@ def map_u_dot_grad_scl(func_call):
     if len(params) == 6 and params[5].split("=")[-1].strip() == ".false.":
         pass
     elif len(params) == 6 and params[5].split("=")[-1].strip() == ".true.":
-        add_line = f"{params[4]} = {params[4]} - del6_upwd({gen_field(params[1])})"
+        add_line = f"{params[4]} = {params[4]} - dot(abs({params[3]}),gradient_upwd({gen_field(params[1])}))"
     elif len(params) == 6:
         param_name = params[5].split("=")[-1]
-        add_line = f"if ({param_name}) {params[4]} = {params[4]} - del6_upwd({gen_field(params[1])})"
+        add_line = f"if ({param_name}) {params[4]} = {params[4]} - dot(abs({params[3]}),gradient_upwd({gen_field(params[1])}))"
     else:
         pexit("don't know whether to do upwinding or not\n")
     main_line  = f"{params[4]} = dot({params[3]},{params[2]})"
@@ -767,9 +770,16 @@ def map_gij_etc(func_call):
         elif mapping == 6:
             graddiv_line = f"{param[0]} = gradient_of_divergence({gen_field3(names[1])})"
             res.append(graddiv_line)
+        elif param[-1] == 'aa':
+            pass
+        elif param[-1] == 'aij':
+            pass
+        elif mapping == 7:
+            res.append(f'if({param[0]}) print("covariant bij not implemented")')
         elif mapping > 6:
+            print("MAPPING: ",mapping)
+            pexit("what to do?\n",params)
             return ['not_implemented("gij_etc with more than 6 params")']
-            pexit("what to do?\n")
     return res
 
 def map_bij_tilde(func_call):
@@ -1824,7 +1834,7 @@ def common_data(list1, list2):
 def get_segment_indexes(segment,line,dims):
     return get_indexes(line[segment[1]:segment[2]],segment[0],dims)
 def get_indexes(segment,var,dim):
-    index_search = re.search(f"{var}\((.*)\)",segment)
+    index_search = re.search(f"{var}\s*\((.*)\)",segment)
     indexes = [":" for i in range(dim)]
     if index_search:
         indexes = []
@@ -3424,9 +3434,10 @@ class Parser:
                     ## add last param
                     parameters.append(param.strip())
                     #if multithreading analysis
-                    for i, param in enumerate(parameters):
-                        if len(param) > 0 and param[0] == "-":
-                            parameters[i] = param[1:]
+                    if(False):
+                        for i, param in enumerate(parameters):
+                            if len(param) > 0 and param[0] == "-":
+                                parameters[i] = param[1:]
                     function_name = function_name.strip()
                     if len(function_name) >0 and "%" not in function_name and not function_name.isnumeric():
                         function_calls.append({"function_name": function_name, "parameters": [param.strip() for param in parameters if len(param.strip()) > 0], "range": (save_index,current_index), "line": line, "line_num":line_index})
@@ -5835,8 +5846,12 @@ class Parser:
             #  vtxbuf_name = vtxbuf_name.replace("VEC",vtxbuf_name[-4])
             if i > 0 or rhs_var is None:
               #TP: used to convert f index arithmetic to DSL
+              #TP TODO: this should really work even if we have an index there
+              if ":" not in index and "(" not in index:
+                #This is needed in case of accesses like ieosvar2 which is dynamically set
+                return f"value(Field({index}-1))"
               if "+" in vtxbuf_name:
-                return f"value(Field({vtxbuf_name}))"
+                return f"value(Field({index}))"
               else:
                 return f"value({vtxbuf_name})"
             else:
@@ -5994,8 +6009,11 @@ class Parser:
           pexit("HMM: ",res_index)
         return f"{segment[0]}{res_index}"
     def gen_pushpars(self):
+        res_file = open("mhdsolver-rhs.inc","r")
+        contents = res_file.read()
+        res_file.close()
         res = {}
-        for var in self.static_variables:
+        for var in [var for var in self.static_variables if var not in self.static_variables_to_declare and var in contents]:
           if self.static_variables[var]["parameter"]:
                 continue
           if self.static_variables[var]["is_pointer"]:
@@ -6021,7 +6039,7 @@ class Parser:
               elif type == "logical":
                   call = f"call copy_addr({name},p_par({res[mod][1]})) ! bool"
               res[mod][0].append(call)
-        for var in self.static_variables:
+        for var in [var for var in self.static_variables if var not in self.static_variables_to_declare and var in contents]:
           if self.static_variables[var]["parameter"]:
                 continue
           if self.static_variables[var]["is_pointer"]:
@@ -6062,6 +6080,10 @@ class Parser:
                 res[mod][0].append(f"call copy_addr({name},p_par({res[mod][1]})) ! int ({remove_mod(dims[0])})")
               elif type == "logical":
                 res[mod][0].append(f"call copy_addr({name},p_par({res[mod][1]})) ! bool ({remove_mod(dims[0])})")
+          if type in ["real"] and len(dims) == 2 and ":" not in dims[0] and ":" not in dims[1]:
+                res[mod][1] += 1
+                res[mod][0].append(f"call copy_addr({name},p_par({res[mod][1]})) ! ({remove_mod(dims[0])}) ({remove_mod(dims[1])})")
+
         for mod in res:
           print("CREATING PUSHPARS FOR: ",mod)
           file = open(f"pushpar_{mod}","w")
@@ -6229,7 +6251,10 @@ class Parser:
             for i in range(len(array_segments_indexes)):
                 segment = array_segments_indexes[i]
                 if i == 0 and segment[0] in self.static_variables and segment[0] not in self.static_variables_to_declare:
-                  self.static_variables_to_declare.append(segment[0])
+                  if segment[0] in [write["variable"] for write in writes]:
+                    if segment[0] == "x__mod__cdata":
+                       pexit("HMM: ",line)
+                    self.static_variables_to_declare.append(segment[0])
                 if segment[0] in local_variables:
                     src = local_variables
                 else:
@@ -9914,8 +9939,6 @@ def main():
         #gen_only_vars = True
         gen_only_vars = False
         if(not gen_only_vars):
-            parser.gen_pushpars()
-            print("CREATED PUSHPARS\n")
             res = parser.transform_lines(new_lines,new_lines, local_variables,transform_func)
             print("DONE TRANSFORMING LINES\n")
             res = [normalize_reals(line).replace("(:,1)",".x").replace("(:,2)",".y").replace("(:,3)",".z") for line in res]
@@ -9955,6 +9978,9 @@ def main():
         var_declares_file = open("var_declares.h","w")
         parser.gen_var_declares(var_declares_file)
         var_declares_file.close()
+
+        parser.gen_pushpars()
+        print("CREATED PUSHPARS\n")
 
         exit()
 
