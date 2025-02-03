@@ -549,16 +549,16 @@ def map_multm2_sym_mn(func_call):
 def map_u_dot_grad_vec(func_call):
     params = func_call["new_param_list"]
     names  = func_call["parameters"]
-    upwind = f"del6_upwd({gen_field3(names[1])})"
+    upwind = f"del6_upwd({names[3]},{gen_field3(names[1])})"
     res = []
     add_line = ""
     if len(params) == 6 and params[5][-1] == "upwind" and params[5][0] == ".false.":
         pass
     elif len(params) == 6 and params[5][-1] == "upwind" and params[5][0] == ".true.":
-        add_line = f"{names[4]} = {names[4]} + {upwind}"
+        add_line = f"{names[4]} = {names[4]} - {upwind}"
     elif len(params) == 6 and params[5][-1] == "upwind":
         upwind_param = names[5].split("=")[-1].strip()
-        add_line = f"if ({upwind_param}) {names[4]} = {names[4]} + {upwind}"
+        add_line = f"if ({upwind_param}) {names[4]} = {names[4]} - {upwind}"
     elif len(params)>5:
         print("\n\n")
         print([x[0] for x in params])
@@ -599,9 +599,9 @@ def map_del4(func_call):
 def map_calc_del6_for_upwind(func_call):
     params = func_call["parameters"]
     if len(params) == 4:
-        return [f"{params[2]} = del6_upwd({gen_field(params[1])})"]
+        return [f"{params[3]} = del6_upwd({params[2]},{gen_field(params[1])})"]
     else:
-        return [f"{params[3]} = del6_upwd_masked({gen_field(params[1])}, {params[4]})"]
+        return [f"{params[3]} = del6_upwd_masked({params[2]},{gen_field(params[1])}, {params[4]})"]
 
 def map_del6(func_call):
     params = func_call["parameters"]
@@ -2205,7 +2205,7 @@ def get_chosen_modules(makefile):
         for line in lines:
             if len(line.split("=")) == 2 and all([x not in line for x in ["@",">","_obj","override","flags","_src","$",".x","ld_"]]) and line[0] != "$":
                 variable = line.split("=")[0].strip()
-                value = line.split("=")[1].strip()
+                value = line.split("=")[1].strip().split("/")[-1]
                 if variable not in chosen_modules:
                     chosen_modules[variable] = value
                 if variable == "density":
@@ -3064,7 +3064,7 @@ class Parser:
                                 module_name = search_line.split(" ")[1].strip().lower()
                                 #choose only the chosen module files
                                 file_end = filepath.split("/")[-1].split(".")[0].strip()
-                                if module_name in ["solid_cells_ogrid","solid_cells_ogrid_cdata","solid_cells_ogrid_sub","solid_cells", "special","density","energy","hydro","gravity","viscosity","poisson","weno_transport","magnetic","deriv","equationofstate","pscalar","radiation","chiral","poisson","selfgravity","particles","pointmasses","shear","heatflux","detonate","chemistry","cosmicray","cosmicrayflux","opacity","fixed_point","testfield","testflow"] and file_end != self.chosen_modules[module_name]:
+                                if module_name in ["solid_cells_ogrid","solid_cells_ogrid_cdata","solid_cells_ogrid_sub","solid_cells", "special","density","energy","hydro","gravity","viscosity","poisson","weno_transport","magnetic","deriv","equationofstate","pscalar","radiation","chiral","poisson","selfgravity","particles","pointmasses","shear","heatflux","detonate","chemistry","cosmicray","cosmicrayflux","opacity","fixed_point","testfield","testflow","magnetic_meanfield"] and file_end != self.chosen_modules[module_name]:
                                   self.not_chosen_files.append(filepath)
                                   return
                                 elif "deriv_8th" in filepath: 
@@ -6014,6 +6014,7 @@ class Parser:
         res_file.close()
         res = {}
         for var in [var for var in self.static_variables if var not in self.static_variables_to_declare and var in contents]:
+          if var in ["m__mod__cdata","n__mod__cdata"]: continue
           if self.static_variables[var]["parameter"]:
                 continue
           if self.static_variables[var]["is_pointer"]:
@@ -6083,6 +6084,13 @@ class Parser:
           if type in ["real"] and len(dims) == 2 and ":" not in dims[0] and ":" not in dims[1]:
                 res[mod][1] += 1
                 res[mod][0].append(f"call copy_addr({name},p_par({res[mod][1]})) ! ({remove_mod(dims[0])}) ({remove_mod(dims[1])})")
+          if type in ["real"] and len(dims) == 3 and ":" not in dims[0] and ":" not in dims[1] and ":" not in dims[2]:
+                res[mod][1] += 1
+                res[mod][0].append(f"call copy_addr({name},p_par({res[mod][1]})) ! ({remove_mod(dims[0])}) ({remove_mod(dims[1])}) ({remove_mod(dims[2])})")
+          if type in ["real"] and len(dims) == 4 and ":" not in dims[0] and ":" not in dims[1] and ":" not in dims[2] and ":" not in dims[3]:
+                res[mod][1] += 1
+                res[mod][0].append(f"call copy_addr({name},p_par({res[mod][1]})) ! ({remove_mod(dims[0])}) ({remove_mod(dims[1])}) ({remove_mod(dims[2])}) ({remove_mod(dims[3])})")
+
 
         for mod in res:
           print("CREATING PUSHPARS FOR: ",mod)
@@ -6095,11 +6103,12 @@ class Parser:
 
               
 
-    def gen_var_declares(self,file):
+    def gen_var_declares(self,file,cparam_file):
 
         res_file = open("mhdsolver-rhs.inc","r")
         contents = res_file.read()
         res_file.close()
+
 
         declared_vars= ["AC_npencils__mod__cparam"]
         print("GEN VAR DECLARATIONS\n")
@@ -6117,14 +6126,24 @@ class Parser:
                 if is_arithmetic_expression(val) or val in [".false.",".true."]:
                   val = val.replace(".false.","false").replace(".true.","true")
                   file.write(f"const {translate_to_DSL(type)} {name} = {val}\n")
+                  #cparam_file.write(f"const {translate_to_DSL(type)} {name} = {val}\n")
                   file.write(f"#define AC_{name} {name}\n")
+                  if(get_mod(name) == "cparam"):
+                    cparam_file.write(f"#define AC_{name} {remove_mod(name)}\n")
+                  else:
+                    cparam_file.write(f"const {translate_to_DSL(type)} {name} = {val}\n")
+                    cparam_file.write(f"#define AC_{name} {name}\n")
                   declared_vars.append(var)
                 else:
                     file.write(f"run_const {translate_to_DSL(type)} AC_{name}\n")
+                    #cparam_file.write(f"run_const {translate_to_DSL(type)} AC_{name}\n")
+                    #cparam_file.write(f"const {translate_to_DSL(type)} AC_{name} = {val}\n")
+                    cparam_file.write(f"#define AC_{name} {remove_mod(name)}\n")
                     declared_vars.append(var)
               else:
                 if name not in ["n__mod__cdata","m__mod__cdata"]:
                     file.write(f"run_const {translate_to_DSL(type)} AC_{name}\n")
+                    #cparam_file.write(f"const {translate_to_DSL(type)} AC_{name} = {val}\n")
                     declared_vars.append(var)
               declared_vars.append(var)
           if dims == ["3"] and type in ["integer","real","double","logical"]:
@@ -9976,8 +9995,10 @@ def main():
 
         ##TP this is slow for some reason but can cache it to an include file
         var_declares_file = open("var_declares.h","w")
-        parser.gen_var_declares(var_declares_file)
+        cparam_file       = open("cparam.h","w")
+        parser.gen_var_declares(var_declares_file,cparam_file)
         var_declares_file.close()
+        cparam_file.close()
 
         parser.gen_pushpars()
         print("CREATED PUSHPARS\n")
