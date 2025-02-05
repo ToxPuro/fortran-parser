@@ -286,6 +286,7 @@ def translate_fortran_ops_to_c(lines):
     lines = [line.replace(".or."," || ") for line in lines]
     lines = [line.replace(".not.","!") for line in lines]
     lines = [line.replace("/=","!=") for line in lines]
+    lines = [line.replace(".neqv.","!=") for line in lines]
     lines = [line.replace("'",'"') for line in lines]
     return lines
 def split_line_nml(line):
@@ -508,6 +509,8 @@ def map_div_mn(func_call):
     return [f"{params[1]} = divergence({params[0]},{params[2]})"]
 def map_dot2_mn(func_call):
     params = func_call["parameters"]
+    #if("(" in params[0]):
+    #    pexit("HI: ",params)
     if len(params)>2:
         if params[2] == "fast_sqrt=.true.":
             return [f"{params[1]} = sqrt(dot({params[0]},{params[0]}))"]
@@ -516,6 +519,8 @@ def map_dot2_mn(func_call):
     res = [f"{params[1]} = dot({params[0]},{params[0]})"]
     var = params[0].split("(",1)[0].strip()
     indexes = get_indexes(params[0],var,0)
+    return res
+    #TP: what is going on here?
     if len(indexes) > 0:
         if len(indexes) == 3 and var in func_call["local_variables"] and indexes[:2] == [":",":"]:
             dims = func_call["local_variables"][var]["dims"]
@@ -527,14 +532,19 @@ def map_dot2_mn(func_call):
     pexit("HMM: ",res, var, indexes)
 def map_del2v_etc(func_call):
     params = func_call["new_param_list"]
+    names  = func_call["parameters"]
     res = []
-    for param in params[2:]:
+    for i in range(2,len(params)):
+        param = params[i]
+        name = names[i]
         if param[-1] == "del2":
-            res.append(f"{param[0]} = laplace({gen_field3(params[1][0])})")
+            res.append(f"{param[5]} = laplace({gen_field3(names[1])})")
         elif param[-1] == "graddiv":
-            res.append(f"{param[0]} = gradient_of_divergence({gen_field3(params[1][0])})")
+            if names[1].strip()  == "":
+                pexit("WHAT TO DO? ",params)
+            res.append(f"{param[5]} = gradient_of_divergence({gen_field3(names[1])})")
         elif param[-1] == "curlcurl":
-            res.append(f"{param[0]} = curlcurl({gen_field3(params[1][0])})")
+            res.append(f"{param[5]} = curlcurl({gen_field3(names[1])})")
         else:
             pexit("WHAT TO DO? ",param)
     #print("PARAMS: ",params)
@@ -959,7 +969,6 @@ def map_shearing(func_call):
 #     print(params)
 #     pexit("what to do?\n")
 
-
 sub_funcs = {
     "shrearing":
     {
@@ -1280,6 +1289,11 @@ sub_funcs = {
     {
         "output_params_indexes": [3],
         "map_func": map_dot_mn
+    },
+    "dot2_0":
+    {
+        "output_params_indexes": [3],
+        "map_func": map_dot2_mn
     },
     "dot_0":
     {
@@ -1659,70 +1673,6 @@ def is_vector_stencil_index(index):
     if lower[-1] == "x" and upper[-1] == "z":
         return True
     return False
-def get_vtxbuf_name_from_index(prefix, index):
-    if index == "ireaci__mod__chemistry(1):ireaci__mod__chemistry(nchemspec__mod__cparam)":
-        return f"{prefix}CHEMISTRY_REACTIONS"
-    elif "ireaci__mod__chemistry" in index and ":" not in index:
-        bundle_index = index.split("(")[-1].split(")")[0]
-        return f"{prefix}CHEMISTRY_REACTIONS[{bundle_index}]"
-    elif "ichemspec__mod__cdata" in index and ":" not in index:
-        bundle_index = index.split("(")[-1].split(")")[0]
-        return f"{prefix}CHEMISTRY_SPECIES[{bundle_index}]"
-    if ":" in index and  "iudx__mod__cdata"  in index  and "iudz__mod__cdata" in index:
-        bundle_index = index.split("(")[-1].split(")")[0]
-        return f"{prefix}DUST_VELOCITY[{bundle_index}]"
-    elif "iudx__mod__cdata" in index:
-        bundle_index = index.split("(")[-1].split(")")[0]
-        return f"{prefix}DUST_VELOCITY[{bundle_index}].x"
-    elif "iudy__mod__cdata" in index:
-        bundle_index = index.split("(")[-1].split(")")[0]
-        return f"{prefix}DUST_VELOCITY[{bundle_index}].y"
-    elif "iudz__mod__cdata" in index:
-        bundle_index = index.split("(")[-1].split(")")[0]
-        return f"{prefix}DUST_VELOCITY[{bundle_index}].z"
-    if "ind__mod__cdata" in index or "ilnnd__mod__cdata" in index:
-        bundle_index = index.split("(")[-1].split(")")[0]
-        return f"{prefix}DUST_DENSITY[{bundle_index}]"
-    if "ilnnd__mod__cdata" in index or "ilnnd__mod__cdata" in index:
-        bundle_index = index.split("(")[-1].split(")")[0]
-        return f"{prefix}DUST_LOG_DENSITY[{bundle_index}]"
-    if "imd__mod__cdata" in index:
-        bundle_index = index.split("(")[-1].split(")")[0]
-        return f"{prefix}DUST_MASS[{bundle_index}]"
-    if "imi__mod__cdata" in index:
-        bundle_index = index.split("(")[-1].split(")")[0]
-        return f"{prefix}DUST_ICE_MASS[{bundle_index}]"
-    index = remove_mod(index)
-    if index.isnumeric():
-        return f"{prefix}{pc_parser.pde_names[index]}"
-    ## VEC informs that it is a vector access 
-    if ":" in index:
-        lower,upper= [part.strip() for part in index.split(":")]
-        if lower.isnumeric() and upper.isnumeric():
-            return f"{prefix}{pc_parser.pde_vec_names[index]}"
-        if "(" in lower:
-            lower_indexes = get_indexes(lower,lower.split("(",1)[0].strip(),0)
-            upper_indexes= get_indexes(lower,lower.split("(",1)[0].strip(),0)
-            assert(lower_indexes == upper_indexes)
-            assert(len(lower_indexes) == 1)
-            lower = lower.split("(",1)[0].strip()
-            upper = upper.split("(",1)[0].strip()
-            return f"{prefix}{(lower[1:-1]+lower_indexes[0]).upper()}VEC"
-        return f"{prefix}{lower[1:-1].upper()}VEC"
-    if "(" in index:
-        base = index.split("(",1)[0].strip()
-        index = index.split("(",1)[1].split(")")[0].strip()
-        if index == "1":
-            vec_index = "x"
-        elif index == "2":
-            vec_index = "y"
-        elif index == "3":
-            vec_index = "z"
-        else:
-            pexit("WHAT TO DO? ",base,index)
-
-        return f"{prefix}{(base[1:]).upper()}VEC.{vec_index}"
-    return f"{prefix}{index[1:].upper()}"
 
 def get_function_call_index(function_call, lines):
     for i, line in enumerate(lines):
@@ -1767,7 +1717,7 @@ def replace_exp_once(line):
             num_of_left_brackets += 1
         if line[backward_index] in ")]":
             num_of_right_brackets += 1
-        if (backward_index == 0 or line[backward_index-1] in " =*+-;()/\{},")  and num_of_left_brackets == num_of_right_brackets:
+        if (backward_index == 0 or line[backward_index-1] in "=*+-;()/\{},")  and num_of_left_brackets == num_of_right_brackets:
             parse = False
             base = line[backward_index] + base
         if parse:
@@ -1779,19 +1729,19 @@ def replace_exp_once(line):
             res = res + x
         elif i ==backward_index:
             if exponent.strip() == "2":
-              res = res + f"{base}*{base}"
+              res = res + f"({base}*{base})"
             elif exponent.strip() == "3":
-              res = res + f"{base}*{base}*{base}"
+              res = res + f"({base}*{base}*{base})"
             elif exponent.strip() == "4":
-              res = res + f"{base}*{base}*{base}*{base}"
+              res = res + f"({base}*{base}*{base}*{base})"
             elif exponent.strip() == "5":
-              res = res + f"{base}*{base}*{base}*{base}*{base}*{base}"
+              res = res + f"({base}*{base}*{base}*{base}*{base}*{base})"
             elif exponent.strip() == "6":
-              res = res + f"{base}*{base}*{base}*{base}*{base}*{base}"
+              res = res + f"({base}*{base}*{base}*{base}*{base}*{base})"
             elif exponent.strip() == "7":
-              res = res + f"{base}*{base}*{base}*{base}*{base}*{base}*{base}"
+              res = res + f"({base}*{base}*{base}*{base}*{base}*{base}*{base})"
             elif exponent.strip() == "8":
-              res = res + f"{base}*{base}*{base}*{base}*{base}*{base}*{base}*{base}"
+              res = res + f"({base}*{base}*{base}*{base}*{base}*{base}*{base}*{base})"
             else:
               if exponent.isnumeric():
                 pexit("HMM ",exponent)
@@ -2376,6 +2326,68 @@ class Parser:
         segments = self.get_array_segments_in_line(line,{var: self.static_variables[var] for var in vars})
         return self.replace_segments(segments,line,self.map_val_func,{},{"map_val": [new_vars[line[x[1]:x[2]]] for x in segments]})
 
+
+    def get_vtxbuf_name_from_index(self,prefix, index):
+        index_map = {
+                "imi__mod__cdata": "DUST_ICE_MASS",
+                "imd__mod__cdata": "DUST_MASS",
+                "ind__mod__cdata": "DUST_DENSITY",
+                "ilnnd__mod__cdata": "DUST_DENSITY",
+                "ireaci__mod__chemistry": "CHEMISTRY_REACTIONS",
+                "ichemspec__mod__cdata": "CHEMISTRY_SPECIES",
+        }
+        if index == "ireaci__mod__chemistry(1):ireaci__mod__chemistry(nchemspec__mod__cparam)":
+            return f"{prefix}CHEMISTRY_REACTIONS"
+        if ":" in index and  "iudx__mod__cdata"  in index  and "iudz__mod__cdata" in index:
+            bundle_index = index.split("(")[-1].split(")")[0]
+            return f"{prefix}DUST_VELOCITY[{bundle_index}-1]"
+        elif "iudx__mod__cdata" in index:
+            bundle_index = index.split("(")[-1].split(")")[0]
+            return f"{prefix}DUST_VELOCITY[{bundle_index}-1].x"
+        elif "iudy__mod__cdata" in index:
+            bundle_index = index.split("(")[-1].split(")")[0]
+            return f"{prefix}DUST_VELOCITY[{bundle_index}-1].y"
+        elif "iudz__mod__cdata" in index:
+            bundle_index = index.split("(")[-1].split(")")[0]
+            return f"{prefix}DUST_VELOCITY[{bundle_index}-1].z"
+        if ":" not in index and any([var in index for var in index_map]):
+            bundle_index = index.split("(")[-1].split(")")[0]
+            base = index.split("(")[0].strip()
+            infix = index_map[base]
+            if bundle_index == base and base in self.static_variables and len(self.static_variables[base]["dims"]) == 1:
+                return f"{prefix}{infix}"
+            return f"{prefix}{infix}[{bundle_index}-1]"
+        index = remove_mod(index)
+        if index.isnumeric():
+            return f"{prefix}{pc_parser.pde_names[index]}"
+        ## VEC informs that it is a vector access 
+        if ":" in index:
+            lower,upper= [part.strip() for part in index.split(":")]
+            if lower.isnumeric() and upper.isnumeric():
+                return f"{prefix}{pc_parser.pde_vec_names[index]}"
+            if "(" in lower:
+                lower_indexes = get_indexes(lower,lower.split("(",1)[0].strip(),0)
+                upper_indexes= get_indexes(lower,lower.split("(",1)[0].strip(),0)
+                assert(lower_indexes == upper_indexes)
+                assert(len(lower_indexes) == 1)
+                lower = lower.split("(",1)[0].strip()
+                upper = upper.split("(",1)[0].strip()
+                return f"{prefix}{(lower[1:-1]+lower_indexes[0]).upper()}VEC"
+            return f"{prefix}{lower[1:-1].upper()}VEC"
+        if "(" in index:
+            base = index.split("(",1)[0].strip()
+            index = index.split("(",1)[1].split(")")[0].strip()
+            if index == "1":
+                vec_index = "x"
+            elif index == "2":
+                vec_index = "y"
+            elif index == "3":
+                vec_index = "z"
+            else:
+                pexit("WHAT TO DO? ",base,index)
+    
+            return f"{prefix}{(base[1:]).upper()}VEC.{vec_index}"
+        return f"{prefix}{index[1:].upper()}"
 
     def map_to_new_index(self,index,i,local_variables,line,possible_values=[],make_sure_indexes_safe=False):
         if ":" in index:
@@ -4327,11 +4339,12 @@ class Parser:
             if len(func_calls) == 0:
                param_name = parameter[0].split("=")[-1].strip()
             info = self.get_param_info((param_name,parameter[1]),local_variables,local_module_variables)
+            #TP: have to do this in a stupid manner i.e. info[4] == info[6] for backwards compability: TODO fix
             if len(parameter[0].split("=")) == 2:
                 param_name,passed_param = [part.strip().lower() for part in parameter[0].split("=")]
-                res[i] = (info[0],info[1],info[2],info[3],param_name)
+                res[i] = (info[0],info[1],info[2],info[3],param_name,original_parameters[i].split("=")[-1].strip(),param_name)
             else:
-                res[i] = (info[0],info[1],info[2],info[3],None)
+                res[i] = (info[0],info[1],info[2],info[3],None,original_parameters[i].split("=")[-1].strip(),None)
 
         return res
 
@@ -5324,7 +5337,14 @@ class Parser:
                 while(len(sum_calls)>0 and modified_sum):
                     call = sum_calls[0]
                     modified_sum = False 
-                    if (len(call["parameters"]) == 2 and call["parameters"][1] == "2" and self.get_param_info((call["parameters"][0],False),local_variables,self.static_variables)[3] == [global_subdomain_range_x,"3"]):
+                    #if (len(call["parameters"]) == 2 and call["parameters"][1] == "2" and self.get_param_info((call["parameters"][0],False),local_variables,self.static_variables)[3] == [global_subdomain_range_x,"3"]):
+                    param_dims = self.get_param_info((call["parameters"][0],False),local_variables,self.static_variables)[3]
+                    #if (len(call["parameters"]) == 2 and call["parameters"][1] == "2" and len() == 2:
+                    if len(call["parameters"]) == 2 and call["parameters"][1] == "2" and len(param_dims) == 2 and param_dims[0] == global_subdomain_range_x:
+                        line = self.replace_func_call(line,call,f"sum({call['parameters'][0]})")
+                        lines[line_index] = line
+                        modified_sum = True
+                    if len(call["parameters"]) == 2 and call["parameters"][1] == "3" and len(param_dims) == 3 and param_dims[0] == global_subdomain_range_x and param_dims[1] == "3":
                         line = self.replace_func_call(line,call,f"sum({call['parameters'][0]})")
                         lines[line_index] = line
                         modified_sum = True
@@ -5817,6 +5837,8 @@ class Parser:
       #read/write to matrix indexes
       if len(indexes) == 0:
           return segment[0]
+      if ":" not in indexes[0] and ":" not in indexes[1] and len(indexes) == 3:
+        return f"{segment[0]}[{indexes[2]}-1][{indexes[0]}-1][{indexes[1]}-1]"
       if ":" not in indexes[0] and ":" not in indexes[1]:
         return f"{segment[0]}[{indexes[0]}-1][{indexes[1]}-1]"
       #Reading matrix row
@@ -5831,7 +5853,7 @@ class Parser:
           pexit(indexes)
     def gen_f_access(self,i,rhs_var,segment,index):
         if segment[0] == "df":
-            vtxbuf_name = get_vtxbuf_name_from_index("DF_", index)
+            vtxbuf_name = self.get_vtxbuf_name_from_index("DF_", index)
             #if vtxbuf_name == "DF_UX":
             #    pexit("WRONG: ",index)
             if "VEC" in vtxbuf_name:
@@ -5841,16 +5863,19 @@ class Parser:
               return vtxbuf_name
         elif segment[0] == "f":
             #split in case range
-            vtxbuf_name = get_vtxbuf_name_from_index("F_", index)
+            vtxbuf_name = self.get_vtxbuf_name_from_index("F_", index)
             #if "VEC" in vtxbuf_name:
             #  vtxbuf_name = vtxbuf_name.replace("VEC",vtxbuf_name[-4])
             if i > 0 or rhs_var is None:
+              base = index.split("(")[0].strip()
+              if index in self.static_variables and len(self.static_variables[index]["dims"]) == 1:
+                return f"{vtxbuf_name}"
               #TP: used to convert f index arithmetic to DSL
               #TP TODO: this should really work even if we have an index there
               if ":" not in index and "(" not in index:
                 #This is needed in case of accesses like ieosvar2 which is dynamically set
                 return f"value(Field({index}-1))"
-              if "+" in vtxbuf_name:
+              if "+" in vtxbuf_name and not (base in self.static_variables and len(self.static_variables[base]["dims"]) == 1):
                 return f"value(Field({index}))"
               else:
                 return f"value({vtxbuf_name})"
@@ -5883,7 +5908,7 @@ class Parser:
                 if len(parts) == 2:
                     f_arr_index = orig_indexes[3].split(":")[0].split("(")[-1].split(")")[0].strip()
                     if parts[0] == "iudx__mod__cdata":
-                        return f"value(F_DUSTVEC[{f_arr_index}])"
+                        return f"value(F_DUST_VELOCITY[{f_arr_index}])"
                     
                 pexit("WEIRD FOURTH DIM: ",orig_indexes[3])
             indexes = [self.evaluate_indexes(index) for index  in orig_indexes]
@@ -6267,13 +6292,13 @@ class Parser:
                 ))
                 or (rhs_var in ["df","f"] or rhs_var in vectors_to_replace))
             ): 
+            if rhs_var in self.static_variables and rhs_var not in self.static_variables_to_declare:
+                  if rhs_var in [write["variable"] for write in writes]:
+                    if rhs_var == "x__mod__cdata":
+                       pexit("HMM: ",line)
+                    self.static_variables_to_declare.append(rhs_var)
             for i in range(len(array_segments_indexes)):
                 segment = array_segments_indexes[i]
-                if i == 0 and segment[0] in self.static_variables and segment[0] not in self.static_variables_to_declare:
-                  if segment[0] in [write["variable"] for write in writes]:
-                    if segment[0] == "x__mod__cdata":
-                       pexit("HMM: ",line)
-                    self.static_variables_to_declare.append(segment[0])
                 if segment[0] in local_variables:
                     src = local_variables
                 else:
@@ -6371,10 +6396,16 @@ class Parser:
                     elif segment[0] in local_variables and var_dims[:-1] ==  [global_subdomain_range_x,"3"] and var_dims[-1] in bundle_dims and ":" not in indexes[1] and ":" not in indexes[2]:
                         res = f"{segment[0]}[{indexes[1]}][{indexes[2]}]"
                     elif segment[0] in local_variables and  var_dims[:-1] == [global_subdomain_range_x,"3"] and var_dims[-1] in bundle_dims and indexes[:-1] in [[],[":","1"]]:
+                        if(indexes[-1] == ":"):
+                            pexit("Not supported at the moment!\n",line)
                         res = f"{segment[0]}[{indexes[-1]} -1].x"
                     elif segment[0] in local_variables and  var_dims[:-1] == [global_subdomain_range_x,"3"] and var_dims[-1] in bundle_dims and indexes[:-1] in [[],[":","2"]]:
+                        if(indexes[-1] == ":"):
+                            pexit("Not supported at the moment!\n",line)
                         res = f"{segment[0]}[{indexes[-1]} -1].y"
                     elif segment[0] in local_variables and  var_dims[:-1] == [global_subdomain_range_x,"3"] and var_dims[-1] in bundle_dims and indexes[:-1] in [[],[":","3"]]:
+                        if(indexes[-1] == ":"):
+                            pexit("Not supported at the moment!\n",line)
                         res = f"{segment[0]}[{indexes[-1]} -1].z"
                     elif segment[0] in local_variables and var_dims[:-1] == [global_subdomain_range_x,"3","3"] and var_dims[-1] in bundle_dims and indexes[:-1] in [[":",":",":"]]:
                         res = f"{segment[0]}[{indexes[-1]} -1]"
@@ -6416,6 +6447,9 @@ class Parser:
                       res = self.get_ac_matrix_res(segment,indexes)
                     #nx var -> AcMatrix
                     elif src[segment[0]]["dims"] == [global_subdomain_range_x,"3","3"] and indexes[0] == ":": 
+                      res = self.get_ac_matrix_res(segment,indexes[1:])
+                    #nx var -> AcMatrix
+                    elif len(src[segment[0]]["dims"]) == 4 and src[segment[0]]["dims"][:-1] == [global_subdomain_range_x,"3","3"] and indexes[0] == ":" and src[segment[0]]["dims"][3] in bundle_dims: 
                       res = self.get_ac_matrix_res(segment,indexes[1:])
                     #AcTensor
                     elif var_dims == [global_subdomain_range_x,"3","3","3"]:
@@ -6583,27 +6617,27 @@ class Parser:
                 if var == "f":
                     if((assumed_boundary is None or assumed_boundary == "z") and len(indexes) == 4 and indexes[:2] in [[":",":"], [global_subdomain_range_x_inner,":"]]):
                         f_index = f"[vertexIdx.x][vertexIdx.y][{indexes[2]}-1]"
-                        vtxbuf_name = get_vtxbuf_name_from_index("",indexes[3])
+                        vtxbuf_name = self.get_vtxbuf_name_from_index("",indexes[3])
                         res = f"{vtxbuf_name}{f_index}"
                         assumed_boundary = "z"
                     elif((assumed_boundary is None or assumed_boundary == "y") and len(indexes) == 4 and indexes[0] in [":",global_subdomain_range_x_inner] and indexes[2] == ":"):
                         f_index = f"[vertexIdx.x][{indexes[1]}-1][vertexIdx.z]"
-                        vtxbuf_name = get_vtxbuf_name_from_index("",indexes[3])
+                        vtxbuf_name = self.get_vtxbuf_name_from_index("",indexes[3])
                         res = f"{vtxbuf_name}{f_index}"
                         assumed_boundary = "y"
                     elif((assumed_boundary is None or assumed_boundary == "x") and len(indexes) == 4 and indexes[1] == ":" and indexes[2] == ":"):
                         f_index = f"[{indexes[0]}-1][vertexIdx.y][vertexIdx.z]"
-                        vtxbuf_name = get_vtxbuf_name_from_index("",indexes[3])
+                        vtxbuf_name = self.get_vtxbuf_name_from_index("",indexes[3])
                         res = f"{vtxbuf_name}{f_index}"
                         assumed_boundary = "x"
                     elif((assumed_boundary is None or assumed_boundary == "z") and len(indexes) == 4 and len(loop_indexes) >= 2 and all([x[1] == True for x in loop_indexes[:2]])):
                         f_index = f"[vertexIdx.x][vertexIdx.y][{indexes[2]}-1]"
-                        vtxbuf_name = get_vtxbuf_name_from_index("",indexes[3])
+                        vtxbuf_name = self.get_vtxbuf_name_from_index("",indexes[3])
                         res = f"{vtxbuf_name}{f_index}"
                         assumed_boundary = "z"
                     elif (all(":" not in x for x in indexes)):
                         f_index = f"[{indexes[0]}-1][{indexes[1]}-1][{indexes[2]}-1]"
-                        vtxbuf_name = get_vtxbuf_name_from_index("",indexes[3])
+                        vtxbuf_name = self.get_vtxbuf_name_from_index("",indexes[3])
                         res = f"{vtxbuf_name}{f_index}"
                 elif(len(indexes) == 1 and indexes != [":"] and len(src[var]["dims"]) == 1):
                     ##-1 since from 1 to 0-based indexing
@@ -6679,7 +6713,7 @@ class Parser:
                     src = self.static_variables
                 if segment[0] == "f":
                     indexes = [self.evaluate_indexes(index) for index in get_segment_indexes(segment,line, len(src[segment[0]]["dims"]))]
-                    vtxbuf_name = get_vtxbuf_name_from_index("VTXBUF_", indexes[-1])
+                    vtxbuf_name = self.get_vtxbuf_name_from_index("VTXBUF_", indexes[-1])
                     new_var = f"vba.in[{vtxbuf_name}]"
                     indexes= indexes[:-1]
                     for i,index in enumerate(indexes):
@@ -6869,6 +6903,8 @@ class Parser:
             return "real " + ", ".join(vars_to_declare)
         if local_variables[vars_to_declare[0]]["dims"] == [global_subdomain_range_x,"3","3"]:
             return "Matrix " + ", ".join(vars_to_declare)
+        if dims[:-1] == [global_subdomain_range_x,"3","3"] and dims[-1] in bundle_dims and len(vars_to_declare) == 1:
+            return "Matrix " + ", ".join(vars_to_declare) + f"[AC_{dims[-1]}]"
         if local_variables[vars_to_declare[0]]["dims"] in [[global_subdomain_range_x,"3"],["3"]]:
             return "real3 " + ", ".join(vars_to_declare)
         if local_variables[vars_to_declare[0]]["dims"] == [global_subdomain_range_x,"3","3","3"]:
@@ -6880,7 +6916,7 @@ class Parser:
             for var in vars_to_declare:
               res = res + "real3 " + var + f"[AC_{dims[-1]}]\n"
             return res
-        if dims[:-1] ==  [global_subdomain_range_x] and dims[-1] in bundle_dims:
+        if (dims[:-1] ==  [global_subdomain_range_x] and dims[-1] in bundle_dims) or (len(dims) == 1 and dims[0] in bundle_dims):
             #tensors are not yet supported
             res = ""
             for var in vars_to_declare:
@@ -6966,7 +7002,7 @@ class Parser:
             elif self.offload_type == "boundcond":
                 return f"{function_name}({','.join(param_strings)})\n"+"{\n"
             elif self.offload_type == "stencil":
-              return "Kernel twopass_solve_intermediate(){\n#include \"static_var_declares.h\"\n#include \"df_declares.h\"\n"
+              return "Kernel twopass_solve_intermediate(int step_num, real AC_dt__mod__cdata, real AC_t__mod__cdata){\n#include \"static_var_declares.h\"\n#include \"df_declares.h\"\n"
         if is_use_line(line):
             return ""
 
@@ -9678,9 +9714,9 @@ def main():
           parser.safe_subs_to_remove.extend(["sum_mn_name","max_mn_name","yzsum_mn_name_x","xzsum_mn_name_y","xysum_mn_name_z","zsum_mn_name_xy","ysum_mn_name_xz","phizsum_mn_name_r","phisum_mn_name_rz","integrate_mn_name","sum_lim_mn_name","save_name"])
           parser.ignored_subroutines.extend(["diagnostic_magnetic","xyaverages_magnetic","yzaverages_magnetic","xzaverages_magnetic"])
           parser.safe_subs_to_remove.extend(["diagnostic_magnetic","xyaverages_magnetic","yzaverages_magnetic","xzaverages_magnetic"])
-          parser.ignored_subroutines.extend(["calc_diagnostics_density","calc_diagnostics_magnetic","calc_diagnostics_energy","calc_diagnostics_hydro"])
-          parser.safe_subs_to_remove.extend(["calc_diagnostics_density","calc_diagnostics_magnetic","calc_diagnostics_energy","calc_diagnostics_hydro"])
-
+          for mod in ["density","magnetic","viscosity","energy","dustvelocity","dustdensity","hydro"]:
+              parser.ignored_subroutines.append(f"calc_diagnostics_{mod}")
+              parser.safe_subs_to_remove.append(f"calc_diagnostics_{mod}")
         parser.ignored_subroutines.extend(["die_gracefully", "stop_it","stop_it_if_any"])
         parser.safe_subs_to_remove.extend(["die_gracefully","stop_it","stop_it_if_any"])
         parser.safe_subs_to_remove.extend(["open","close"])
@@ -9968,28 +10004,29 @@ def main():
               type = translate_to_DSL(parser.static_variables[var]["type"])
               if dims == ["nx__mod__cparam","3"]:
                 file.write(f"{type}3 {name}\n")
+              elif len(dims) == 2 and dims[0]  == "nx__mod__cparam" and dims[1] in bundle_dims:
+                file.write(f"{type} {name}[AC_{dims[1]}]\n")
+              elif len(dims) == 3 and dims[0]  == "nx__mod__cparam" and dims[1] in bundle_dims and dims[2] in bundle_dims:
+                file.write(f"{type} {name}[AC_{dims[1]}][AC_{dims[2]}]\n")
               else:
                 file.write(f"{type} {name}\n")
             file = open(output_filename,"w")
-            file.write("const int NGHOST_VAL = 3\n")
-            file.write("#include \"../../../../acc-runtime/stdlib/math\"\n")
-            file.write("#include \"../../../../acc-runtime/stdlib/derivs.h\"\n")
-            file.write("#include \"../../../../acc-runtime/stdlib/operators.h\"\n")
-            file.write("#include \"fieldecs.h\"\n")
-            #file.write("#define AC_lenergy__mod__cparam (lentropy__mod__cparam || ltemperature__mod__cparam || lthermal_energy__mod__cparam)\n")
-            file.write("#define AC_NGHOST__mod__cparam nghost__mod__cparam\n")
+            #file.write("const int NGHOST_VAL = 3\n")
+            #file.write("#include \"../../../../acc-runtime/stdlib/math\"\n")
+            #file.write("#include \"../../../../acc-runtime/stdlib/derivs.h\"\n")
+            #file.write("#include \"../../../../acc-runtime/stdlib/operators.h\"\n")
+            #file.write("#include \"fieldecs.h\"\n")
+            #file.write("#define AC_NGHOST__mod__cparam nghost__mod__cparam\n")
 
-            file.write("//TP: nphis1 and nphis2 don't actually work. simply declared to compile the code\n")
-            ##file.write("gmem real AC_nphis1__mod__cdata[AC_mx__mod__cparam]\n")
-            ##file.write("gmem real AC_nphis2__mod__cdata[AC_mx__mod__cparam]\n")
-            file.write("//\n")
-            file.write("#include \"var_declares.h\"\n")
-            #file.write("run_const bool AC_lpencil__mod__cdata[AC_npencils__mod__cparam]\n")
+            #file.write("//TP: nphis1 and nphis2 don't actually work. simply declared to compile the code\n")
+            #file.write("//\n")
+            #file.write("#include \"var_declares.h\"\n")
+            file.write("#include \"preamble.h\"\n");
+
             res = get_formatted_lines(res)
             for line in res:
                 if line != "real3 ac_transformed_pencil_":
                   file.write(f"{line}\n") 
-            file.write(f'\n#include "taskgraph.h"\n')
             file.close()
             print("DONE")
 
