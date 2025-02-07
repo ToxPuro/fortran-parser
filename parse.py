@@ -942,7 +942,9 @@ def map_u_grad_kurganov_tadmore(func_call):
     return [f"{params[2]} = u_grad_kurganov_tadmore({params[1]},{params[3]})"]
 def map_u_dot_grad_scl_alt(func_call):
     params = func_call["parameters"]
-    return [f"print(\"not implemented u_dot_grad_scl_alt\")"]
+    if len(params) == 6:
+        return [f"{params[4]} = u_dot_grad_scl_alt({params[1]},{params[2]},{params[3]},{params[5]})"]
+    pexit("WHAT TO DO?\n", params)
 def map_spline_derivative(func_call):
     line = func_call["line"]
     pexit("HMM: ",line)
@@ -3099,6 +3101,9 @@ class Parser:
                                         self.func_info[sub_name] = {}
                                     if "lines" not in self.func_info[sub_name]:
                                         self.func_info[sub_name]["lines"] = {}
+                                    if "files" not in self.func_info[sub_name]:
+                                        self.func_info[sub_name]["files"] = []
+                                    self.func_info[sub_name]["files"].append(filepath)
                                     self.func_info[sub_name]["lines"][filepath] = []
                                     if "files" not in self.func_info[sub_name]:
                                         self.func_info[sub_name]["files"] = []
@@ -6033,7 +6038,26 @@ class Parser:
         if segment[0] == "uu_average__mod__hydro":
           pexit("HMM: ",res_index)
         return f"{segment[0]}{res_index}"
+    def get_already_pushed_pars(self):
+        res = {}
+        for mod in self.module_info:
+            res[mod] = [[],0]
+            for file in self.module_info[mod]["files"]:
+                if file in self.func_info["pushpars2c"]["files"]:
+                    lines = self.func_info["pushpars2c"]["lines"][file]
+                    local_variables = {parameter:v for parameter,v in self.get_variables(lines, {},file, True).items() }
+                    for line in lines:
+                        func_calls = self.get_function_calls_in_line(line,local_variables)
+                        if len(func_calls) == 1:
+                            func_call = func_calls[0]
+                            if func_call["function_name"] == "copy_addr":
+                                res[mod][0].append(func_call["parameters"][0])
+                                index = func_call["parameters"][1].split("(")[-1].split(")")[0].strip()
+                                res[mod][1] = max(res[mod][1],int(index))
+        return res
+
     def gen_pushpars(self):
+        already_pushed_pars = self.get_already_pushed_pars();
         res_file = open("mhdsolver-rhs.inc","r")
         contents = res_file.read()
         res_file.close()
@@ -6048,11 +6072,13 @@ class Parser:
           type = self.static_variables[var]["type"]
           name = remove_mod(var)
           mod  = get_mod(var)
+          if mod not in res:
+              res[mod] = [[],already_pushed_pars[mod][1]]
+          if name in already_pushed_pars[mod][0]: 
+              continue
           if "particles" in mod:
               continue
           if dims == [] and type in ["logical","integer","real"]:
-              if mod not in res:
-                  res[mod] = [[],0]
               res[mod][1] += 1
               call = ""
               if type == "real":
@@ -6074,6 +6100,8 @@ class Parser:
           type = self.static_variables[var]["type"]
           name = remove_mod(var)
           mod  = get_mod(var)
+          if name in already_pushed_pars[mod][0]: 
+              continue
           if "particles" in mod:
               continue
           if dims == ["3"] and type in ["logical","integer","real"]:
@@ -9991,8 +10019,8 @@ def main():
         #print(new_lines)
         local_variables = {parameter:v for parameter,v in parser.get_variables(new_lines, {},filename,True).items() }
         
-        #gen_only_vars = True
-        gen_only_vars = False
+        gen_only_vars = True
+        #gen_only_vars = False
         if(not gen_only_vars):
             res = parser.transform_lines(new_lines,new_lines, local_variables,transform_func)
             print("DONE TRANSFORMING LINES\n")
@@ -10030,6 +10058,9 @@ def main():
             file.close()
             print("DONE")
 
+        parser.gen_pushpars()
+        print("CREATED PUSHPARS\n")
+
         ##TP this is slow for some reason but can cache it to an include file
         var_declares_file = open("var_declares.h","w")
         cparam_file       = open("cparam.h","w")
@@ -10037,8 +10068,6 @@ def main():
         var_declares_file.close()
         cparam_file.close()
 
-        parser.gen_pushpars()
-        print("CREATED PUSHPARS\n")
 
         exit()
 
