@@ -10058,8 +10058,6 @@ def main():
             file.close()
             print("DONE")
 
-        parser.gen_pushpars()
-        print("CREATED PUSHPARS\n")
 
         ##TP this is slow for some reason but can cache it to an include file
         var_declares_file = open("var_declares.h","w")
@@ -10067,6 +10065,10 @@ def main():
         parser.gen_var_declares(var_declares_file,cparam_file)
         var_declares_file.close()
         cparam_file.close()
+
+        print("CREATING PUSHPARS\n")
+        parser.gen_pushpars()
+        print("CREATED PUSHPARS\n")
 
 
         exit()
