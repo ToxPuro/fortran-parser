@@ -39,6 +39,21 @@ multiplicative_ops = "*/"
 additive_ops = "+-"
 all_ops = "*/+-"
 
+
+def filter_loop_values(vals):
+    res = []
+    for val in vals:
+        loop_value = False
+        function_call = False
+        for char in val["value"]:
+            if not loop_value and char == '(':
+                function_call = True
+            if not function_call and char == ',':
+                loop_value = True
+        if not loop_value:
+            res.append(val)
+    return res
+
 def get_if_in_global_loop(indexes):
     for i in range(len(indexes)):
         if indexes[i][1]:
@@ -5896,13 +5911,17 @@ class Parser:
             orig_indexes = get_segment_indexes(segment,line, len([src[segment[0]]["dims"]]))
             first_index = orig_indexes[0]
             #TP: do not consider loop writes
-            writes_to_index = [x for x in writes if x["variable"] == first_index and len(x["value"]) >= 2 and x["value"][:2] != "1,"]
+            writes_to_index = [x for x in writes if x["variable"] == first_index and len(x["value"]) >= 2 and x["value"][:2] != "1," and x["value"][:2]]
+            writes_to_index = filter_loop_values(writes_to_index)
             if len(writes_to_index) > 0 and all([x["value"] == writes_to_index[0]["value"] for x in writes_to_index]):
                 first_index = writes_to_index[0]["value"]
 
-            if all([not get_if_compatible(first_index,loop_indexes[i][0],loop_indexes[i][2]) for i in range(len(loop_indexes))]):
+            compatibility = [not get_if_compatible(first_index,loop_indexes[i][0],loop_indexes[i][2]) for i in range(len(loop_indexes))]
+            if all(compatibility):
                 print("FIRST INDEX: ",first_index);
                 print("LINE: ",line)
+                print("SEGMENT: ",line[segment[1]:segment[2]])
+                print("compatibility: ",compatibility)
                 pexit("WEIRD FIRST DIM: ",loop_indexes)
             if(orig_indexes[1] != "m__mod__cdata"):
                 pexit("WEIRD SECOND DIM: ",orig_indexes[1])
@@ -10019,8 +10038,8 @@ def main():
         #print(new_lines)
         local_variables = {parameter:v for parameter,v in parser.get_variables(new_lines, {},filename,True).items() }
         
-        gen_only_vars = True
-        #gen_only_vars = False
+        #gen_only_vars = True
+        gen_only_vars = False
         if(not gen_only_vars):
             res = parser.transform_lines(new_lines,new_lines, local_variables,transform_func)
             print("DONE TRANSFORMING LINES\n")
