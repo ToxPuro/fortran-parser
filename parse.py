@@ -2298,7 +2298,7 @@ class Parser:
         self.not_chosen_files = []
         for file in self.used_files:
             self.get_lines(file)
-        self.used_files = [file for file in self.used_files if not self.file_info[file]["is_program_file"] and file not in self.not_chosen_files]
+        self.used_files = [file for file in self.used_files if not (self.file_info[file]["is_program_file"]) and file not in self.not_chosen_files]
         self.used_files.append(self.main_program)
         ##Intrinsic functions
         self.ignored_subroutines = ["epsilon","alog10","count", "min1", "erf","aimag", "cmplx","len", "inquire", "floor", "matmul","ceiling", "achar", "adjustl", "index", "iabs","tiny","dble","float","nullify","associated","nint","open","close","random_seed","modulo","nearest","xor","ishft","iand","ieor","ior","random_number","all","any","deallocate","cshift","allocated","allocate","case","real","int","complex","character","if","elseif","where","while","elsewhere","forall", "dot_product", "abs", "alog", "mod", "size",  "sqrt", "sum","isnan", "exp", "spread", "present", "trim", "sign","min","max","sin","cos","log","log10","tan","tanh","cosh","sinh","asin","acos","atan","atan2","write","read","char","merge","scan","precision","flush", "adjustr","transpose","repeat"]
@@ -3093,7 +3093,7 @@ class Parser:
                                 module_name = search_line.split(" ")[1].strip().lower()
                                 #choose only the chosen module files
                                 file_end = filepath.split("/")[-1].split(".")[0].strip()
-                                if module_name in ["solid_cells_ogrid","solid_cells_ogrid_cdata","solid_cells_ogrid_sub","solid_cells", "special","density","energy","hydro","gravity","viscosity","poisson","weno_transport","magnetic","deriv","equationofstate","pscalar","radiation","chiral","poisson","selfgravity","particles","pointmasses","shear","heatflux","detonate","chemistry","cosmicray","cosmicrayflux","opacity","fixed_point","testfield","testflow","magnetic_meanfield"] and file_end != self.chosen_modules[module_name]:
+                                if module_name in ["solid_cells_ogrid","solid_cells_ogrid_cdata","solid_cells_ogrid_sub","solid_cells", "special","density","energy","hydro","gravity","viscosity","poisson","neutralvelocity","neutraldensity","weno_transport","magnetic","deriv","equationofstate","pscalar","radiation","chiral","poisson","selfgravity","particles","pointmasses","shear","heatflux","detonate","chemistry","cosmicray","cosmicrayflux","opacity","fixed_point","testfield","testflow","magnetic_meanfield"] and file_end != self.chosen_modules[module_name]:
                                   self.not_chosen_files.append(filepath)
                                   return
                                 elif "deriv_8th" in filepath: 
@@ -6060,8 +6060,12 @@ class Parser:
     def get_already_pushed_pars(self):
         res = {}
         for mod in self.module_info:
+            #Needed because we push cdata stuff from run.f90
+            mod_key = mod
+            if mod == "cdata":
+                mod_key = "run_module"
             res[mod] = [[],0]
-            for file in self.module_info[mod]["files"]:
+            for file in self.module_info[mod_key]["files"]:
                 if file in self.func_info["pushpars2c"]["files"]:
                     lines = self.func_info["pushpars2c"]["lines"][file]
                     local_variables = {parameter:v for parameter,v in self.get_variables(lines, {},file, True).items() }
