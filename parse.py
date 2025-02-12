@@ -40,6 +40,17 @@ additive_ops = "+-"
 all_ops = "*/+-"
 
 
+def check_fortran_nots(lines):
+    for line in lines:
+        size = len(".not.")
+        look_for_bracket = False
+        for i in range(len(line)):
+            if line[i:i+size] == ".not.":
+                look_for_bracket = True
+            if line[i] == "(":
+                look_for_bracket = False
+            if look_for_bracket and line[i] in "<>":
+                pexit("Please add brackets to make this line more safe! ",line)
 def filter_loop_values(vals):
     res = []
     for val in vals:
@@ -291,6 +302,8 @@ pc_parser = ""
 farray_register_funcs = ["farray_register_pde","farray_register_global","farray_register_auxiliary"]
 
 number_of_fields = ""
+
+
 
 
 
@@ -8018,6 +8031,7 @@ class Parser:
             file.write(f"{line}\n")
         file.close()
 
+        check_fortran_nots(lines)
         lines = translate_fortran_ops_to_c(lines)
 
 
