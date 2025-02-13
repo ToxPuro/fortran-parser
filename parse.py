@@ -67,6 +67,8 @@ def filter_loop_values(vals):
 
 def get_if_in_global_loop(indexes):
     for i in range(len(indexes)):
+        if indexes[i] == "WHILE LOOP!":
+            continue
         if indexes[i][1]:
             return True
     return False
@@ -431,6 +433,10 @@ def map_del2_main(func_call):
 def map_del2_other(func_call):
     params = func_call["parameters"]
     first_param_name = params[0].split("(")[0]
+    if first_param_name == "f":
+      indexes =get_indexes(params[0],first_param_name,0)
+      if indexes[:-1] == [":",":",":"] and len(indexes) == 4:
+          return [f"{params[1]} = laplace({gen_field(indexes[-1])})"]
     if first_param_name in func_call["static_variables"] and func_call["static_variables"][first_param_name]["profile_type"] == "vtxbuf":
       indexes =get_indexes(params[0],first_param_name,0)
       if len(indexes) == 0:
@@ -908,13 +914,15 @@ def map_der_other(func_call):
     #print(params)
     #is actually a normal der call
     if(params[0][0] == 'f'):
-        if(params[2][0] == '1'):
-            return [f"{[1]} = derx({names[0]},{names[2]})"]
-        if(params[2][0] == '2'):
-            return [f"{[1]} = dery({names[0]},{names[2]})"]
-        if(params[2][0] == '3'):
-            return [f"{[1]} = derz({names[0]},{names[2]})"]
-        pexit("unknown dim")
+      indexes =get_indexes(params[0][5],'f',0)
+      assert(len(indexes) == 4)
+      if(params[2][0] == '1'):
+          return [f"{names[1]} = derx(gen_field{indexes[-1]})"]
+      if(params[2][0] == '2'):
+          return [f"{names[1]} = dery(gen_field{indexes[-1]})"]
+      if(params[2][0] == '3'):
+          return [f"{names[1]} = derz(gen_field{indexes[-1]})"]
+      pexit("unknown dim")
     pexit("what to do?\n")
 
 def map_calc_slope_diff_flux(func_call):
@@ -2767,11 +2775,52 @@ class Parser:
             pass
           else:
             checked_local_writes.append({"variable": variable, "line_num": line_num, "local": is_local, "filename": filename, "call_trace": call_trace, "line": line})
+    def get_allocations_in_init_func(self,init_func_name,subs_not_to_inline):
+        func_info = self.get_function_info(init_func_name)
+        filename = list(func_info["lines"].keys())[0]
+        #chem_lines = func_info["lines"][filename]
+        #self.inline_all_function_calls(filename,init_func_name,chem_lines,subs_not_to_inline) 
+        #inlined_func = self.func_info[init_func_name]["inlined_lines"][filename]
+        inlined_func = self.get_subroutine_lines(init_func_name,filename)
+        local_variables = {parameter:v for parameter,v in self.get_variables(inlined_func, {},filename,True).items() }
+        inlined_func = self.rename_lines_to_internal_names(inlined_func,local_variables,filename,init_func_name)
+
+        for line in inlined_func:
+            func_calls = self.get_function_calls_in_line(line,local_variables)
+            for call in func_calls:
+                allocate_calls = [call for call in func_calls if call["function_name"] == "allocate"]
+                for call in allocate_calls:
+                    for param in call["parameters"]:
+                        param_name = param.split("(")[0].strip()
+                        param_dim = param.split("(")[-1].split(")")[0].strip()
+                        if param_name in self.static_variables and len(self.static_variables[param_name]["dims"]) == 1:
+                            self.static_variables[param_name]["dims"] = [param_dim]
+                            if param_dim in [self.static_variables["nz__mod__cparam"]["value"], self.static_variables["mz__mod__cparam"]["value"]]:
+                                self.static_variables[param_name]["profile_type"] = "z"
+                            elif param_dim in [self.static_variables["nx__mod__cparam"]["value"], self.static_variables["mx__mod__cparam"]["value"]]:
+                                self.static_variables[param_name]["profile_type"] = "x"
+                            elif param_dim in [self.static_variables["ny__mod__cparam"]["value"], self.static_variables["my__mod__cparam"]["value"]]:
+                                self.static_variables[param_name]["profile_type"] = "y"
+                            self.static_variables[param_name]["dims"] = [param_dim] 
+                        param_dims = param.split("(")[-1].split(")")[0].strip().split(",")
+                        if param_name in self.static_variables and len(self.static_variables[param_name]["dims"]) == 2:
+                            self.static_variables[param_name]["dims"] = param_dims
+                        if param_name in self.static_variables and len(self.static_variables[param_name]["dims"]) == 3:
+                            self.static_variables[param_name]["dims"] = param_dims
+                            if param_dims == ["mx__mod__cparam","my__mod__cparam","mz__mod__cparam"]:
+                                self.static_variables[param_name]["profile_type"] = "vtxbuf"
+                            if param_dims == ["mx__mod__cparam","my__mod__cparam","3"]:
+                                self.static_variables[param_name]["profile_type"] = "xy_vec"
+                        if param_name in self.static_variables and len(self.static_variables[param_name]["dims"]) == 4:
+                            self.static_variables[param_name]["dims"] = param_dims
+                            if param_dims[:-1] == ["mx__mod__cparam","my__mod__cparam","mz__mod__cparam"] and param_dims[-1] in bundle_dims:
+                                self.static_variables[param_name]["profile_type"] = "vtxbuf_bundle"
 
     def set_optional_param_not_present(self,lines,param):
         for line_index,_ in enumerate(lines):
             lines[line_index] =  lines[line_index].replace(f"present({param})",".false.")
         return lines
+
     def get_boundcond_func_calls(self,boundcond_func,boundconds_map):
         mcom = int(self.static_variables["mcom__mod__cparam"]["value"])
         boundcond_module = self.chosen_modules["boundcond"]
@@ -5316,9 +5365,6 @@ class Parser:
         #assuming all profiles are written in mn loop; if not use the lower
         for field in self.struct_table["pencil_case"]:
           dims = self.struct_table["pencil_case"][field]["dims"]
-          #TP: this is because in nopscalar.f90 there is pencil case of dims (3,0)
-          if "0" in dims:
-              continue
           new_name = f"ac_transformed_pencil_{field}"
           if new_name not in local_variables:
             local_variables[new_name] = self.struct_table["pencil_case"][field]
@@ -5947,7 +5993,7 @@ class Parser:
                     if parts[0] == "iudx__mod__cdata":
                         return f"value(F_DUST_VELOCITY[{f_arr_index}])"
                     
-                pexit("WEIRD FOURTH DIM: ",orig_indexes[3])
+                #pexit("WEIRD FOURTH DIM: ",orig_indexes[3])
             indexes = [self.evaluate_indexes(index) for index  in orig_indexes]
             return self.gen_f_access(i,rhs_var,segment,indexes[-1])
 
@@ -5989,9 +6035,13 @@ class Parser:
                 return segment[0]
             elif prof_type == "x" and loop_indexes[-1][0] == indexes[0] and loop_indexes[-1][3] == "l1__mod__cparam" and loop_indexes[-1][2] == "l2__mod__cdata":
                 return f"{segment[0]}[vertexIdx.x]"
+            elif prof_type == "x" and loop_indexes[-1][0] == indexes[0] and loop_indexes[-1][3] == "1" and loop_indexes[-1][2] == "nx__mod__cparam":
+                return f"{segment[0]}[vertexIdx.x-NGHOST]"
             elif prof_type == "vtxbuf_bundle" and len(loop_indexes) == 1 and indexes[0] == f"l1__mod__cparam+{loop_indexes[0][0]}-1" and indexes[1] == "m__mod__cdata" and indexes[2] == "n__mod__cdata" and indexes[3] == "1:nchemspec__mod__cparam" and loop_indexes[0][3] == "1" and loop_indexes[0][2] == "nx__mod__cparam":
                 return f"{segment[0]}"
             pexit("PROF ACCESS IN NX LOOP: ",line[segment[1]:segment[2]],prof_type,loop_indexes)
+        if var_dims == ["my__mod__cparam"] and prof_type == "y" and indexes == ["m1__mod__cparam:m2__mod__cdata"]:
+            return f"{segment[0]}[vertexIdx.y]"
         if prof_type == "vtxbuf":
           if indexes == ["l1__mod__cparam:l2__mod__cdata","m__mod__cdata","n__mod__cdata"]:
             return f"value({segment[0]})"
@@ -7070,9 +7120,11 @@ class Parser:
         if is_use_line(line):
             return ""
 
-        if line.strip()[:2] == "do":
+        if line.strip()[:2] == "do" and line.strip()[:len("do while")] != "do while":
+            print("HMM: ",line)
             loop_index = self.get_writes_from_line(line)[0]["variable"]
             lower,upper= [part.strip() for part in line.split("=")[1].split(",",1)]
+            loop_indexes.append("WHILE LOOP!")
             loop_indexes.append((loop_index, (lower == "1" and upper in global_subdomain_ranges) or (lower == "l1__mod__cparam" and upper == "l2__mod__cdata"),upper,lower))
             if loop_indexes[-1][1]:
                 return ""
@@ -7148,6 +7200,8 @@ class Parser:
             if rhs_var in [".false.",".true."]:
               pexit("WRONG",line)
             #print("LINE: ",line)
+            if rhs_var not in self.static_variables:
+                pexit("HMM: ",rhs_var,line)
             local_variables[rhs_var] = self.static_variables[rhs_var]
             # print("WHAT TO DO rhs not in variables",line)
             # print(rhs_var)
@@ -7725,6 +7779,8 @@ class Parser:
                     lines[line_index] = self.replace_segments(arr_segs_in_line,lines[line_index],self.trans_to_normal_indexing,local_variables,{"var": var, "dims":dims})
         return lines
     def get_pointer_target(self,pointer_in):
+            if pointer_in in ["0.0",".false."]:
+                return pointer_in
             pointer = remove_mod(pointer_in)
             possible_modules = [mod for mod in self.module_info if mod in self.shared_flags_given and f"{pointer}__mod__{mod}" in self.shared_flags_given[mod]]
             #print(pointer)
@@ -7745,6 +7801,9 @@ class Parser:
 
               print(len(possible_modules))
               if(len(possible_modules) == 0):
+                  #if can't find target assume it is never used
+                  if self.static_variables[pointer_in]["type"]  == "logical":
+                      return ".false."
                   pexit("No targets for: ",pointer_in)
 
               assert(len(possible_modules) == 1)
@@ -8830,7 +8889,7 @@ class Parser:
                 if case_number > 0 and len(func_calls) == 1 and func_calls[0]["function_name"] == "case":
                     case_indexes.append(i)
                     case_params.append(func_calls[0]["parameters"])
-                if case_number > 0 and "default" in line and "case" in line:
+                if case_number > 0 and line.strip() == "case default":
                     case_indexes.append(i)
                 if  "select" in line:
                     case_number += 1
@@ -8857,6 +8916,8 @@ class Parser:
         #default case is handled separately
         res_lines.append("else")
         for j,i in enumerate(case_indexes):
+            if j >= len(res_lines):
+                pexit("Something went wrong: ",res_lines,case_indexes)
             lines[i] = res_lines[j]
         lines[end_index] = "endif"
         lines = [x[1] for x in enumerate(lines) if x[0] not in remove_indexes]
@@ -9004,8 +9065,6 @@ class Parser:
             string = remove_invalid_symbols(string.replace(" ","_"))
             res = f"string_enum_{string}_string"
             if f"{res}__mod__cparam".lower() not in self.static_variables:
-                if res == "string_enum_nonZcartesian_coordinates_string":
-                    pexit("WRONG!")
                 largest_string_int += 1
                 file.write(f"integer, parameter :: {res} = {largest_string_int}\n")
         file.close()
@@ -9782,6 +9841,22 @@ def main():
           for mod in ["density","magnetic","viscosity","energy","dustvelocity","dustdensity","hydro"]:
               parser.ignored_subroutines.append(f"calc_diagnostics_{mod}")
               parser.safe_subs_to_remove.append(f"calc_diagnostics_{mod}")
+
+        parser.ignored_subroutines.append(f"calc_phiavg_profile")
+        parser.safe_subs_to_remove.append(f"calc_phiavg_profile")
+
+        parser.ignored_subroutines.append(f"calc_aaxyaver")
+        parser.safe_subs_to_remove.append(f"calc_aaxyaver")
+
+        parser.ignored_subroutines.append(f"accumulate_schur_averages")
+        parser.safe_subs_to_remove.append(f"accumulate_schur_averages")
+
+        parser.ignored_subroutines.append(f"time_integrals_magnetic")
+        parser.safe_subs_to_remove.append(f"time_integrals_magnetic")
+
+        parser.ignored_subroutines.append(f"density_after_boundary")
+        parser.safe_subs_to_remove.append(f"density_after_boundary")
+
         parser.ignored_subroutines.extend(["die_gracefully", "stop_it","stop_it_if_any"])
         parser.safe_subs_to_remove.extend(["die_gracefully","stop_it","stop_it_if_any"])
         parser.safe_subs_to_remove.extend(["open","close"])
@@ -9844,41 +9919,9 @@ def main():
 
 
         
-        init_chem_name = "initialize_chemistry"
-        func_info = pc_parser.get_function_info(init_chem_name)
-        chem_file = list(func_info["lines"].keys())[0]
-        chem_lines = func_info["lines"][chem_file]
-        parser.inline_all_function_calls(chem_file,init_chem_name,chem_lines,subs_not_to_inline) 
-        inlined_init_chem = parser.func_info[init_chem_name]["inlined_lines"][chem_file]
-        local_variables = {parameter:v for parameter,v in parser.get_variables(inlined_init_chem, {},chem_file,True).items() }
-        for line in inlined_init_chem:
-            func_calls = parser.get_function_calls_in_line(line,local_variables)
-            for call in func_calls:
-                allocate_calls = [call for call in func_calls if call["function_name"] == "allocate"]
-                for call in allocate_calls:
-                    for param in call["parameters"]:
-                        param_name = param.split("(")[0].strip()
-                        param_dim = param.split("(")[-1].split(")")[0].strip()
-                        if param_name in parser.static_variables and len(parser.static_variables[param_name]["dims"]) == 1:
-                            parser.static_variables[param_name]["dims"] = [param_dim]
-                            if param_dim in [parser.static_variables["nz__mod__cparam"]["value"], parser.static_variables["mz__mod__cparam"]["value"]]:
-                                parser.static_variables[param_name]["profile_type"] = "z"
-                            elif param_dim in [parser.static_variables["nx__mod__cparam"]["value"], parser.static_variables["mx__mod__cparam"]["value"]]:
-                                parser.static_variables[param_name]["profile_type"] = "x"
-                            elif param_dim in [parser.static_variables["ny__mod__cparam"]["value"], parser.static_variables["my__mod__cparam"]["value"]]:
-                                parser.static_variables[param_name]["profile_type"] = "y"
-                            parser.static_variables[param_name]["dims"] = [param_dim] 
-                        param_dims = param.split("(")[-1].split(")")[0].strip().split(",")
-                        if param_name in parser.static_variables and len(parser.static_variables[param_name]["dims"]) == 2:
-                            parser.static_variables[param_name]["dims"] = param_dims
-                        if param_name in parser.static_variables and len(parser.static_variables[param_name]["dims"]) == 3:
-                            parser.static_variables[param_name]["dims"] = param_dims
-                            if param_dims == ["mx__mod__cparam","my__mod__cparam","mz__mod__cparam"]:
-                                parser.static_variables[param_name]["profile_type"] = "vtxbuf"
-                        if param_name in parser.static_variables and len(parser.static_variables[param_name]["dims"]) == 4:
-                            parser.static_variables[param_name]["dims"] = param_dims
-                            if param_dims[:-1] == ["mx__mod__cparam","my__mod__cparam","mz__mod__cparam"] and param_dims[-1] in bundle_dims:
-                                parser.static_variables[param_name]["profile_type"] = "vtxbuf_bundle"
+        parser.get_allocations_in_init_func("initialize_chemistry",subs_not_to_inline)
+        parser.get_allocations_in_init_func("initialize_density",subs_not_to_inline)
+        parser.get_allocations_in_init_func("initialize_hydro",subs_not_to_inline)
 
 
         if not os.path.isfile("res-inlined.txt"):
@@ -10038,6 +10081,8 @@ def main():
             res_lines = get_formatted_lines(res_lines)
             file = open(output_filename,"w")
             for line in res_lines:
+                if line in ["headtt__mod__cdata=false","lfirstpoint__mod__cdata=false"]:
+                    continue
                 file.write(f"{line}\n")
             file.close()
             print("DONE Boundcond\n")
