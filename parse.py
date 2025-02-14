@@ -67,8 +67,6 @@ def filter_loop_values(vals):
 
 def get_if_in_global_loop(indexes):
     for i in range(len(indexes)):
-        if indexes[i] == "WHILE LOOP!":
-            continue
         if indexes[i][1]:
             return True
     return False
@@ -7051,7 +7049,7 @@ class Parser:
         if line == "assert(.false.)":
             return "static_assert(false)"
         #we disregard some mn_loop setup lines
-        if line in ["n__mod__cdata=nn__mod__cdata(imn__mod__cdata)","m__mod__cdata=mm__mod__cdata(imn__mod__cdata)","enddo mn_loop","headtt=.false.","lfirstpoint=.false."]:
+        if line in ["n__mod__cdata=nn__mod__cdata(imn__mod__cdata)","m__mod__cdata=mm__mod__cdata(imn__mod__cdata)","enddo mn_loop","headtt__mod__cdata=.false.","lfirstpoint__mod__cdata=.false."]:
             return ""
         if "mn_loop:" in line and "do" in line:
             return ""
@@ -7089,6 +7087,8 @@ class Parser:
             is_global_index = loop_indexes.pop()[1]
             if(is_global_index): return ""
             return "}\n"
+        if line.strip() == "cycle":
+            return "continue"
         if "subroutine" in line and "end" in line:
             if self.test_to_c:
                 return ""
@@ -7116,22 +7116,24 @@ class Parser:
             elif self.offload_type == "boundcond":
                 return f"{function_name}({','.join(param_strings)})\n"+"{\n"
             elif self.offload_type == "stencil":
-              return "Kernel twopass_solve_intermediate(int step_num, real AC_dt__mod__cdata, real AC_t__mod__cdata){\n#include \"static_var_declares.h\"\n#include \"df_declares.h\"\n"
+              return "Kernel twopass_solve_intermediate(PC_SUB_STEP_NUMBER step_num, real AC_dt__mod__cdata, real AC_t__mod__cdata){\n#include \"static_var_declares.h\"\n#include \"df_declares.h\"\n"
         if is_use_line(line):
             return ""
 
-        if line.strip()[:2] == "do" and line.strip()[:len("do while")] != "do while":
-            print("HMM: ",line)
-            loop_index = self.get_writes_from_line(line)[0]["variable"]
-            lower,upper= [part.strip() for part in line.split("=")[1].split(",",1)]
-            loop_indexes.append("WHILE LOOP!")
-            loop_indexes.append((loop_index, (lower == "1" and upper in global_subdomain_ranges) or (lower == "l1__mod__cparam" and upper == "l2__mod__cdata"),upper,lower))
-            if loop_indexes[-1][1]:
-                return ""
-            #to convert to C loops
-            #return f"for(int {loop_index} = {lower};{loop_index}<={upper};{loop_index}++)" +"{"
-            #to convert to DSL loops
-            return f"for {loop_index} in {lower}:{upper}+1 " + "{"
+        if line.strip()[:2] == "do":
+            if line.strip()[:len("do while")] == "do while":
+                loop_indexes.append(("WHILE LOOP!",False,"",""))
+                line = line.replace("do while","while") + "{"
+            else:
+                lower,upper= [part.strip() for part in line.split("=")[1].split(",",1)]
+                loop_index = self.get_writes_from_line(line)[0]["variable"]
+                loop_indexes.append((loop_index, (lower == "1" and upper in global_subdomain_ranges) or (lower == "l1__mod__cparam" and upper == "l2__mod__cdata"),upper,lower))
+                if loop_indexes[-1][1]:
+                    return ""
+                #to convert to C loops
+                #return f"for(int {loop_index} = {lower};{loop_index}<={upper};{loop_index}++)" +"{"
+                #to convert to DSL loops
+                return f"for {loop_index} in {lower}:{upper}+1 " + "{"
         if "endif" in line:
             return "}"
         original_line = line
@@ -9845,11 +9847,17 @@ def main():
         parser.ignored_subroutines.append(f"calc_phiavg_profile")
         parser.safe_subs_to_remove.append(f"calc_phiavg_profile")
 
+        parser.ignored_subroutines.append(f"check_if_necessary")
+        parser.safe_subs_to_remove.append(f"check_if_necessary")
+
         parser.ignored_subroutines.append(f"calc_aaxyaver")
         parser.safe_subs_to_remove.append(f"calc_aaxyaver")
 
         parser.ignored_subroutines.append(f"accumulate_schur_averages")
         parser.safe_subs_to_remove.append(f"accumulate_schur_averages")
+
+        parser.ignored_subroutines.append(f"time_integrals_hydro")
+        parser.safe_subs_to_remove.append(f"time_integrals_hydro")
 
         parser.ignored_subroutines.append(f"time_integrals_magnetic")
         parser.safe_subs_to_remove.append(f"time_integrals_magnetic")
@@ -10081,8 +10089,6 @@ def main():
             res_lines = get_formatted_lines(res_lines)
             file = open(output_filename,"w")
             for line in res_lines:
-                if line in ["headtt__mod__cdata=false","lfirstpoint__mod__cdata=false"]:
-                    continue
                 file.write(f"{line}\n")
             file.close()
             print("DONE Boundcond\n")
@@ -10135,6 +10141,8 @@ def main():
 
             res = get_formatted_lines(res)
             for line in res:
+                if line.strip() in ["headtt__mod__cdata=false","lfirstpoint__mod__cdata=false","lfirstpoint__mod__cdata=true","lcommunicate=!early_finalize","dline_1__mod__cdata.z = dline_1__mod__cdata.z*AC_nphis1__mod__cdata[AC_m__mod__cdata-1]","lproc_print__mod__cdata=false","lproc_print__mod__cdata=true"]:
+                    continue
                 if line != "real3 ac_transformed_pencil_":
                   file.write(f"{line}\n") 
             file.close()
