@@ -412,7 +412,10 @@ def map_curl_mn(func_call):
     #other_params = func_call["parameters"][:1] + func_call["parameters"][2:]
     #return f"{func_call['parameters'][1]}=curl_from_matrix({','.join(other_params)})"
 
-    return [f"{func_call['parameters'][1]}=curl({func_call['parameters'][0]})"]
+    #This corresponds to no-correction term so can work only in cartesian coordinates!
+    if(len(params) == 2):
+        return [f"{func_call['parameters'][1]}=curl({func_call['parameters'][0]})"]
+    return [f"{func_call['parameters'][1]}=curl({func_call['parameters'][0]},{func_call['parameters'][2]})"]
 
 def map_dot_mn(func_call):
     params = func_call["parameters"]
@@ -605,6 +608,7 @@ def map_u_dot_grad_vec(func_call):
         print("\n\n")
         print([x[0] for x in params])
         pexit("optional params not supported\n")
+    #main_line = f"{names[4]} = u_dot_grad({gen_field3(names[1])},{names[2]},{names[3]})"
     main_line = f"{names[4]} = {names[2]}*{names[3]}"
     res.append(main_line)
     if len(add_line) > 0:
