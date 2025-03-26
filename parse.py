@@ -408,14 +408,19 @@ def map_curl(func_call):
 
 def map_curl_mn(func_call):
     #for time being only support carteesian coords
-    params = func_call["parameters"]
+    params = func_call["new_param_list"]
     #other_params = func_call["parameters"][:1] + func_call["parameters"][2:]
     #return f"{func_call['parameters'][1]}=curl_from_matrix({','.join(other_params)})"
 
     #This corresponds to no-correction term so can work only in cartesian coordinates!
     if(len(params) == 2):
-        return [f"{func_call['parameters'][1]}=curl({func_call['parameters'][0]})"]
-    return [f"{func_call['parameters'][1]}=curl({func_call['parameters'][0]},{func_call['parameters'][2]})"]
+        return [f"{params[1][0]}=curl({params[0][0]})"]
+    elif(len(params) == 4):
+        res = []
+        res.append([f"if {params[3][0]} {params[1][0]} = curl({params[0][0]},{params[2][0]})"])
+        res.append([f"else              {params[1][0]} = covariant_curl({params[0][0]},{params[2][0]})"])
+        
+    return [f"{params[1][0]}=curl({params[0][0]},{params[2][0]})"]
 
 def map_dot_mn(func_call):
     params = func_call["parameters"]
@@ -919,11 +924,11 @@ def map_der_other(func_call):
       indexes =get_indexes(params[0][5],'f',0)
       assert(len(indexes) == 4)
       if(params[2][0] == '1'):
-          return [f"{names[1]} = derx(gen_field{indexes[-1]})"]
+          return [f"{names[1]} = derx({gen_field(indexes[-1])})"]
       if(params[2][0] == '2'):
-          return [f"{names[1]} = dery(gen_field{indexes[-1]})"]
+          return [f"{names[1]} = dery({gen_field(indexes[-1])})"]
       if(params[2][0] == '3'):
-          return [f"{names[1]} = derz(gen_field{indexes[-1]})"]
+          return [f"{names[1]} = derz({gen_field(indexes[-1])})"]
       pexit("unknown dim")
     pexit("what to do?\n")
 
@@ -5299,7 +5304,7 @@ class Parser:
             return line[segment[1]:segment[2]]
         type = self.static_variables[segment[0]]["type"]
         if("character" in type):
-            res = f"string_enum_{segment[0]}"
+            res = f"enum_{segment[0]}"
             mod = get_mod(segment[0])
             if res not in self.enum_strings:
                 self.enum_strings.append(res)
@@ -5354,11 +5359,15 @@ class Parser:
         variables = merge_dictionaries(local_variables,self.static_variables)
         sg_indexes = get_segment_indexes(segment,line,0)
         changed = False
+        abort = False
         for i, index in enumerate(sg_indexes):
-            if i==info["index_num"] and index==info["old_index"]:
-                changed = True
-                sg_indexes[i] = info["new_index"]
-        if changed:
+            if i==info["index_num"]: 
+                if index==info["old_index"]:
+                    changed = True
+                    sg_indexes[i] = info["new_index"]
+                else:
+                    abort = True
+        if changed and not abort:
             return build_new_access(segment[0],sg_indexes)
         return line[segment[1]:segment[2]]
 
@@ -5442,10 +5451,16 @@ class Parser:
             unroll = False
             lower = None
             upper = None
+            index_to_replace = None
+            index_num = None
             for sg in arr_segs_in_line:
                 indexes = get_segment_indexes(sg,line,0)
                 if len(variables[sg[0]]["dims"]) > 0 and len(indexes) > 0:
-                    unroll = unroll or variables[sg[0]]["dims"][-1]  == "3" and indexes[-1] in ["1:2", "2:3"]
+                    unroll_now = variables[sg[0]]["dims"][-1]  in ["3","mfarray__mod__cparam"] and indexes[-1] in ["1:2", "2:3","iux__mod__cdata:iuy__mod__cdata"]
+                    unroll = unroll or unroll_now
+                    if unroll_now:
+                        index_to_replace = indexes[-1]
+                        index_num = len(indexes)-1
                     if indexes[-1] in ["1:2"]:
                         assert(lower is None or lower == "1")
                         lower = "1"
@@ -5454,10 +5469,13 @@ class Parser:
                         assert(lower is None or lower == "2")
                         lower = "2"
                         upper = "3"
+                    elif indexes[-1] in ["iux__mod__cdata:iuy__mod__cdata"]:
+                        lower = "iux__mod__cdata"
+                        upper = "iuy__mod__cdata"
             if unroll:
                 info = {
-                    "index_num": len(indexes)-1,
-                    "old_index": indexes[-1],
+                    "index_num": index_num,
+                    "old_index": index_to_replace,
                     "new_index": lower,
                 }
                 line_lower = self.replace_segments(arr_segs_in_line,line,self.unroll_range,local_variables,info)
@@ -5933,6 +5951,23 @@ class Parser:
           print(line[segment[1]:segment[2]])
           pexit(indexes)
     def gen_f_access(self,i,rhs_var,segment,index):
+
+        if(index == "0+iguij__mod__cdata"): index = "igu11__mod__cdata"
+        if(index == "1+iguij__mod__cdata"): index = "igu12__mod__cdata"
+        if(index == "2+iguij__mod__cdata"): index = "igu13__mod__cdata"
+                       
+        if(index == "3+iguij__mod__cdata"): index = "igu21__mod__cdata"
+        if(index == "4+iguij__mod__cdata"): index = "igu22__mod__cdata"
+        if(index == "5+iguij__mod__cdata"): index = "igu23__mod__cdata"
+                       
+        if(index == "6+iguij__mod__cdata"): index = "igu31__mod__cdata"
+        if(index == "7+iguij__mod__cdata"): index = "igu32__mod__cdata"
+        if(index == "8+iguij__mod__cdata"): index = "igu33__mod__cdata"
+
+        if(index == "iux__mod__cdata-1+1"): index = "iux__mod__cdata"
+        if(index == "iux__mod__cdata-1+2"): index = "iuy__mod__cdata"
+        if(index == "iux__mod__cdata-1+3"): index = "iuz__mod__cdata"
+
         if segment[0] == "df":
             vtxbuf_name = self.get_vtxbuf_name_from_index("DF_", index)
             #if vtxbuf_name == "DF_UX":
@@ -6172,8 +6207,8 @@ class Parser:
               if type == "real":
                   call = f"call copy_addr({name},p_par({res[mod][1]}))"
               elif type == "integer":
-                  if "string_enum" in name:
-                    string_name = name[len("string_enum_"):len(name)]
+                  if len(name) >= len("enum_") and name[0:len("enum_")] == "enum_":
+                    string_name = name[len("enum_"):len(name)]
                     res[mod][0].append(f"call string_to_enum({name},{string_name})")
                   call = f"call copy_addr({name},p_par({res[mod][1]})) ! int"
               elif type == "logical":
@@ -9034,7 +9069,7 @@ class Parser:
         def replacement(match):
             content = match.group(1)
             modified_content = content.replace(" ", "_")
-            return remove_invalid_symbols(f"string_enum_{modified_content}_string__mod__cparam")
+            return remove_invalid_symbols(f"enum_{modified_content}_string__mod__cparam")
 
         res_lines = []
         all_strings = []
@@ -9059,28 +9094,27 @@ class Parser:
         #TP: filter too long strings out
         all_strings = [x for x in all_strings if len(x) < 40]
         file = open("res-string-enums","w")
-        #file.write(f"integer, parameter :: string_enum_unknown_string_string = 0\n")
+        #file.write(f"integer, parameter :: enum_unknown_string_string = 0\n")
         largest_string_int = 0
         for var in self.static_variables:
             if "__mod__cparam" in var:
-                if "string_enum" in var and self.static_variables[var]["parameter"]:
+                if len(var) >= len("enum_") and var[0:len("enum_")] == "enum_" and self.static_variables[var]["parameter"]:
                     largest_string_int = max(largest_string_int,int(self.static_variables[var]["value"]))
 
 
         for i,string in enumerate(all_strings):
             string = remove_invalid_symbols(string.replace(" ","_"))
-            res = f"string_enum_{string}_string"
+            res = f"enum_{string}_string"
             if f"{res}__mod__cparam".lower() not in self.static_variables:
                 largest_string_int += 1
                 file.write(f"integer, parameter :: {res} = {largest_string_int}\n")
         file.close()
         file = open("strings-to-enums","w")
-        file.write("select case(src)\n")
         for string in all_strings:
             enum = remove_invalid_symbols(string.replace(" ","_"))
-            file.write(f"case('{string}')\n\tdst = string_enum_{enum}_string\n")
-        file.write(f"case default\n\tdst = string_enum_unknown_string_string\n")
-        file.write(f"endselect\n")
+            var = f"enum_{enum}_string"
+            if f"{var}__mod__cparam".lower() not in self.static_variables:
+                file.write(f"case('{string}')\n  dst = {var}\n")
         file.close()
 
         return res_lines
