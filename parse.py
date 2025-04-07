@@ -701,6 +701,68 @@ def map_der_main(func_call):
     print("j=",j)
     pexit("don't know whic der to call")
 
+def map_der_x(func_call):
+    params = func_call["new_param_list"]
+    names  = func_call["parameters"]
+    if(params[0][0] == 'f'):
+      indexes =get_indexes(params[0][5],'f',0)
+      if(not(len(indexes) == 4 and indexes[:-1] == [":","m__mod__cdata","n__mod__cdata"])):
+          pexit("HMM: ",indexes)
+
+      return [f"{names[1]} = derx({gen_field(indexes[-1])})"]
+    pexit("WHAT TO DO?: ",params)
+
+def map_der2_x(func_call):
+    params = func_call["new_param_list"]
+    names  = func_call["parameters"]
+    if(params[0][0] == 'f'):
+      indexes =get_indexes(params[0][5],'f',0)
+      if(not(len(indexes) == 4 and indexes[:-1] == [":","m__mod__cdata","n__mod__cdata"])):
+          pexit("HMM: ",indexes)
+
+      return [f"{names[1]} = derxx({gen_field(indexes[-1])})"]
+    pexit("WHAT TO DO?: ",params)
+
+def map_der_y(func_call):
+    params = func_call["new_param_list"]
+    names  = func_call["parameters"]
+    if(params[0][0] == 'f'):
+      indexes =get_indexes(params[0][5],'f',0)
+      if(not(len(indexes) == 4 and indexes[:-1] == [":","m__mod__cdata","n__mod__cdata"])):
+          pexit("HMM: ",indexes)
+      return [f"{names[1]} = dery({gen_field(indexes[-1])})"]
+    pexit("WHAT TO DO?: ",params)
+
+def map_der2_y(func_call):
+    params = func_call["new_param_list"]
+    names  = func_call["parameters"]
+    if(params[0][0] == 'f'):
+      indexes =get_indexes(params[0][5],'f',0)
+      if(not(len(indexes) == 4 and indexes[:-1] == [":","m__mod__cdata","n__mod__cdata"])):
+          pexit("HMM: ",indexes)
+      return [f"{names[1]} = deryy({gen_field(indexes[-1])})"]
+    pexit("WHAT TO DO?: ",params)
+
+def map_der_z(func_call):
+    params = func_call["new_param_list"]
+    names  = func_call["parameters"]
+    if(params[0][0] == 'f'):
+      indexes =get_indexes(params[0][5],'f',0)
+      if(not(len(indexes) == 4 and indexes[:-1] == [":","m__mod__cdata","n__mod__cdata"])):
+          pexit("HMM: ",indexes)
+      return [f"{names[1]} = derz({gen_field(indexes[-1])})"]
+    pexit("WHAT TO DO?: ",params)
+
+def map_der2_z(func_call):
+    params = func_call["new_param_list"]
+    names  = func_call["parameters"]
+    if(params[0][0] == 'f'):
+      indexes =get_indexes(params[0][5],'f',0)
+      if(not(len(indexes) == 4 and indexes[:-1] == [":","m__mod__cdata","n__mod__cdata"])):
+          pexit("HMM: ",indexes)
+      return [f"{names[1]} = derzz({gen_field(indexes[-1])})"]
+    pexit("WHAT TO DO?: ",params)
+
 def map_smooth_mn(func_call):
     params = func_call["new_param_list"]
     names  = func_call["parameters"]
@@ -1189,6 +1251,36 @@ sub_funcs = {
     {
         "output_params_indexes": [2,3],
         "map_func": map_bij_tilde
+    },
+    "der_x":
+    {
+        "output_params_indexes": [1],
+        "map_func": map_der_x
+    },
+    "der2_x":
+    {
+        "output_params_indexes": [1],
+        "map_func": map_der2_x
+    },
+    "der_y":
+    {
+        "output_params_indexes": [1],
+        "map_func": map_der_y
+    },
+    "der2_y":
+    {
+        "output_params_indexes": [1],
+        "map_func": map_der2_y
+    },
+    "der_z":
+    {
+        "output_params_indexes": [1],
+        "map_func": map_der_z
+    },
+    "der2_z":
+    {
+        "output_params_indexes": [1],
+        "map_func": map_der2_z
     },
     "der_main":
     {
