@@ -1070,7 +1070,7 @@ def map_multsv_mn_add(func_call):
 
 
 def map_not_implemented(func_call):
-    return [f"fatal_error(true,\"{func_call['function_name']}\")"]
+    return [f"fatal_error_message(true,\"{func_call['function_name']}\")"]
 
 def map_directly(func_call):
     #print("HMM MAP DIRECT: ",func_call["new_param_list"])
@@ -6356,7 +6356,7 @@ class Parser:
                         func_calls = self.get_function_calls_in_line(line,local_variables)
                         if len(func_calls) == 1:
                             func_call = func_calls[0]
-                            if func_call["function_name"] == "copy_addr":
+                            if func_call["function_name"] in ["copy_addr","copy_addr_dble"]:
                                 res[mod][0].append(func_call["parameters"][0])
                                 index = func_call["parameters"][1].split("(")[-1].split(")")[0].strip()
                                 res[mod][1] = max(res[mod][1],int(index))
@@ -7359,7 +7359,10 @@ class Parser:
             elif self.offload_type == "boundcond":
                 return f"{function_name}({','.join(param_strings)})\n"+"{\n"
             elif self.offload_type == "stencil":
-              return "Kernel twopass_solve_intermediate(PC_SUB_STEP_NUMBER step_num, real AC_dt__mod__cdata, real AC_t__mod__cdata){\n#include \"static_var_declares.h\"\n#include \"df_declares.h\"\n"
+                if function_name == "rhs_cpu":
+                    return "Kernel twopass_solve_intermediate(PC_SUB_STEP_NUMBER step_num, real AC_dt__mod__cdata, real AC_t__mod__cdata){\n#include \"static_var_declares.h\"\n#include \"df_declares.h\"\n"
+                else:
+                    return f"Kernel {function_name}()"+"{\n"
         if is_use_line(line):
             return ""
 
@@ -10189,6 +10192,7 @@ def main():
         parser.get_allocations_in_init_func("initialize_density",subs_not_to_inline)
         parser.get_allocations_in_init_func("initialize_hydro",subs_not_to_inline)
         parser.get_allocations_in_init_func("initialize_eos",subs_not_to_inline)
+        parser.get_allocations_in_init_func("initialize_radiation",subs_not_to_inline)
 
 
         if not os.path.isfile("res-inlined.txt"):
@@ -10400,8 +10404,11 @@ def main():
 
             res = get_formatted_lines(res)
             for i,line in enumerate(res):
-                if subroutine_name == "rhs_cpu" and i == len(res)-1:
-                    file.write("#include \"handwritten_end.h\"\n")
+                if i == len(res)-1:
+                    if subroutine_name == "rhs_cpu":
+                        file.write("#include \"handwritten_end.h\"\n")
+                    else:
+                        file.write(f"#include \"{subroutine_name}_handwritten_end.h\"\n")
                 if line.strip() in ["headtt__mod__cdata=false","lfirstpoint__mod__cdata=false","lfirstpoint__mod__cdata=true","lcommunicate=!early_finalize","dline_1__mod__cdata.z = dline_1__mod__cdata.z*AC_nphis1__mod__cdata[AC_m__mod__cdata-1]","lproc_print__mod__cdata=false","lproc_print__mod__cdata=true"]:
                     continue
                 if line != "real3 ac_transformed_pencil_":
