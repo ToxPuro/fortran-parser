@@ -265,11 +265,14 @@ global_loop_z = "n__mod__cdata"
 global_subdomain_range_x = "nx__mod__cparam"
 global_subdomain_range_y = "ny__mod__cparam"
 global_subdomain_range_z = "nz__mod__cparam"
+global_subdomain_range_x_with_halos = "mx__mod__cparam"
+global_subdomain_range_y_with_halos = "my__mod__cparam"
+global_subdomain_range_z_with_halos = "mz__mod__cparam"
 nghost_val = "3"
 global_subdomain_range_with_halos_x = f"{global_subdomain_range_x}+2*{nghost_val}"
 global_subdomain_range_with_halos_y = f"{global_subdomain_range_y}+2*{nghost_val}"
 global_subdomain_range_with_halos_z = f"{global_subdomain_range_z}+2*{nghost_val}"
-global_subdomain_ranges = [global_subdomain_range_x,global_subdomain_range_with_halos_x,global_subdomain_range_with_halos_y,global_subdomain_range_with_halos_z]
+global_subdomain_ranges = [global_subdomain_range_x,global_subdomain_range_with_halos_x,global_subdomain_range_with_halos_y,global_subdomain_range_with_halos_z, global_subdomain_range_x_with_halos]
 global_subdomain_range_x_upper = "l2__mod__cdata"
 global_subdomain_range_x_lower= "l1__mod__cparam"
 global_subdomain_range_x_inner = f"{global_subdomain_range_x_lower}:{global_subdomain_range_x_upper}"
@@ -536,7 +539,7 @@ def map_grad_other(func_call):
       if len(indexes) == 4 and indexes[:-1] == [":",":",":"]:
          return [f"{params[1]} = gradient({gen_field(indexes[3])})"]
       pexit("BUNDLE PARAM",params[0])
-    pexit("PARAM ",params[0])
+    pexit("PARAM ",params[0], func_call["static_variables"][params[0]])
 def map_div(func_call):
     params = func_call["parameters"]
     if len(params)>3:
@@ -995,7 +998,60 @@ def map_der_other(func_call):
     pexit("what to do?\n")
 
 def map_calc_slope_diff_flux(func_call):
-    return ['not_implemented("calc_slope_diff_flux")']
+
+    params = func_call["new_param_list"]
+    names  = [x[-2] for x in params]
+    heat   = any([x[-1] == "heat" for x in params])
+
+    field_index  = names[1]
+    field = gen_field(names[1])
+    div_param   = names[5]
+    heat_param = None
+    flux1_param = None
+    flux2_param = None
+    flux3_param = None
+    h_slope_param = names[3]
+    nlf_param     = names[4]
+    for i in range(len(names)):
+        if params[i][-1] == "heat":
+            heat_param = names[i]
+        if params[i][-1] == "flux1":
+            flux1_param = names[i]
+        if params[i][-1] == "flux2":
+            flux2_param = names[i]
+        if params[i][-1] == "flux3":
+            flux3_param = names[i]
+    res = []
+    twod_slope_param = "ac_slope_res_2d"
+    fourd_slope_param = "ac_slope_res_4d"
+    fived_slope_param = "ac_slope_res_5d"
+    if(heat_param and flux1_param == None):
+        slope_res = twod_slope_param
+        res.append(f"{slope_res} = get_slope_limited_divergence_and_heat({field},SLD_CHAR_SPEED,60.0,{h_slope_param},{nlf_param},F_RHO)")
+        res.append(f"{div_param} = {slope_res}.x")
+        res.append(f"{heat_param} = {slope_res}.y")
+
+    if(heat_param and flux1_param):
+        slope_res = fived_slope_param 
+        res.append(f"{slope_res} = get_slope_limited_all({field},SLD_CHAR_SPEED,60.0,{h_slope_param},{nlf_param},F_RHO)")
+        res.append(f"{div_param} = {slope_res}.x")
+        res.append(f"{flux1_param} = {slope_res}.y")
+        res.append(f"{flux2_param} = {slope_res}.z")
+        res.append(f"{flux3_param} = {slope_res}.w")
+        res.append(f"{heat_param} = {slope_res}.v")
+    if(heat_param == None and flux1_param):
+        slope_res = fourd_slope_param 
+        res.append(f"{slope_res} = get_slope_limited_divergence_and_average_fluxes({field},SLD_CHAR_SPEED,60.0,{h_slope_param},{nlf_param})")
+        res.append(f"{div_param} = {slope_res}.x")
+        res.append(f"{flux1_param} = {slope_res}.y")
+        res.append(f"{flux2_param} = {slope_res}.z")
+        res.append(f"{flux3_param} = {slope_res}.w")
+    else:
+        res.append(f"{div_param} = get_slope_limited_divergence({field},SLD_CHAR_SPEED,60.0,{h_slope_param},{nlf_param},{field_index} == AC_ilnrho__mod__cdata || {field_index} == AC_ilntt__mod__cdata)")
+    return res
+
+
+
 
 def map_multmv_mn_transp(func_call):
     params = func_call["parameters"]
@@ -1013,6 +1069,8 @@ def map_multsv_mn_add(func_call):
     return res
 
 
+def map_not_implemented(func_call):
+    return [f"fatal_error(true,\"{func_call['function_name']}\")"]
 
 def map_directly(func_call):
     #print("HMM MAP DIRECT: ",func_call["new_param_list"])
@@ -1077,6 +1135,16 @@ def map_shearing(func_call):
 #     pexit("what to do?\n")
 
 sub_funcs = {
+    "calc_kapparho_b2":
+    {
+        "output_param_indexes": [0],
+        "map_func": map_not_implemented
+    },
+    "calc_kapparho_b2_w2":
+    {
+        "output_param_indexes": [0],
+        "map_func": map_not_implemented
+    },
     "shrearing":
     {
         "output_param_indexes": [1],
@@ -1879,6 +1947,8 @@ def replace_exp_once(line):
               res = res + f"({base}*{base}*{base}*{base}*{base}*{base}*{base})"
             elif exponent.strip() == "8":
               res = res + f"({base}*{base}*{base}*{base}*{base}*{base}*{base}*{base})"
+            elif exponent.strip() == "9":
+              res = res + f"({base}*{base}*{base}*{base}*{base}*{base}*{base}*{base}*{base})"
             else:
               if exponent.isnumeric():
                 pexit("HMM ",exponent)
@@ -2372,7 +2442,7 @@ class Parser:
             # #for now set off
             # "ltime_integrals__mod__cdata":".false.",
         }
-        self.safe_subs_to_remove = ["print","not_implemented","fatal_error","keep_compiler_quiet","warning"]
+        self.safe_subs_to_remove = ["print","not_implemented","output","fatal_error","keep_compiler_quiet","warning"]
         self.func_info = {}
         self.file_info = {}
         self.module_info = {}
@@ -2875,6 +2945,9 @@ class Parser:
           else:
             checked_local_writes.append({"variable": variable, "line_num": line_num, "local": is_local, "filename": filename, "call_trace": call_trace, "line": line})
     def get_allocations_in_init_func(self,init_func_name,subs_not_to_inline):
+
+        if init_func_name not in self.func_info:
+            return 
         func_info = self.get_function_info(init_func_name)
         filename = list(func_info["lines"].keys())[0]
         #chem_lines = func_info["lines"][filename]
@@ -3133,7 +3206,7 @@ class Parser:
                     profile_type = "xz"
                 elif dims in [["nx","ny","nz"]]:
                     profile_type = "xyz"
-                elif dims in [["mx","my","mz"]]:
+                elif dims in [["mx","my","mz"],["mx__mod__cparam","my__mod__cparam","mz__mod__cparam"]]:
                     profile_type = "vtxbuf"
                 elif dims[:-1] in [["mx","my","mz"]] and dims[-1] in bundle_dims:
                     profile_type = "vtxbuf_bundle"
@@ -3254,7 +3327,7 @@ class Parser:
                                 module_name = search_line.split(" ")[1].strip().lower()
                                 #choose only the chosen module files
                                 file_end = filepath.split("/")[-1].split(".")[0].strip()
-                                if module_name in ["solid_cells_ogrid","solid_cells_ogrid_cdata","solid_cells_ogrid_sub","solid_cells", "special","density","energy","hydro","gravity","viscosity","poisson","neutralvelocity","neutraldensity","weno_transport","magnetic","deriv","equationofstate","pscalar","radiation","chiral","poisson","selfgravity","particles","pointmasses","shear","heatflux","detonate","chemistry","cosmicray","cosmicrayflux","opacity","fixed_point","testfield","testflow","magnetic_meanfield"] and file_end != self.chosen_modules[module_name]:
+                                if module_name in ["solid_cells_ogrid","solid_cells_ogrid_cdata","solid_cells_ogrid_sub","solid_cells", "special","density","energy","hydro","forcing","gravity","viscosity","poisson","neutralvelocity","neutraldensity","weno_transport","magnetic","deriv","equationofstate","pscalar","radiation","chiral","poisson","selfgravity","particles","pointmasses","shear","heatflux","detonate","chemistry","cosmicray","cosmicrayflux","opacity","fixed_point","testfield","testflow","magnetic_meanfield"] and file_end != self.chosen_modules[module_name]:
                                   self.not_chosen_files.append(filepath)
                                   return
                                 elif "deriv_8th" in filepath: 
@@ -6060,6 +6133,18 @@ class Parser:
         if(index == "iux__mod__cdata-1+2"): index = "iuy__mod__cdata"
         if(index == "iux__mod__cdata-1+3"): index = "iuz__mod__cdata"
 
+        if(index == "iuu__mod__cdata-1+1"): index = "iux__mod__cdata"
+        if(index == "iuu__mod__cdata-1+2"): index = "iuy__mod__cdata"
+        if(index == "iuu__mod__cdata-1+3"): index = "iuz__mod__cdata"
+
+        if(index == "iuu__mod__cdata-1+1"): index = "iux__mod__cdata"
+        if(index == "iuu__mod__cdata-1+2"): index = "iuy__mod__cdata"
+        if(index == "iuu__mod__cdata-1+3"): index = "iuz__mod__cdata"
+
+        if(index == "iaa__mod__cdata-1+1"): index = "iax__mod__cdata"
+        if(index == "iaa__mod__cdata-1+2"): index = "iay__mod__cdata"
+        if(index == "iaa__mod__cdata-1+3"): index = "iaz__mod__cdata"
+
         if segment[0] == "df":
             vtxbuf_name = self.get_vtxbuf_name_from_index("DF_", index)
             #if vtxbuf_name == "DF_UX":
@@ -6129,10 +6214,13 @@ class Parser:
 
         orig_indexes = get_segment_indexes(segment,line, len([src[segment[0]]["dims"]]))
         indexes = [self.evaluate_indexes(index) for index  in orig_indexes]
+        if indexes[:-1] == ["l1__mod__cparam-radx__mod__radiation:l2__mod__cdata+radx__mod__radiation","m1__mod__cparam-rady__mod__radiation:m2__mod__cdata+rady__mod__radiation","n1__mod__cparam-radz__mod__radiation:n2__mod__cdata+radz__mod__radiation"]:
+            return self.gen_f_access(i,rhs_var,segment,indexes[-1])
         if not all([okay_stencil_index(self.evaluate_indexes(x[1]),x[0]) for x in enumerate(orig_indexes[:-1])]):
             print("How how to handle stencil indexes?")
             print(line[segment[1]:segment[2]])
             print(indexes)
+            print(indexes[0])
             print([self.evaluate_indexes(index) for index in orig_indexes])
             pexit(line,loop_indexes)
         if ":" in indexes[-1]:
@@ -6149,7 +6237,7 @@ class Parser:
                 print("INDEX PAIR: ",lower,upper,upper == f"2+{lower}")
                 pexit("LINE: ",line)
         return self.gen_f_access(i,rhs_var,segment,indexes[-1])
-    def get_profile_access(self,var_dims,indexes,segment,src,line,loop_indexes):
+    def get_profile_access(self,var_dims,indexes,segment,src,line,loop_indexes,is_lhs):
         prof_type = src[segment[0]]["profile_type"]
         res_index = None
         if inside_nx_loop(loop_indexes):
@@ -6168,17 +6256,20 @@ class Parser:
                 return f"{segment[0]}[vertexIdx.x-NGHOST]"
             elif prof_type == "vtxbuf_bundle" and len(loop_indexes) == 1 and indexes[0] == f"l1__mod__cparam+{loop_indexes[0][0]}-1" and indexes[1] == "m__mod__cdata" and indexes[2] == "n__mod__cdata" and indexes[3] == "1:nchemspec__mod__cparam" and loop_indexes[0][3] == "1" and loop_indexes[0][2] == "nx__mod__cparam":
                 return f"{segment[0]}"
+            elif prof_type == "z" and indexes == ["n__mod__cdata"]:
+                return f"{segment[0]}"
             pexit("PROF ACCESS IN NX LOOP: ",line[segment[1]:segment[2]],prof_type,loop_indexes)
         if var_dims == ["my__mod__cparam"] and prof_type == "y" and indexes == ["m1__mod__cparam:m2__mod__cdata"]:
             return f"{segment[0]}[vertexIdx.y]"
         if prof_type == "vtxbuf":
+          if is_lhs or indexes == [":","m__mod__cdata","n__mod__cdata"]:
+              return f"{segment[0]}"
           if indexes == ["l1__mod__cparam:l2__mod__cdata","m__mod__cdata","n__mod__cdata"]:
             return f"value({segment[0]})"
           elif indexes == []:
             return segment[0]
           elif indexes == ["l1__mod__cparam","m1__mod__cparam","n1__mod__cparam"]:
               return f"{segment[0]}[nghost__mod__cparam][nghost__mod__cparam][nghost__mod__cparam]"
-          pexit("HMM",segment[0],indexes,prof_type,line[segment[1]:segment[2]],loop_indexes)
         elif prof_type == "vtxbuf_bundle":
             if len(indexes) == 4 and indexes[:-1] == ["l1__mod__cparam:l2__mod__cdata","m__mod__cdata","n__mod__cdata"] and ":" not in indexes[3]:
                 return f"{segment[0]}[{indexes[3]}]"
@@ -6361,6 +6452,7 @@ class Parser:
 
 
         for mod in res:
+          if len(res[mod][0]) == 0: continue
           print("CREATING PUSHPARS FOR: ",mod)
           file = open(f"pushpar_{mod}","w")
           for line in res[mod][0]:
@@ -6525,12 +6617,13 @@ class Parser:
                     or (num_of_looped_dims == 1 and len(rhs_dim) == 1 and rhs_dim[0] in bundle_dims)
                     or (num_of_looped_dims == 3 and rhs_dim[1] in bundle_dims and rhs_dim[2] in bundle_dims and rhs_dim[0] == global_subdomain_range_x)
                     or (num_of_looped_dims == 1 and rhs_dim == ["3"])
-                    or (num_of_looped_dims == 1 and rhs_dim in [[global_subdomain_range_x,"3"],[global_subdomain_range_x]])
+                    or (num_of_looped_dims == 1 and rhs_dim in [[global_subdomain_range_x,"3"],[global_subdomain_range_x], [global_subdomain_range_x_with_halos]])
                     or (num_of_looped_dims == 2 and rhs_var in local_variables)
                     or (num_of_looped_dims == 2 and rhs_dim in [[global_subdomain_range_x,"3"]])
                     or (num_of_looped_dims == 2 and rhs_dim[0] == global_subdomain_range_x and rhs_dim[1] in bundle_dims)
                     or (num_of_looped_dims == 3 and rhs_dim[:-1] == [global_subdomain_range_x,"3"] and rhs_dim[-1] in bundle_dims)
                     or (num_of_looped_dims == 3 and rhs_dim in [[global_subdomain_range_x,"3","3"]])
+                    or (num_of_looped_dims == 3 and rhs_dim in [[global_subdomain_range_x_with_halos,global_subdomain_range_y_with_halos,global_subdomain_range_z_with_halos]])
                     or (num_of_looped_dims == 4 and rhs_dim in [[global_subdomain_range_x,"3","3","3"]])
                 ))
                 or (rhs_var in ["df","f"] or rhs_var in vectors_to_replace))
@@ -6546,6 +6639,9 @@ class Parser:
                     src = local_variables
                 else:
                     src = self.static_variables
+                #if src[segment[0]]["profile_type"] == "vtxbuf":
+                if src[segment[0]]["dims"] == ["mx__mod__cparam","my__mod__cparam","mz__mod__cparam"]:
+                    src[segment[0]]["profile_type"] = "vtxbuf"
                 if segment[0] == "df" or segment[0] == "f":
                   res = self.get_f_array_access(line,segment,local_variables,i,rhs_var,loop_indexes,writes)
                 else:
@@ -6566,8 +6662,10 @@ class Parser:
                         elif(indexes  == ["n__mod__cdata"]):
                             prof_type = "z"
                         src[segment[0]]["profile_type"] = prof_type
-                    if src[segment[0]]["profile_type"]:
-                        res = self.get_profile_access(var_dims,indexes,segment,src,line,loop_indexes)
+                    if len(var_dims) == 2 and var_dims[0] == "mx__mod__cparam" and var_dims[1] in bundle_dims and indexes[0] == "l1__mod__cparam:l2__mod__cdata" and ":" not in indexes[1]:
+                        res = f"{segment[0]}[vertexIdx.x][{indexes[1]}]"
+                    elif src[segment[0]]["profile_type"]:
+                        res = self.get_profile_access(var_dims,indexes,segment,src,line,loop_indexes,i == 0)
                     elif len(var_dims) == 3 and var_dims[2] in bundle_dims and var_dims[1] == "3" and var_dims[0] == global_subdomain_range_x and len(indexes) == 3 and indexes[1].isnumeric() and ":" not in indexes[2]:
                         if indexes[1] == "1":
                             res = f"{segment[0]}[{indexes[2]}-1].x"
@@ -6694,6 +6792,8 @@ class Parser:
                     #nx var -> AcMatrix
                     elif len(src[segment[0]]["dims"]) == 4 and src[segment[0]]["dims"][:-1] == [global_subdomain_range_x,"3","3"] and indexes[0] == ":" and src[segment[0]]["dims"][3] in bundle_dims: 
                       res = self.get_ac_matrix_res(segment,indexes[1:])
+                    elif len(src[segment[0]]["dims"]) == 4 and src[segment[0]]["dims"] == ["nx__mod__cparam","ny__mod__cparam","nz__mod__cparam","3"] and indexes[0] == ":":
+                      res = f"{segment[0]}[vertexIdx.x-NGHOST][{indexes[1]}-1][{indexes[2]}-1][{indexes[3]}-1]"
                     #AcTensor
                     elif var_dims == [global_subdomain_range_x,"3","3","3"]:
                         var_info = self.get_param_info((line[segment[1]:segment[2]],False),local_variables,self.static_variables)
@@ -6715,6 +6815,14 @@ class Parser:
                         else:
                           pexit("HMM: ",res)
                     elif len(var_dims) == 1 and num_of_looped_dims == 0 and len(indexes) == 0:
+                        res = f"{line[segment[1]:segment[2]]}"
+                    elif len(var_dims) == 1 and num_of_looped_dims == 1 and len(indexes) == 0 and var_dims[0] == global_subdomain_range_x_with_halos:
+                        res = f"{line[segment[1]:segment[2]]}"
+                    elif num_of_looped_dims == 1 and var_dims == ["mx__mod__cparam","my__mod__cparam","mz__mod__cparam"] and indexes == [global_subdomain_range_x_inner,"m__mod__cdata","n__mod__cdata"]:
+                        res = f"{line[segment[1]:segment[2]]}"
+                    elif num_of_looped_dims == 1 and var_dims == ["mx__mod__cparam","my__mod__cparam","mz__mod__cparam"] and indexes == [":","m__mod__cdata","n__mod__cdata"]:
+                        res = f"{line[segment[1]:segment[2]]}"
+                    elif num_of_looped_dims == 3 and var_dims == ["mx__mod__cparam","my__mod__cparam","mz__mod__cparam"] and indexes == []:
                         res = f"{line[segment[1]:segment[2]]}"
                     elif len(var_dims) == 1 and var_dims[0] == global_subdomain_range_x and len(indexes) == 1 and indexes[0] == global_subdomain_range_x_inner:
                         res = f"{segment[0]}"
@@ -7142,7 +7250,7 @@ class Parser:
             for var in vars_to_declare:
                 res = res + "real " + var + "[2]\n"
             return res
-        if local_variables[vars_to_declare[0]]["dims"] in [[],[global_subdomain_range_x]]:
+        if local_variables[vars_to_declare[0]]["dims"] in [[],[global_subdomain_range_x],[global_subdomain_range_x_with_halos]]:
             return "real " + ", ".join(vars_to_declare)
         if local_variables[vars_to_declare[0]]["dims"] == [global_subdomain_range_x,"3","3"]:
             return "Matrix " + ", ".join(vars_to_declare)
@@ -7215,8 +7323,12 @@ class Parser:
             select_case_var = line.split("(")[1].split(")")[0]
             return f"case {select_case_var}:\n"
         if "end" in line and "do" in line:
-            is_global_index = loop_indexes.pop()[1]
+            if(len(loop_indexes) == 0): 
+                pexit("WRONG: ",line)
+            loop_index = loop_indexes.pop()
+            is_global_index = loop_index[1]
             if(is_global_index): return ""
+            if(loop_index[0] in ["l__mod__cdata","m__mod__cdata","n__mod__cdata"]): return ""
             return "}\n"
         if line.strip() == "cycle":
             return "continue"
@@ -7258,7 +7370,10 @@ class Parser:
             else:
                 lower,upper= [part.strip() for part in line.split("=")[1].split(",",1)]
                 loop_index = self.get_writes_from_line(line)[0]["variable"]
-                loop_indexes.append((loop_index, (lower == "1" and upper in global_subdomain_ranges) or (lower == "l1__mod__cparam" and upper == "l2__mod__cdata"),upper,lower))
+                global_loop = lower == "1" and upper in global_subdomain_ranges
+                loop_indexes.append((loop_index, (global_loop) or (lower == "l1__mod__cparam" and upper == "l2__mod__cdata"),upper,lower))
+                if loop_indexes[-1][0] in ["l__mod__cdata","m__mod__cdata","n__mod__cdata"]:
+                    return ""
                 if loop_indexes[-1][1]:
                     return ""
                 #to convert to C loops
@@ -7325,6 +7440,8 @@ class Parser:
           rhs_var = self.get_rhs_variable(line)
           if rhs_var is not None:
             rhs_var = rhs_var.lower()
+        if rhs_var is not None and "ac_slope_res" in rhs_var:
+            return line
         #if rhs_var is None:
         #    print("rhs var is none")
         #    pexit("LINE: ",line)
@@ -7356,32 +7473,40 @@ class Parser:
         #line = self.transform_spread(line,[f":" for i in range(num_of_looped_dims)],local_variables)
         #line = self.transform_spread(line,[f":" for i in range(num_of_looped_dims)],local_variables)
         return transform_func(line,num_of_looped_dims, local_variables,rhs_var,vectors_to_replace,writes, loop_indexes)
+    def get_spread(self,line,call):
+        lhs = call["parameters"][0]
+        redundant_index = call["parameters"][1]
+        res_line = self.replace_func_call(line,call,lhs)
+        return res_line
     def transform_spreads(self,lines,local_variables,variables):
         res_lines = []
         for line_index, line in enumerate(lines):
             spread_calls= [call for call in self.get_function_calls_in_line(line,variables) if call["function_name"] == "spread"]
-            if len(spread_calls) > 1:
+            if len(spread_calls) == 0:
+                res_lines.append(line)
+                continue
+            rhs_var = self.get_rhs_variable(line)
+            rhs_segments = get_variable_segments(line, [rhs_var])
+            if len(rhs_segments) == 0:
+                rhs_segments = self.get_struct_segments_in_line(line, [rhs_var])
+            if len(rhs_segments) == 0:
+                pexit("WHAT TO DO? ",line)
+            rhs_segment = rhs_segments[0]
+            rhs_info = self.get_param_info((line[rhs_segment[1]:rhs_segment[2]],False),local_variables,self.static_variables)
+            var_name = line[rhs_segment[1]:rhs_segment[2]]
+            rhs_indexes = get_segment_indexes(rhs_segment,line,0)
+            dims, num_of_looped_dims = get_dims_from_indexes(rhs_indexes,rhs_segment[0])
+            if rhs_indexes == [] or (rhs_var == "f" and rhs_indexes[:-1] == [":",":",":"] and ":" not in rhs_indexes[-1]):
+                while len(spread_calls) > 0:
+                    line = self.get_spread(line,spread_calls[0])
+                    spread_calls= [call for call in self.get_function_calls_in_line(line,variables) if call["function_name"] == "spread"]
+                res_lines.append(line)
+            elif len(spread_calls) > 1:
                 pexit("multiple spread calls",line)
             elif len(spread_calls) == 1:
-                call = spread_calls[0]
-                lhs = call["parameters"][0]
-                redundant_index = call["parameters"][1]
-                rhs_var = self.get_rhs_variable(line)
-                res_line = self.replace_func_call(line,call,lhs)
-                rhs_segment = get_variable_segments(line, [rhs_var])
-                if len(rhs_segment) == 0:
-                    rhs_segment = self.get_struct_segments_in_line(line, [rhs_var])
-                rhs_segment  = rhs_segment[0]
-                rhs_info = self.get_param_info((line[rhs_segment[1]:rhs_segment[2]],False),local_variables,self.static_variables)
-                var_name = line[rhs_segment[1]:rhs_segment[2]]
-                rhs_indexes = get_segment_indexes(rhs_segment,res_line,0)
-                dims, num_of_looped_dims = get_dims_from_indexes(rhs_indexes,rhs_segment[0])
-                if rhs_indexes == [] and len(rhs_info[3]) == 1:
-                    new_rhs = f"{var_name}"
-                    res_line = new_rhs + res_line[rhs_segment[2]:]
-                    res_lines.append(res_line)
+                call = calls[0]
                 #spreading scalar to vectors
-                elif call["parameters"][1] == "2" and call["parameters"][2] == "3":
+                if call["parameters"][1] == "2" and call["parameters"][2] == "3":
                     if "spread_index" not in local_variables:
                         local_variables["spread_index"] = {
                             "type": "integer",
@@ -7449,8 +7574,6 @@ class Parser:
                     print(rhs_info)
                     pexit(line)
             
-            else:
-                res_lines.append(line)
         return res_lines
     def elim_empty_dos(self,lines,local_variables):
         orig_line_len = len(lines)+1
@@ -8203,7 +8326,7 @@ class Parser:
         writes = self.get_writes(lines)
         self.known_values = {}
         self.try_to_deduce_if_params(lines,writes,local_variables)
-        for x in ["n__mod__cdata","n__mod__cdata"]:
+        for x in ["m__mod__cdata","n__mod__cdata"]:
           if x in self.known_values:
             del self.known_values[x]
 
@@ -10013,6 +10136,9 @@ def main():
         parser.safe_subs_to_remove.extend(["initiate_isendrcv_bdry","finalize_isendrcv_bdry"])
         parser.ignored_subroutines.extend(["initiate_isendrcv_bdry","finalize_isendrcv_bdry"])
 
+        parser.safe_subs_to_remove.extend(["update_neighbors"])
+        parser.ignored_subroutines.extend(["update_neighbors"])
+
         parser.safe_subs_to_remove.extend(["boundconds_y","boundconds_z"])
         #special not used for the moment
         parser.safe_subs_to_remove.extend(["caller0","caller1","caller2","caller3","caller4",])
@@ -10058,8 +10184,11 @@ def main():
 
         
         parser.get_allocations_in_init_func("initialize_chemistry",subs_not_to_inline)
+        parser.get_allocations_in_init_func("initialize_forcing",subs_not_to_inline)
+        parser.get_allocations_in_init_func("random_isotropic_ks_setup_test",subs_not_to_inline)
         parser.get_allocations_in_init_func("initialize_density",subs_not_to_inline)
         parser.get_allocations_in_init_func("initialize_hydro",subs_not_to_inline)
+        parser.get_allocations_in_init_func("initialize_eos",subs_not_to_inline)
 
 
         if not os.path.isfile("res-inlined.txt"):
@@ -10145,10 +10274,10 @@ def main():
                       assert(len(param_info[3]) <= 2)
                       range_len_2nd = None
                       if(len(param_info[3]) == 1):
-                          is_scalar_if = is_scalar_if or range_len == global_subdomain_range_x
+                          is_scalar_if = is_scalar_if or range_len in [global_subdomain_range_x,global_subdomain_range_x_with_halos]
                       elif(len(param_info[3]) == 2):
                           range_len_2nd = parser.evaluate_integer(param_info[3][1])
-                          is_scalar_if = is_scalar_if or (range_len == global_subdomain_range_x and range_len_2nd == "3")
+                          is_scalar_if = is_scalar_if or (range_len in [global_subdomain_range_x,global_subdomain_range_x_with_halos] and range_len_2nd == "3")
                   for seg in struct_segs:
                     param_info = parser.get_param_info((line[seg[1]:seg[2]],False),local_variables,parser.static_variables)
                     assert(len(param_info[3]) <= 2)
@@ -10157,10 +10286,10 @@ def main():
                     range_len = parser.evaluate_integer(param_info[3][0])
                     range_len_2nd = None
                     if(len(param_info[3]) == 1):
-                        is_scalar_if = is_scalar_if or range_len in [global_subdomain_range_x, global_subdomain_range_x_inner]
+                        is_scalar_if = is_scalar_if or range_len in [global_subdomain_range_x, global_subdomain_range_x_inner,global_subdomain_range_x_with_halos]
                     elif(len(param_info[3]) == 2):
                         range_len_2nd = parser.evaluate_integer(param_info[3][1])
-                        is_scalar_if = is_scalar_if or (range_len in [global_subdomain_range_x, global_subdomain_range_x_inner] and (range_len_2nd == "3"))
+                        is_scalar_if = is_scalar_if or (range_len in [global_subdomain_range_x, global_subdomain_range_x_inner,global_subdomain_range_x_with_halos] and (range_len_2nd == "3"))
                   for seg in parser.get_array_segments_in_line(line,variables):
                     param_info = parser.get_param_info((line[seg[1]:seg[2]],False),local_variables,parser.static_variables)
                     assert(len(param_info[3]) <= 2)
@@ -10270,7 +10399,9 @@ def main():
             file.write("#include \"preamble.h\"\n");
 
             res = get_formatted_lines(res)
-            for line in res:
+            for i,line in enumerate(res):
+                if subroutine_name == "rhs_cpu" and i == len(res)-1:
+                    file.write("#include \"handwritten_end.h\"\n")
                 if line.strip() in ["headtt__mod__cdata=false","lfirstpoint__mod__cdata=false","lfirstpoint__mod__cdata=true","lcommunicate=!early_finalize","dline_1__mod__cdata.z = dline_1__mod__cdata.z*AC_nphis1__mod__cdata[AC_m__mod__cdata-1]","lproc_print__mod__cdata=false","lproc_print__mod__cdata=true"]:
                     continue
                 if line != "real3 ac_transformed_pencil_":
