@@ -74,6 +74,8 @@ def inside_nx_loop(indexes):
     for i in range(len(indexes)):
         if indexes[i][1] and indexes[i][2] == "nx__mod__cparam":
             return True
+        if indexes[i][1] and indexes[i][2] == "mx__mod__cparam":
+            return True
         if indexes[i][3] == "l1__mod__cparam" and indexes[i][2] == "l2__mod__cdata":
             return True
     return False
@@ -6216,6 +6218,8 @@ class Parser:
         indexes = [self.evaluate_indexes(index) for index  in orig_indexes]
         if indexes[:-1] == ["l1__mod__cparam-radx__mod__radiation:l2__mod__cdata+radx__mod__radiation","m1__mod__cparam-rady__mod__radiation:m2__mod__cdata+rady__mod__radiation","n1__mod__cparam-radz__mod__radiation:n2__mod__cdata+radz__mod__radiation"]:
             return self.gen_f_access(i,rhs_var,segment,indexes[-1])
+        if indexes[0] in [f"i1_{j}:i2_{j}" for j in range(13)]:
+            return self.gen_f_access(i,rhs_var,segment,indexes[-1])
         if not all([okay_stencil_index(self.evaluate_indexes(x[1]),x[0]) for x in enumerate(orig_indexes[:-1])]):
             print("How how to handle stencil indexes?")
             print(line[segment[1]:segment[2]])
@@ -6707,7 +6711,10 @@ class Parser:
                                 res = f"{segment[0]}"
                         elif loop_indexes[-1][3] == "l1__mod__cparam" and loop_indexes[-1][2] == "l2__mod__cdata" and len(loop_indexes) == 1:
                             if all([loop_indexes[-1][0] not in index for index in indexes]):
-                                res = f"{segment[0]}[{indexes[0]}]"
+                                res = f"{segment[0]}[{indexes[0]}-1]"
+                        elif loop_indexes[-1][3] == "1" and loop_indexes[-1][2] == "mx__mod__cparam" and len(loop_indexes) == 1:
+                            if all([loop_indexes[-1][0] not in index for index in indexes]):
+                                res = f"{segment[0]}[{indexes[0]}-1]"
                         else:
                             print(var_dims)
                             print(indexes)
