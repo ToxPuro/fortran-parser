@@ -1122,9 +1122,7 @@ def map_hyper3x_mesh(func_call):
 def map_test_field_shear(func_call):
     return ["#include  \"test_field_shear.h\""]
 def map_shearing(func_call):
-    pexit("WHAT TO DO?\n")
-
-
+    return ["#include  \"../shear.h\""]
 
 # def map_bval_from_neumann_arr(func_call):
 #     params = func_call["parameters"]
@@ -1147,7 +1145,7 @@ sub_funcs = {
         "output_param_indexes": [0],
         "map_func": map_not_implemented
     },
-    "shrearing":
+    "shearing":
     {
         "output_param_indexes": [1],
         "map_func": map_shearing
@@ -2364,7 +2362,7 @@ def get_chosen_modules(makefile):
         for line in lines:
             if len(line.split("=")) == 2 and all([x not in line for x in ["@",">","_obj","override","flags","_src","$",".x","ld_"]]) and line[0] != "$":
                 variable = line.split("=")[0].strip()
-                value = line.split("=")[1].strip().split("/")[-1]
+                value = line.split("=")[1].strip().split("/")[-1].strip()
                 if variable not in chosen_modules:
                     chosen_modules[variable] = value
                 if variable == "density":
@@ -2479,11 +2477,11 @@ class Parser:
 	#TP: lsode_for_chemistry.f90 has only bindings to lsode
         self.ignored_files = ["nodebug.f90","/boundcond_examples/","boundcond_alt.f90", "deriv_alt.f90","diagnostics_outlog.f90", "/cuda/", "/obsolete/", "test_field_compress_z.f90","test_flow.z","/inactive/", "/astaroth/", "/pre_and_post_processing/", "/scripts/","file_io_dist.f90","timestep_subcycle.f90","lsode_for_chemistry.f90","timestep_LSODE.f90","solid_cells_ogrid.f90"]
         # self.ignored_files = ["nodebug.f90","/boundcond_examples/","deriv_alt.f90","boundcond_alt.f90", "diagnostics_outlog.f90","pscalar.f90", "/cuda/", "/obsolete/", "/inactive/", "/astaroth/", "/initial_condition/", "/pre_and_post_processing/", "/scripts/"]
-        self.ignored_files.append("magnetic_ffreeMHDrel.f90")
-        self.ignored_files.append("photoelectric_dust.f90")
         self.ignored_files.append("interstellar_old.f90")
         self.ignored_files.append("spiegel.f90")
         self.ignored_files.append("fourier_fft.f90")
+        self.ignored_files.append("rel_1d.f90")
+        self.ignored_files.append("oscillation_3D.f90")
         self.used_files = [file for file in self.used_files if not any([ignored_file in file for ignored_file in self.ignored_files])  and ".f90" in file]
         self.main_program = f"{self.directory}/run.f90"
             
@@ -5538,15 +5536,15 @@ class Parser:
             return build_new_access(segment[0],sg_indexes)
         return line[segment[1]:segment[2]]
 
-    def transform_pencils(self,lines,local_variables):
+    def transform_pencils(self,lines,local_variables,struct_name,var_name):
         profile_replacements = {}
         #assuming all profiles are written in mn loop; if not use the lower
-        for field in self.struct_table["pencil_case"]:
-          dims = self.struct_table["pencil_case"][field]["dims"]
+        for field in self.struct_table[struct_name]:
+          dims = self.struct_table[struct_name][field]["dims"]
           new_name = f"ac_transformed_pencil_{field}"
           if new_name not in local_variables:
-            local_variables[new_name] = self.struct_table["pencil_case"][field]
-          profile_replacements[f"p%{field}"] = new_name
+            local_variables[new_name] = self.struct_table[struct_name][field]
+          profile_replacements[f"{var_name}%{field}"] = new_name
 
         ##get all profiles written to; can also assume that all profiles are calced at mn loop
         # for line_index,line in enumerate(lines):
@@ -7367,7 +7365,7 @@ class Parser:
                 return f"{function_name}({','.join(param_strings)})\n"+"{\n"
             elif self.offload_type == "stencil":
                 if function_name == "rhs_cpu":
-                    return "Kernel twopass_solve_intermediate(PC_SUB_STEP_NUMBER step_num, real AC_dt__mod__cdata, real AC_t__mod__cdata){\n#include \"static_var_declares.h\"\n#include \"df_declares.h\"\n"
+                    return "Kernel twopass_solve_intermediate(PC_SUB_STEP_NUMBER step_num, real AC_dt__mod__cdata, real AC_t__mod__cdata,bool AC_lrmv__mod__cdata){\n#include \"static_var_declares.h\"\n#include \"df_declares.h\"\n"
                 else:
                     return f"Kernel {function_name}()"+"{\n"
         if is_use_line(line):
@@ -8070,6 +8068,12 @@ class Parser:
                   #if can't find target assume it is never used
                   if self.static_variables[pointer_in]["type"]  == "logical":
                       return ".false."
+                  if self.static_variables[pointer_in]["type"] == "real" and len(self.static_variables[pointer_in]["dims"]) == 1:
+                      if "ac_unused_real_array_1d" not in self.static_variables:
+                          self.static_variables["ac_unused_real_array_1d"] = self.static_variables[pointer_in]
+                          self.static_variables["ac_unused_real_array_1d"]["is_pointer"] = False
+                          self.static_variables["ac_unused_real_array_1d"]["dims"] = ["nx__mod__cdata"]
+                      return "ac_unused_real_array_1d"
                   pexit("No targets for: ",pointer_in)
 
               assert(len(possible_modules) == 1)
@@ -8105,8 +8109,8 @@ class Parser:
             if len(line) < 2 or line[:2] != "do":
                 continue
             parts = line.split(",")
-            if len(parts) == 3:
-                pexit("Do loops with offset not supported: ",line)
+            #if len(parts) == 3:
+            #    pexit("Do loops with offset not supported: ",line)
     def transform_lines(self,lines,all_inlined_lines,local_variables,transform_func):
 
         self.check_for_offset_do_loops(lines)
@@ -8346,6 +8350,7 @@ class Parser:
         file.close()
         for i,line in enumerate(lines):
             res = self.transform_line(i,lines,local_variables,loop_indexes,symbol_table,initialization_lines,orig_params, transform_func,vectors_to_replace,writes)
+            res = re.sub(r'\bac_unused_real_array_1d\b(?!\s*\()', 'ac_real_unused_scalar', res)
             lines[i] = res
             if res is None:
                 pexit("WRONG did not return anything for: ",line)
@@ -9356,7 +9361,9 @@ class Parser:
         local_variables = {parameter:v for parameter,v in self.get_variables(lines, {},self.file,True).items() }
         lines = self.transform_pointers(lines,merge_dictionaries(local_variables,self.static_variables))
         if(self.offload_type == "stencil"):
-            lines = self.transform_pencils(lines,local_variables)
+            lines = self.transform_pencils(lines,local_variables,"pencil_case","p")
+            lines = self.transform_pencils(lines,local_variables,"internalpencils","q__mod__special")
+            lines = self.transform_pencils(lines,local_variables,"internalpencils","q")
         lines = self.remove_strings(lines,local_variables)
         return lines
 
@@ -10103,7 +10110,7 @@ def main():
           parser.safe_subs_to_remove.extend(["sum_mn_name","max_mn_name","yzsum_mn_name_x","xzsum_mn_name_y","xysum_mn_name_z","zsum_mn_name_xy","ysum_mn_name_xz","phizsum_mn_name_r","phisum_mn_name_rz","integrate_mn_name","sum_lim_mn_name","save_name"])
           parser.ignored_subroutines.extend(["diagnostic_magnetic","xyaverages_magnetic","yzaverages_magnetic","xzaverages_magnetic"])
           parser.safe_subs_to_remove.extend(["diagnostic_magnetic","xyaverages_magnetic","yzaverages_magnetic","xzaverages_magnetic"])
-          for mod in ["density","magnetic","viscosity","energy","dustvelocity","dustdensity","hydro"]:
+          for mod in ["density","magnetic","viscosity","energy","dustvelocity","dustdensity","hydro","interstellar","cosmicray","gravity","chiral"]:
               parser.ignored_subroutines.append(f"calc_diagnostics_{mod}")
               parser.safe_subs_to_remove.append(f"calc_diagnostics_{mod}")
 
