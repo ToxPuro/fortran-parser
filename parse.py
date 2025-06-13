@@ -2950,9 +2950,9 @@ class Parser:
             return 
         func_info = self.get_function_info(init_func_name)
         filename = list(func_info["lines"].keys())[0]
-        #chem_lines = func_info["lines"][filename]
-        #self.inline_all_function_calls(filename,init_func_name,chem_lines,subs_not_to_inline) 
+        #self.inline_all_function_calls(filename,init_func_name,self.get_subroutine_lines(init_func_name,filename),subs_not_to_inline) 
         #inlined_func = self.func_info[init_func_name]["inlined_lines"][filename]
+        
         inlined_func = self.get_subroutine_lines(init_func_name,filename)
         local_variables = {parameter:v for parameter,v in self.get_variables(inlined_func, {},filename,True).items() }
         inlined_func = self.rename_lines_to_internal_names(inlined_func,local_variables,filename,init_func_name)
@@ -3212,7 +3212,7 @@ class Parser:
                     profile_type = "vtxbuf_bundle"
                 #TP these are always bundles but might not be allocated always
                 #TP: for now do my hand but also might look for the allocate calls
-                elif variable_name in ["diff_full__mod__chemistry","diff_full_add__mod__chemistry"]:
+                elif variable_name.lower() in ["rhs_y_full__mod__chemistry","diff_full__mod__chemistry","diff_full_add__mod__chemistry"]:
                     profile_type = "vtxbuf_bundle"
                 elif dims in [["mx","my","3"],["nx","ny","3"]]:
                     profile_type = "xy_vec"
@@ -5537,6 +5537,8 @@ class Parser:
         return line[segment[1]:segment[2]]
 
     def transform_pencils(self,lines,local_variables,struct_name,var_name):
+        if struct_name not in self.struct_table:
+            return lines
         profile_replacements = {}
         #assuming all profiles are written in mn loop; if not use the lower
         for field in self.struct_table[struct_name]:
@@ -6275,6 +6277,8 @@ class Parser:
         elif prof_type == "vtxbuf_bundle":
             if len(indexes) == 4 and indexes[:-1] == ["l1__mod__cparam:l2__mod__cdata","m__mod__cdata","n__mod__cdata"] and ":" not in indexes[3]:
                 return f"{segment[0]}[{indexes[3]}]"
+            elif len(indexes) == 4 and indexes[:-1] == ["l1__mod__cparam:l2__mod__cdata","m__mod__cdata","n__mod__cdata"] and indexes[3] == ":":
+                return f"{segment[0]}"
             pexit("WHAT TO DO?",line[segment[1]:segment[2]])
         if len(indexes) == 0 and prof_type == "glob_n_vec":
           pexit("HMM ",segment[0])
@@ -6607,7 +6611,7 @@ class Parser:
         #can't have writes to a profile
         if rhs_var is not None:
           if rhs_var in self.static_variables:
-            if(self.static_variables[rhs_var]["profile_type"]):
+            if(self.static_variables[rhs_var]["profile_type"] and self.static_variables[rhs_var]["profile_type"] not in ["vtxbuf","vtxbuf_bundle"]):
                 self.static_variables[rhs_var]["profile_type"] = None
           elif local_variables[rhs_var]["profile_type"]:
                 local_variables[rhs_var]["profile_type"] = None
@@ -6630,7 +6634,7 @@ class Parser:
                 ))
                 or (rhs_var in ["df","f"] or rhs_var in vectors_to_replace))
             ): 
-            if rhs_var in self.static_variables and rhs_var not in self.static_variables_to_declare:
+            if rhs_var in self.static_variables and rhs_var not in self.static_variables_to_declare and self.static_variables[rhs_var]["profile_type"] != "vtxbuf_bundle":
                   if rhs_var in [write["variable"] for write in writes]:
                     if rhs_var == "x__mod__cdata":
                        pexit("HMM: ",line)
@@ -6767,6 +6771,25 @@ class Parser:
                         res = segment[0]
                     elif var_dims == ["nx__mod__cparam","my__mod__cparam"] and indexes == [":",global_loop_y]:
                         res = f"{segment[0]}[vertexIdx.x][vertexIdx.y]"
+                    elif src[segment[0]]["dims"] == [global_subdomain_range_x,"2"]:
+                        indexes = [self.evaluate_indexes(index) for index in indexes]
+                        if indexes[0] == ":":
+                          if indexes[1] in [":","1:2"]:
+                            res = segment[0]
+                          elif indexes[1] not in ["1","2"]:
+                            print("what to do?")
+                            print(line)
+                            print(indexes)
+                            print(line[segment[1]:segment[2]])
+                            pexit(var_dims)
+                          elif indexes[1]  == "1":
+                            res = f"{segment[0]}.x"
+                          elif indexes[1] == "2":
+                            res = f"{segment[0]}.y"
+                        else:
+                          print("what to do?")
+                          print(indexes)
+                          pexit(line)
                     elif src[segment[0]]["dims"] == [global_subdomain_range_x,"3"]:
                         indexes = [self.evaluate_indexes(index) for index in indexes]
                         if indexes[0] == ":":
@@ -6850,6 +6873,10 @@ class Parser:
                         res = f"{segment[0]}[{indexes[0]}-1]"
                     elif len(var_dims) == 2 and len(indexes) == 2:
                         res = f"{segment[0]}[{indexes[0]}-1][{indexes[1]}-1]"
+                    elif len(var_dims) == 3 and len(indexes) == 3 and num_of_looped_dims == 1 and indexes[0] == ":" and var_dims[0] == "nx__mod__cparam":
+                        res = f"{segment[0]}[vertexIdx.x-NGHOST][{indexes[1]}-1][{indexes[2]}-1]"
+                    elif len(var_dims) == 3 and len(indexes) == 3:
+                        res = f"{segment[0]}[{indexes[0]}-1][{indexes[1]}-1][{indexes[2]}-1]"
                     elif len(var_dims) == 4 and len(indexes) == 4:
                         res = f"{segment[0]}[{indexes[0]}-1][{indexes[1]}-1][{indexes[2]}-1][{indexes[3]}-1]"
                     else:
@@ -7263,6 +7290,8 @@ class Parser:
             return "Matrix " + ", ".join(vars_to_declare) + f"[AC_{dims[-1]}]"
         if local_variables[vars_to_declare[0]]["dims"] in [[global_subdomain_range_x,"3"],["3"]]:
             return "real3 " + ", ".join(vars_to_declare)
+        if local_variables[vars_to_declare[0]]["dims"] in [[global_subdomain_range_x,"2"],["2"]]:
+            return "real2 " + ", ".join(vars_to_declare)
         if local_variables[vars_to_declare[0]]["dims"] == [global_subdomain_range_x,"3","3","3"]:
             #tensors are not yet supported
             return "Tensor " + ", ".join(vars_to_declare)
@@ -7322,9 +7351,9 @@ class Parser:
         if "select case" in line:
             select_case_var = line.split("(")[1].split(")")[0].lower()
             return f"switch({select_case_var})"+"{\n"
-        if "case" in line and "default" in line:
+        if "case" in line and "default" in line and line[:4] == "case":
             return "default:"
-        if "case" in line:
+        if "case" in line and line and line[:4] == "case":
             select_case_var = line.split("(")[1].split(")")[0]
             return f"case {select_case_var}:\n"
         if "end" in line and "do" in line:
@@ -8069,13 +8098,17 @@ class Parser:
                   if self.static_variables[pointer_in]["type"]  == "logical":
                       return ".false."
                   if self.static_variables[pointer_in]["type"] == "real" and len(self.static_variables[pointer_in]["dims"]) == 1:
-                      if "ac_unused_real_array_1d" not in self.static_variables:
-                          self.static_variables["ac_unused_real_array_1d"] = self.static_variables[pointer_in]
-                          self.static_variables["ac_unused_real_array_1d"]["is_pointer"] = False
-                          self.static_variables["ac_unused_real_array_1d"]["dims"] = ["nx__mod__cdata"]
                       return "ac_unused_real_array_1d"
+                  if self.static_variables[pointer_in]["type"] == "real" and len(self.static_variables[pointer_in]["dims"]) == 3:
+                      return "ac_unused_real_array_3d"
+                  if self.static_variables[pointer_in]["type"] == "real" and len(self.static_variables[pointer_in]["dims"]) == 4:
+                      return "ac_unused_real_array_4d"
                   pexit("No targets for: ",pointer_in)
 
+              possible_modules = [x for x in possible_modules if "particles" not in x]
+              if(len(possible_modules) > 1):
+                  print("Var: ",pointer_in)
+                  print("Possible modules ",possible_modules)
               assert(len(possible_modules) == 1)
             mod = possible_modules[0]
             return f"{pointer}__mod__{mod}"
@@ -8101,7 +8134,7 @@ class Parser:
         for line in lines:
             line = line.replace("iux__mod__cdata+1-1","iux__mod__cdata")
             line = line.replace("iux__mod__cdata+2-1","iuy__mod__cdata")
-            line = line.replace("iux__mod__cdata+3-1","iuy__mod__cdata")
+            line = line.replace("iux__mod__cdata+3-1","iuz__mod__cdata")
             res.append(line)
         return res
     def check_for_offset_do_loops(self,lines):
@@ -10201,6 +10234,8 @@ def main():
 
         
         parser.get_allocations_in_init_func("initialize_chemistry",subs_not_to_inline)
+        parser.get_allocations_in_init_func("chemkin_data",subs_not_to_inline)
+        parser.get_allocations_in_init_func("astrobiology_data",subs_not_to_inline)
         parser.get_allocations_in_init_func("initialize_forcing",subs_not_to_inline)
         parser.get_allocations_in_init_func("random_isotropic_ks_setup_test",subs_not_to_inline)
         parser.get_allocations_in_init_func("initialize_density",subs_not_to_inline)
