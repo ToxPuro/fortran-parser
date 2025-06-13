@@ -601,6 +601,20 @@ def map_cross_mn(func_call):
 def map_multm2_sym_mn(func_call):
     params = func_call["parameters"]
     return [f"{params[1]} = multm2_sym({params[0]})"]
+def map_u_dot_grad_mat(func_call):
+    params = func_call["new_param_list"]
+    names  = func_call["parameters"]
+    res = []
+    if len(params) == 5:
+        pexit("What to do?")
+    else:
+        res.append(f"if({params[5][0]}) then")
+        params = f"{names[1]},{names[2]},{names[3]}"
+        res.append(f"{names[4]} = u_dot_grad_mat_upwd({params})")
+        res.append("else")
+        res.append(f"{names[4]} = u_dot_grad_mat({params})")
+        res.append("endif")
+    return res
 def map_u_dot_grad_vec(func_call):
     params = func_call["new_param_list"]
     names  = func_call["parameters"]
@@ -1464,6 +1478,11 @@ sub_funcs = {
     {
         "output_params_indexes":  [4],
         "map_func": map_u_dot_grad_vec
+    },
+    "u_dot_grad_mat":
+    {
+        "output_params_indexes":  [4],
+        "map_func": map_u_dot_grad_mat
     },
     "u_dot_grad_scl":
     {
