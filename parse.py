@@ -4575,6 +4575,8 @@ class Parser:
             if "(" in field_name: 
                 var_dims = self.get_var_info_from_array_access(parameter,local_variables,local_module_variables)[-1]
             else:
+                if field_name not in self.struct_table[struct]:
+                    pexit(f"{field_name} not in {struct}!")
                 field = self.struct_table[struct][field_name]
                 var_dims = field["dims"]
             field_name = field_name.split("(")[0]
@@ -9652,7 +9654,7 @@ def main():
 
 
     #PENCIL SPECIFIC
-    parser.populate_pencil_case()
+    #parser.populate_pencil_case()
     lines = parser.get_lines(f"{parser.sample_dir}/src/cparam.inc")
     lines = parser.get_lines(f"{parser.sample_dir}/src/cparam.local")
     #used to load sample specific values
