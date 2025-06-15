@@ -671,7 +671,7 @@ def map_del4(func_call):
     params = func_call["parameters"]
     if len(params)>3:
         pexit("optional params not supported\n")
-    return [f"{params[2]} = del4({gen_field(params[1])}"]
+    return [f"{params[2]} = del4({gen_field(params[1])})"]
 
 def map_calc_del6_for_upwind(func_call):
     params = func_call["parameters"]
@@ -6303,7 +6303,7 @@ class Parser:
             pexit(line,loop_indexes)
         if ":" in indexes[-1]:
             lower,upper = indexes[-1].split(":")
-            if is_vector_stencil_index(indexes[-1]) or indexes[-1] == "icc__mod__cdata:icc__mod__cdata+npscalar__mod__cparam-1" or upper == f"2+{lower}" or indexes[-1] in ["ibb_sphr__mod__cdata:ibb_sphp__mod__cdata","iglobal_ax_ext__mod__cdata:iglobal_az_ext__mod__cdata","ibxt__mod__cdata:ibzt__mod__cdata","ijxt__mod__cdata:ijzt__mod__cdata"""]:
+            if is_vector_stencil_index(indexes[-1]) or indexes[-1] == "icc__mod__cdata:icc__mod__cdata+npscalar__mod__cparam-1" or upper == f"2+{lower}" or indexes[-1] in ["ibb_sphr__mod__cdata:ibb_sphp__mod__cdata","iglobal_ax_ext__mod__cdata:iglobal_az_ext__mod__cdata","iaxtest__mod__cdata:iaztest__mod__cdata","ibxt__mod__cdata:ibzt__mod__cdata","ijxt__mod__cdata:ijzt__mod__cdata"""]:
                 pass
             elif lower == "ireaci__mod__chemistry(1)" and upper == "ireaci__mod__chemistry(nchemspec__mod__cparam)":
                 pass
