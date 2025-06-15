@@ -92,11 +92,16 @@ def get_if_compatible(first_index,loop_index,loop_range):
         #TP: if loop 1,nx then offsetting with nghost gives the correct val
         if first_index == f"{loop_index}+nghost__mod__cparam":
             return True
+        if first_index == f"nghost__mod__cparam+{loop_index}":
+            return True
         #TP this is cumbersome way to write nghost + loop_index
         if first_index == f"l1__mod__cparam+{loop_index}-1":
             return True
         #TP this is also a cumbersome way to write nghost + loop_index
         if first_index == f"l1__mod__cparam-1+{loop_index}":
+            return True
+        #TP this is also a cumbersome way to write nghost + loop_index
+        if first_index == f"{loop_index}+l1__mod__cparam-1":
             return True
         if first_index == "l1__mod__cparam":
             return True
@@ -559,7 +564,9 @@ def map_dot2_mn(func_call):
     if len(params)>2:
         if params[2] == "fast_sqrt=.true.":
             return [f"{params[1]} = sqrt(dot({params[0]},{params[0]}))"]
-
+        if params[2] == "precise_sqrt=.true.":
+            return [f"{params[1]} = precise_sqrt_dot2({params[0]})"]
+        print(params)
         pexit("optional params not supported\n")
     res = [f"{params[1]} = dot({params[0]},{params[0]})"]
     var = params[0].split("(",1)[0].strip()
@@ -674,11 +681,22 @@ def map_calc_del6_for_upwind(func_call):
         return [f"{params[3]} = del6_upwd_masked({params[2]},{gen_field(params[1])}, {params[4]})"]
 
 def map_del6(func_call):
-    params = func_call["parameters"]
+    names = func_call["parameters"]
+    params = func_call["new_param_list"]
     #print("DEL6 params: ",params)
-    if len(params)>3:
-        pexit("optional params not supported\n")
-    return [f"{params[2]} = del6({gen_field(params[1])})"]
+
+    field = f"{gen_field(names[1])}"
+    if len(params) == 4:
+        res = [
+                f"if({params[3][0]}) then",
+                f"{names[2]} = del6_without_spacing({field})",
+                "else",
+                f"{names[2]} = del6({field})",
+                "endif"
+                ]
+        return res
+    else:
+        return [f"{names[2]} = del6({field})"]
 
 def map_del6_exp(func_call):
     params = func_call["parameters"]
@@ -704,6 +722,19 @@ def map_multmv(func_call):
     if len(params)>3:
         pexit("optional params not supported\n")
     return [f"{params[2]} = {params[0]}*{params[1]}"]
+def map_der_upwind(func_call):
+    params = func_call["new_param_list"]
+    names  = func_call["parameters"]
+    j = int(params[4][0])
+    if j == 1:
+        return [f"{names[3]} = derx({gen_field(names[1])},{names[2]})"]
+    elif j == 2:
+        return [f"{names[3]} = dery({gen_field(names[1])},{names[2]})"]
+    elif j == 3:
+        return [f"{names[3]} = derz({gen_field(names[1])},{names[2]})"]
+    print("j=",j)
+    pexit("don't know whic der to call")
+
 def map_der_main(func_call):
     params = func_call["new_param_list"]
     names  = func_call["parameters"]
@@ -1369,6 +1400,11 @@ sub_funcs = {
         "output_params_indexes": [2],
         "map_func": map_der_main
     },
+    "der_upwind":
+    {
+        "output_params_indexes": [3],
+        "map_func": map_der_upwind
+    },
     "smooth_mn":
     {
         "output_params_indexes": [3],
@@ -1867,7 +1903,7 @@ def okay_stencil_index(index,i):
     if i==1:
         return index in [global_loop_y]
     if i==2:
-        return index in [global_loop_z]
+        return index in ["n1__mod__cparam",global_loop_z]
 def is_vector_stencil_index(index):
     if index == ":": 
         return False
@@ -2036,7 +2072,7 @@ def get_indexes(segment,var,dim):
                 indexes.append(index.strip())
             elif index.strip() != "":
                 indexes.append(index.split("(")[-1].split(")")[0].strip())
-    return indexes
+    return [index.strip() for index in indexes]
 def is_body_line(line):
     return not "::" in line and "subroutine" not in line and not line.split(" ")[0].strip() == "use" and " function " not in line and not (len(line) >= len("function") and line[0:len("function")] == "function") and not (len(line) >= len("endfunction") and line[0:len("endfunction")] == "endfunction")
 def is_init_line(line):
@@ -2527,6 +2563,7 @@ class Parser:
         self.ignored_subroutines.append("output_pencil_vect")
         self.ignored_subroutines.append("output_pencil")
         self.safe_subs_to_remove.append("output_pencil")
+        self.safe_subs_to_remove.append("store_slices")
         self.ignored_subroutines.append("output_profile")
         self.safe_subs_to_remove.append("output_profile")
         # self.ignored_subroutines.append("loptest")
@@ -3346,7 +3383,7 @@ class Parser:
                                 module_name = search_line.split(" ")[1].strip().lower()
                                 #choose only the chosen module files
                                 file_end = filepath.split("/")[-1].split(".")[0].strip()
-                                if module_name in ["solid_cells_ogrid","solid_cells_ogrid_cdata","solid_cells_ogrid_sub","solid_cells", "special","density","energy","hydro","forcing","gravity","viscosity","poisson","neutralvelocity","neutraldensity","weno_transport","magnetic","deriv","equationofstate","pscalar","radiation","chiral","poisson","selfgravity","particles","pointmasses","shear","heatflux","detonate","chemistry","cosmicray","cosmicrayflux","opacity","fixed_point","testfield","testflow","magnetic_meanfield"] and file_end != self.chosen_modules[module_name]:
+                                if module_name in ["solid_cells_ogrid","solid_cells_ogrid_cdata","solid_cells_ogrid_sub","solid_cells", "special","density","energy","hydro","forcing","gravity","viscosity","poisson","neutralvelocity","neutraldensity","weno_transport","magnetic","deriv","equationofstate","pscalar","radiation","chiral","poisson","selfgravity","particles","pointmasses","shear","heatflux","detonate","chemistry","cosmicray","cosmicrayflux","opacity","fixed_point","testfield","testflow","magnetic_meanfield","timestep"] and file_end != self.chosen_modules[module_name]:
                                   self.not_chosen_files.append(filepath)
                                   return
                                 elif "deriv_8th" in filepath: 
@@ -4321,7 +4358,8 @@ class Parser:
                             pos_mods.append(mod)
                 if(len(pos_mods) != 1):
                     if(len(pos_mods) == 0):
-                        pexit(f"No possible modules for {parameter}")
+                        #pexit(f"No possible modules for {parameter}")
+                        dims = local_module_variables[parameter[0]]["dims"]
                     else:
                         #if self.module_vars_the_same(pos_mods,var_name): pos_mods = [pos_mods[0]]
                         #else:
@@ -4329,8 +4367,9 @@ class Parser:
                             print(pos_mods)
                             pexit("Too many possible modules")
                     
-                src_var = f"{var_name}__mod__{pos_mods[0]}"
-                dims = self.static_variables[src_var]["dims"]
+                else:
+                    src_var = f"{var_name}__mod__{pos_mods[0]}"
+                    dims = self.static_variables[src_var]["dims"]
             else:
                 dims = local_module_variables[parameter[0]]["dims"]
             return (parameter[0],parameter[1],local_module_variables[parameter[0]]["type"],dims)
@@ -4907,12 +4946,18 @@ class Parser:
                 return f"{self.directory}/{self.chosen_modules[module]}.f90"
         pexit("did not find a file for module: " + module)
     def choose_right_module(self,filepaths,call,original_file):
+        n = len(call["parameters"])
         filepaths = unique_list(filepaths)
         if len(filepaths) == 1:
             return filepaths[0]
         for i, path in enumerate(filepaths):
             for module in self.chosen_modules:
                 if path.lower() == f"{self.directory}/{self.chosen_modules[module]}.f90".lower():
+                    if "lines" in self.func_info[call["function_name"]] and path.lower() in self.func_info[call["function_name"]]["lines"]:
+                        lines = self.func_info[call["function_name"]]["lines"][path.lower()]
+                        params = self.get_parameters(lines[0])
+                        if len(params) != n:
+                            continue
                     return filepaths[i]
         if original_file in self.func_info[call["function_name"]]["lines"]:
           return original_file
@@ -5193,6 +5238,9 @@ class Parser:
               init_lines = self.replace_var_in_lines(init_lines, params[mapping[i]], passed_param)
               new_lines = self.replace_var_in_lines(new_lines, params[mapping[i]], passed_param)
             else:
+              if mapping[i] >= len(params):
+                print("LINES: ",subroutine_lines)
+                pexit("WRONG: ",filename,mapping,function_call_to_replace,params)
               init_lines = self.replace_vars_in_lines(init_lines, {params[mapping[i]] : passed_param})
               new_lines = self.replace_vars_in_lines(new_lines, {params[mapping[i]]: passed_param})
         #for line in new_lines:
@@ -6218,6 +6266,8 @@ class Parser:
                 print("LINE: ",line)
                 print("SEGMENT: ",line[segment[1]:segment[2]])
                 print("compatibility: ",compatibility)
+                print("HMM: ",f"nghost__mod__cparam+{loop_indexes[0][0]}",first_index)
+                print("HMM: ",f"nghost__mod__cparam+{loop_indexes[0][0]}" == first_index.strip())
                 pexit("WEIRD FIRST DIM: ",loop_indexes)
             if(orig_indexes[1] != "m__mod__cdata"):
                 pexit("WEIRD SECOND DIM: ",orig_indexes[1])
@@ -6261,6 +6311,10 @@ class Parser:
                 print(orig_indexes)
                 print("INDEX PAIR: ",lower,upper,upper == f"2+{lower}")
                 pexit("LINE: ",line)
+        if indexes[0] == "l1__mod__cparam:l2__mod__data" and indexes[1] == "m__mod__cdata" and indexes[2] == "n1__mod__cparam":
+            pexit("What to do?")
+            base = self.gen_f_access(i,rhs_var,segment,indexes[-1])
+            return f"{base}[vertexIdx.x][vertexidx.y][NGHOST]"
         return self.gen_f_access(i,rhs_var,segment,indexes[-1])
     def get_profile_access(self,var_dims,indexes,segment,src,line,loop_indexes,is_lhs):
         prof_type = src[segment[0]]["profile_type"]
@@ -6282,6 +6336,8 @@ class Parser:
             elif prof_type == "vtxbuf_bundle" and len(loop_indexes) == 1 and indexes[0] == f"l1__mod__cparam+{loop_indexes[0][0]}-1" and indexes[1] == "m__mod__cdata" and indexes[2] == "n__mod__cdata" and indexes[3] == "1:nchemspec__mod__cparam" and loop_indexes[0][3] == "1" and loop_indexes[0][2] == "nx__mod__cparam":
                 return f"{segment[0]}"
             elif prof_type == "z" and indexes == ["n__mod__cdata"]:
+                return f"{segment[0]}"
+            elif prof_type == "y" and indexes == ["m__mod__cdata"]:
                 return f"{segment[0]}"
             pexit("PROF ACCESS IN NX LOOP: ",line[segment[1]:segment[2]],prof_type,loop_indexes)
         if var_dims == ["my__mod__cparam"] and prof_type == "y" and indexes == ["m1__mod__cparam:m2__mod__cdata"]:
