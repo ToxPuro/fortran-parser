@@ -270,6 +270,7 @@ def simplify(equation):
 global_loop_y = "m__mod__cdata"
 global_loop_z = "n__mod__cdata"
 global_subdomain_range_x = "nx__mod__cparam"
+global_subdomain_range_x_outer = "1:mx__mod__cparam"
 global_subdomain_range_y = "ny__mod__cparam"
 global_subdomain_range_z = "nz__mod__cparam"
 global_subdomain_range_x_with_halos = "mx__mod__cparam"
@@ -1898,7 +1899,7 @@ def okay_stencil_index(index,i):
     if index == ":":
         return True
     if i == 0:
-        return index in [global_subdomain_range_x_inner]
+        return index in [global_subdomain_range_x_inner,global_subdomain_range_x_outer]
         global_subdomain_range_x_
     if i==1:
         return index in [global_loop_y]
@@ -5283,7 +5284,7 @@ class Parser:
                     print(line)
                 print("\n\n")
                 print(subroutine_name, original_subroutine_name)
-                #pexit("don't want to return\n")
+                pexit("don't want to return\n")
             #if "f_231" in line and not is_init_line(line) and "subroutine" not in line:
             #    pexit("WRONG LINE: ",line)
             #    print("wrong lines")
