@@ -2420,6 +2420,8 @@ def get_chosen_modules(makefile):
                 value = line.split("=")[1].strip().split("/")[-1].strip()
                 if variable not in chosen_modules:
                     chosen_modules[variable] = value
+                if variable == "border_profiles":
+                    chosen_modules["borderprofiles"] = f"{value}"
                 if variable == "density":
                     chosen_modules["density_methods"] = f"{value}_methods"
                 if variable == "eos":
@@ -3382,8 +3384,8 @@ class Parser:
                                 in_static_variables_declaration = True
                                 module_name = search_line.split(" ")[1].strip().lower()
                                 #choose only the chosen module files
-                                file_end = filepath.split("/")[-1].split(".")[0].strip()
-                                if module_name in ["solid_cells_ogrid","solid_cells_ogrid_cdata","solid_cells_ogrid_sub","solid_cells", "special","density","energy","hydro","forcing","gravity","viscosity","poisson","neutralvelocity","neutraldensity","weno_transport","magnetic","deriv","equationofstate","pscalar","radiation","chiral","poisson","selfgravity","particles","pointmasses","shear","heatflux","detonate","chemistry","cosmicray","cosmicrayflux","opacity","fixed_point","testfield","testflow","magnetic_meanfield","timestep"] and file_end != self.chosen_modules[module_name]:
+                                file_end = filepath.split("/")[-1].split(".")[0].strip().lower()
+                                if module_name in ["solid_cells_ogrid","solid_cells_ogrid_cdata","solid_cells_ogrid_sub","solid_cells","borderprofiles","special","density","energy","hydro","forcing","gravity","viscosity","poisson","neutralvelocity","neutraldensity","weno_transport","magnetic","deriv","equationofstate","pscalar","radiation","chiral","poisson","selfgravity","particles","pointmasses","shear","heatflux","detonate","chemistry","cosmicray","cosmicrayflux","opacity","fixed_point","testfield","testflow","magnetic_meanfield","timestep"] and file_end != self.chosen_modules[module_name]:
                                   self.not_chosen_files.append(filepath)
                                   return
                                 elif "deriv_8th" in filepath: 
@@ -4961,7 +4963,8 @@ class Parser:
                     return filepaths[i]
         if original_file in self.func_info[call["function_name"]]["lines"]:
           return original_file
-        pexit("did not found module in files",filepaths)
+        func_name = call["function_name"]
+        pexit(f"did not found module for {func_name} in files",filepaths)
         
     def parse_subroutine_all_files(self, sub_call, call_trace, check_functions, offload,local_variables,file_called_from, layer_depth=math.inf, parameter_list=[], only_static=True):
         subroutine_name = sub_call["function_name"]
