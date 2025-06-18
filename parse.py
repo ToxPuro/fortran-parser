@@ -7657,7 +7657,7 @@ class Parser:
             elif len(spread_calls) > 1:
                 pexit("multiple spread calls",line)
             elif len(spread_calls) == 1:
-                call = calls[0]
+                call = spread_calls[0]
                 #spreading scalar to vectors
                 if call["parameters"][1] == "2" and call["parameters"][2] == "3":
                     if "spread_index" not in local_variables:
@@ -10513,7 +10513,7 @@ def main():
             assert(len(func_calls) == 1)
             #make one kernel for top and one for bot
             res_lines = parser.transform_lines(new_lines,new_lines,local_variables,transform_func)
-            res_lines = [remove_mod(line) for line in res_lines]
+            #res_lines = [remove_mod(line) for line in res_lines]
             res_lines = get_formatted_lines(res_lines)
             file = open(output_filename,"w")
             for line in res_lines:
