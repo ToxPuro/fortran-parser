@@ -4345,11 +4345,11 @@ class Parser:
             pexit("INCORRECT PARAM",parameter)
         if parameter[0][0] == "(" and parameter[0][-1] == ")":
             return self.get_param_info_recursive((parameter[0][1:-1],parameter[1]),local_variables,local_module_variables)
+        if parameter[0] in local_variables:
+            return (parameter[0],parameter[1],local_variables[parameter[0]]["type"],local_variables[parameter[0]]["dims"])
         #is scientific number
         if ("e" in parameter[0] or parameter[0][0] == '.') and parameter[0].replace(".","").replace("-","").replace("e","").replace("+","").isnumeric():
             return (parameter[0],False,"real",[])
-        if parameter[0] in local_variables:
-            return (parameter[0],parameter[1],local_variables[parameter[0]]["type"],local_variables[parameter[0]]["dims"])
         if parameter[0] in local_module_variables:
             if(local_module_variables[parameter[0]]["is_pointer"]):
                 var_name = remove_mod(parameter[0])
@@ -6234,7 +6234,7 @@ class Parser:
             vtxbuf_name = self.get_vtxbuf_name_from_index("F_", index)
             #if "VEC" in vtxbuf_name:
             #  vtxbuf_name = vtxbuf_name.replace("VEC",vtxbuf_name[-4])
-            if i > 0 or rhs_var is None:
+            if i > 0 or rhs_var is None or rhs_var != "f":
               base = index.split("(")[0].strip()
               if index in self.static_variables and len(self.static_variables[index]["dims"]) == 1:
                 return f"{vtxbuf_name}"
@@ -6273,9 +6273,9 @@ class Parser:
                 print("HMM: ",f"nghost__mod__cparam+{loop_indexes[0][0]}",first_index)
                 print("HMM: ",f"nghost__mod__cparam+{loop_indexes[0][0]}" == first_index.strip())
                 pexit("WEIRD FIRST DIM: ",loop_indexes)
-            if(orig_indexes[1] != "m__mod__cdata"):
+            if(orig_indexes[1] not in ["m__mod__cdata","nghost__mod__cparam+iky"]):
                 pexit("WEIRD SECOND DIM: ",orig_indexes[1])
-            if(orig_indexes[2] != "n__mod__cdata"):
+            if(orig_indexes[2] not in ["n__mod__cdata","nghost__mod__cparam+ikz"]):
                 pexit("WEIRD THIRD DIM: ",orig_indexes[2])
             if ":" in orig_indexes[3]:
                 parts = [x.split("(")[0].strip() for x in orig_indexes[3].split(":")]
@@ -6701,6 +6701,7 @@ class Parser:
             ((rhs_var in local_variables and
                 (
                     (num_of_looped_dims == 0 and len(rhs_dim) == 0)
+                    or (num_of_looped_dims == 1 and len(rhs_dim) == 1 and rhs_dim[0].isnumeric())
                     or (num_of_looped_dims == 1 and len(rhs_dim) == 1 and rhs_dim[0] in bundle_dims)
                     or (num_of_looped_dims == 3 and rhs_dim[1] in bundle_dims and rhs_dim[2] in bundle_dims and rhs_dim[0] == global_subdomain_range_x)
                     or (num_of_looped_dims == 1 and rhs_dim == ["3"])
@@ -6721,6 +6722,7 @@ class Parser:
                        pexit("HMM: ",line)
                     self.static_variables_to_declare.append(rhs_var)
             for i in range(len(array_segments_indexes)):
+                res = None
                 segment = array_segments_indexes[i]
                 if segment[0] in local_variables:
                     src = local_variables
@@ -6792,6 +6794,23 @@ class Parser:
                                 res = f"{segment[0]}[0][{indexes[1]}-1]"
                             elif len(var_dims) == 1 and len(indexes) == 0 and var_dims[0] in bundle_dims:
                                 res = f"{segment[0]}"
+                            elif len(var_dims) == 1 and len(indexes) == 0:
+                                res = f"{segment[0]}"
+                            elif len(var_dims) == 1 and len(indexes) == 1:
+                                res = f"{segment[0]}[indexes{[0]}-1]"
+                            elif len(var_dims) == 2 and len(indexes) == 2:
+                                res = f"{segment[0]}[{indexes[0]}-1][{indexes[1]}-1]"
+                            elif len(var_dims) == 3 and indexes == ["ikx","iky","ikz"]:
+                                res = f"{segment[0]}"
+                            elif len(var_dims) == 4 and len(indexes) == 4 and indexes[:3] == ["ikx","iky","ikz"]:
+                                res = f"{segment[0]}[{indexes[3]}-1]"
+                            elif len(var_dims) == 5 and len(indexes) == 5 and indexes[:3] == ["ikx","iky","ikz"]:
+                                res = f"{segment[0]}[{indexes[3]}-1][{indexes[4]}-1]"
+                            elif len(var_dims) == 3 and len(indexes) == 3:
+                                res = f"{segment[0]}[{indexes[0]}-1][{indexes[1]}-1][{indexes[2]}-1]"
+                            else:
+                                print(indexes)
+                                pexit("What to do?",line[segment[1]:segment[2]])
                         elif loop_indexes[-1][3] == "l1__mod__cparam" and loop_indexes[-1][2] == "l2__mod__cdata" and len(loop_indexes) == 1:
                             if all([loop_indexes[-1][0] not in index for index in indexes]):
                                 res = f"{segment[0]}[{indexes[0]}-1]"
@@ -6972,6 +6991,19 @@ class Parser:
                         print(src[segment[0]])
                         print(indexes)
                         pexit(line)
+                if(res == None):
+                        print("what to do?")
+                        print(line[segment[1]:segment[2]])
+                        print(segment[0])
+                        print("is static: ",segment[0] in self.static_variables)
+                        print("is local: ",segment[0] in local_variables)
+                        print("var dims",var_dims)
+                        print("num of looped dims",num_of_looped_dims)
+                        print("indexes",indexes)
+                        print(src[segment[0]])
+                        print(indexes)
+                        pexit(line)
+
                 res_line += line[last_index:segment[1]] + res
                 last_index = segment[2]
             # res_line += line[last_index:] + ";"
@@ -7358,11 +7390,12 @@ class Parser:
         if len(vars_to_declare) == 0  or local_variables[vars_to_declare[0]]["type"] != "real":
             return ""
         dims = local_variables[vars_to_declare[0]]["dims"]
-        if local_variables[vars_to_declare[0]]["dims"] in [["2"]]:
-            res = ""
-            for var in vars_to_declare:
-                res = res + "real " + var + "[2]\n"
-            return res
+        for dim in ["2","6"]:
+            if local_variables[vars_to_declare[0]]["dims"] in [[dim]]:
+                res = ""
+                for var in vars_to_declare:
+                    res = res + "real " + var + "[2]\n"
+                return res
         if local_variables[vars_to_declare[0]]["dims"] in [[],[global_subdomain_range_x],[global_subdomain_range_x_with_halos]]:
             return "real " + ", ".join(vars_to_declare)
         if local_variables[vars_to_declare[0]]["dims"] == [global_subdomain_range_x,"3","3"]:
@@ -7443,7 +7476,7 @@ class Parser:
             loop_index = loop_indexes.pop()
             is_global_index = loop_index[1]
             if(is_global_index): return ""
-            if(loop_index[0] in ["l__mod__cdata","m__mod__cdata","n__mod__cdata"]): return ""
+            if(loop_index[0] in ["l__mod__cdata","m__mod__cdata","n__mod__cdata","ikx","iky","ikz"]): return ""
             return "}\n"
         if line.strip() == "cycle":
             return "continue"
@@ -7497,6 +7530,8 @@ class Parser:
                 #to convert to C loops
                 #return f"for(int {loop_index} = {lower};{loop_index}<={upper};{loop_index}++)" +"{"
                 #to convert to DSL loops
+                if loop_index in ["ikx","iky","ikz"] and lower == "1" and upper in ["nx__mod__cparam","ny__mod__cparam","nz__mod__cparam"]:
+                    return ""
                 return f"for {loop_index} in {lower}:{upper}+1 " + "{"
         if "endif" in line:
             return "}"
@@ -10224,7 +10259,7 @@ def main():
           parser.safe_subs_to_remove.extend(["sum_mn_name","max_mn_name","yzsum_mn_name_x","xzsum_mn_name_y","xysum_mn_name_z","zsum_mn_name_xy","ysum_mn_name_xz","phizsum_mn_name_r","phisum_mn_name_rz","integrate_mn_name","sum_lim_mn_name","save_name"])
           parser.ignored_subroutines.extend(["diagnostic_magnetic","xyaverages_magnetic","yzaverages_magnetic","xzaverages_magnetic"])
           parser.safe_subs_to_remove.extend(["diagnostic_magnetic","xyaverages_magnetic","yzaverages_magnetic","xzaverages_magnetic"])
-          for mod in ["density","magnetic","viscosity","energy","dustvelocity","dustdensity","hydro","interstellar","cosmicray","gravity","chiral"]:
+          for mod in ["density","magnetic","viscosity","energy","dustvelocity","dustdensity","hydro","interstellar","cosmicray","gravity","chiral","selfgravity"]:
               parser.ignored_subroutines.append(f"calc_diagnostics_{mod}")
               parser.safe_subs_to_remove.append(f"calc_diagnostics_{mod}")
 
