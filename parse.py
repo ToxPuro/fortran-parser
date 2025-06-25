@@ -3386,6 +3386,8 @@ class Parser:
                                 module_name = search_line.split(" ")[1].strip().lower()
                                 #choose only the chosen module files
                                 file_end = filepath.split("/")[-1].split(".")[0].strip().lower()
+                                if "waves" in filepath and module_name == "special":
+                                    print("HI: ",file_end)
                                 if module_name in ["solid_cells_ogrid","solid_cells_ogrid_cdata","solid_cells_ogrid_sub","solid_cells","borderprofiles","special","density","energy","hydro","forcing","gravity","viscosity","poisson","neutralvelocity","neutraldensity","weno_transport","magnetic","deriv","equationofstate","pscalar","radiation","chiral","poisson","selfgravity","particles","pointmasses","shear","heatflux","detonate","chemistry","cosmicray","cosmicrayflux","opacity","fixed_point","testfield","testflow","magnetic_meanfield","timestep"] and file_end != self.chosen_modules[module_name]:
                                   self.not_chosen_files.append(filepath)
                                   return
@@ -4955,7 +4957,7 @@ class Parser:
             return filepaths[0]
         for i, path in enumerate(filepaths):
             for module in self.chosen_modules:
-                if path.lower() == f"{self.directory}/{self.chosen_modules[module]}.f90".lower():
+                if path.lower() in [f"{self.directory}/{self.chosen_modules[module]}.f90".lower(),f"{self.directory}/special/{self.chosen_modules[module]}.f90".lower()] :
                     if "lines" in self.func_info[call["function_name"]] and path.lower() in self.func_info[call["function_name"]]["lines"]:
                         lines = self.func_info[call["function_name"]]["lines"][path.lower()]
                         params = self.get_parameters(lines[0])
@@ -6220,6 +6222,13 @@ class Parser:
         if(index == "iaa__mod__cdata-1+2"): index = "iay__mod__cdata"
         if(index == "iaa__mod__cdata-1+3"): index = "iaz__mod__cdata"
 
+        if(index == "istress_ij__mod__cdata+1-1"): index = "istress_0"
+        if(index == "istress_ij__mod__cdata+2-1"): index = "istress_1"
+        if(index == "istress_ij__mod__cdata+3-1"): index = "istress_2"
+        if(index == "istress_ij__mod__cdata+4-1"): index = "istress_3"
+        if(index == "istress_ij__mod__cdata+5-1"): index = "istress_4"
+        if(index == "istress_ij__mod__cdata+6-1"): index = "istress_5"
+
         if segment[0] == "df":
             vtxbuf_name = self.get_vtxbuf_name_from_index("DF_", index)
             #if vtxbuf_name == "DF_UX":
@@ -6712,6 +6721,7 @@ class Parser:
                     or (num_of_looped_dims == 3 and rhs_dim[:-1] == [global_subdomain_range_x,"3"] and rhs_dim[-1] in bundle_dims)
                     or (num_of_looped_dims == 3 and rhs_dim in [[global_subdomain_range_x,"3","3"]])
                     or (num_of_looped_dims == 3 and rhs_dim in [[global_subdomain_range_x_with_halos,global_subdomain_range_y_with_halos,global_subdomain_range_z_with_halos]])
+                    or (num_of_looped_dims == 3 and rhs_dim in [[global_subdomain_range_x,global_subdomain_range_y,global_subdomain_range_z]])
                     or (num_of_looped_dims == 4 and rhs_dim in [[global_subdomain_range_x,"3","3","3"]])
                 ))
                 or (rhs_var in ["df","f"] or rhs_var in vectors_to_replace))
@@ -6797,7 +6807,7 @@ class Parser:
                             elif len(var_dims) == 1 and len(indexes) == 0:
                                 res = f"{segment[0]}"
                             elif len(var_dims) == 1 and len(indexes) == 1:
-                                res = f"{segment[0]}[indexes{[0]}-1]"
+                                res = f"{segment[0]}[{indexes[0]}-1]"
                             elif len(var_dims) == 2 and len(indexes) == 2:
                                 res = f"{segment[0]}[{indexes[0]}-1][{indexes[1]}-1]"
                             elif len(var_dims) == 3 and indexes == ["ikx","iky","ikz"]:
@@ -6911,6 +6921,10 @@ class Parser:
                           print("what to do?")
                           print(indexes)
                           pexit(line)
+                    elif segment[0] in local_variables and len(var_dims) == 2 and var_dims[0] == "nx__mod__cparam" and var_dims[1].isnumeric() and len(indexes) == 2 and indexes[0] == ":" and indexes[1] == ":":
+                        res = f"{segment[0]}"
+                    elif segment[0] in local_variables and len(var_dims) == 2 and var_dims[0] == "nx__mod__cparam" and var_dims[1].isnumeric() and len(indexes) == 2 and indexes[0] == ":":
+                        res = f"{segment[0]}[{indexes[1]}-1]"
                     #AcMatrix
                     elif src[segment[0]]["dims"] == ["3","3"]:
                       res = self.get_ac_matrix_res(segment,indexes)
@@ -7371,6 +7385,7 @@ class Parser:
         for var in vars_in_line:
             if var.strip() in local_variables and var.strip() not in orig_params:
                 vars_to_declare.append(var)
+        if len(vars_to_declare) == 0: return ""
         if len(vars_to_declare) == 1:
           var = vars_to_declare[0]
           if local_variables[var]["parameter"] and "value" in local_variables[var]:
@@ -7383,21 +7398,32 @@ class Parser:
               return f"const {var} = {value}"
             print(line)
             pexit("HMM var",var)
+        dims = local_variables[vars_to_declare[0]]["dims"]
         if len(vars_to_declare) == 1 and local_variables[vars_to_declare[0]]["type"] == "logical":
             return f"bool {vars_to_declare[0]}"
         if len(vars_to_declare) == 1 and local_variables[vars_to_declare[0]]["type"] == "integer":
             return f"int {vars_to_declare[0]}"
-        if len(vars_to_declare) == 0  or local_variables[vars_to_declare[0]]["type"] != "real":
+        if len(vars_to_declare) == 1 and local_variables[vars_to_declare[0]]["type"] == "real" and len(dims) == 0:
+            writes = self.get_writes_from_line(line)
+            if(len(writes) == 1 and writes[0]["variable"] == vars_to_declare[0]):
+                value = writes[0]["value"]
+                return f"real {vars_to_declare[0]} = {value}"
+            else:
+                return f"real {vars_to_declare[0]}"
+        if local_variables[vars_to_declare[0]]["dims"] in [[],[global_subdomain_range_x],[global_subdomain_range_x_with_halos]]:
+            var_type = local_variables[vars_to_declare[0]]["type"]
+            res = ""
+            for var in vars_to_declare:
+                res = res + f"{var_type} {var}\n"
+            return res
+        if local_variables[vars_to_declare[0]]["type"] != "real":
             return ""
-        dims = local_variables[vars_to_declare[0]]["dims"]
         for dim in ["2","6"]:
-            if local_variables[vars_to_declare[0]]["dims"] in [[dim]]:
+            if local_variables[vars_to_declare[0]]["dims"] in [[dim],["nx__mod__cparam",dim]]:
                 res = ""
                 for var in vars_to_declare:
-                    res = res + "real " + var + "[2]\n"
+                    res = res + "real " + var + f"[{dim}]\n"
                 return res
-        if local_variables[vars_to_declare[0]]["dims"] in [[],[global_subdomain_range_x],[global_subdomain_range_x_with_halos]]:
-            return "real " + ", ".join(vars_to_declare)
         if local_variables[vars_to_declare[0]]["dims"] == [global_subdomain_range_x,"3","3"]:
             return "Matrix " + ", ".join(vars_to_declare)
         if dims[:-1] == [global_subdomain_range_x,"3","3"] and dims[-1] in bundle_dims and len(vars_to_declare) == 1:
@@ -7890,20 +7916,20 @@ class Parser:
             print(x, static_var in self.rename_dict[x])
             print(x, static_var in self.rename_dict[x])
         exit()
-    def transform_get_shared_variable_line(self,line,local_variables,lines):
+    def transform_get_shared_variable_line(self,local_variables,lines):
         variables = merge_dictionaries(local_variables,self.static_variables)
-        func_calls = self.get_function_calls_in_line(line,variables)
-        if len(func_calls) == 1 and func_calls[0]["function_name"] == "get_shared_variable":
-              
-            shared_variable = func_calls[0]["parameters"][1].replace("'","").replace('"',"'")
-            rhs = self.get_pointer_target(shared_variable)
-            lhs = f"{func_calls[0]['parameters'][1]}"
-            #if the name is already the instead of assignment change the reference to the src globally
-            if(lhs == remove_mod(rhs)):
-                lines = self.replace_var_in_lines(lines,lhs,rhs)
-                return ""
-            return f"{lhs} = {rhs}"
-        return line
+        calls =  self.get_function_calls(lines,local_variables,False)
+        for call in [call for call in calls if call["function_name"] == "get_shared_variable"]:
+            old = call["parameters"][1]
+            new = self.get_pointer_target(old)
+            map = {old: new}
+            tmp = []
+            print("HMM: ",map)
+            for line in lines:
+                line = self.replace_variables_multi(line,map)
+                tmp.append(line)
+            lines = tmp
+        return lines
 
 
     def replace_interfaced_calls(self,lines,variables):
@@ -8500,6 +8526,7 @@ class Parser:
         for i,line in enumerate(lines):
             res = self.transform_line(i,lines,local_variables,loop_indexes,symbol_table,initialization_lines,orig_params, transform_func,vectors_to_replace,writes)
             res = re.sub(r'\bac_unused_real_array_1d\b(?!\s*\()', 'ac_real_unused_scalar', res)
+            res = re.sub(r'\(/\s*([^,]+?)\s*,\s*([^,]+?)\s*,\s*([^/]+?)\s*/\)', r'real3(\1, \2, \3)',res)
             lines[i] = res
             if res is None:
                 pexit("WRONG did not return anything for: ",line)
@@ -10259,7 +10286,7 @@ def main():
           parser.safe_subs_to_remove.extend(["sum_mn_name","max_mn_name","yzsum_mn_name_x","xzsum_mn_name_y","xysum_mn_name_z","zsum_mn_name_xy","ysum_mn_name_xz","phizsum_mn_name_r","phisum_mn_name_rz","integrate_mn_name","sum_lim_mn_name","save_name"])
           parser.ignored_subroutines.extend(["diagnostic_magnetic","xyaverages_magnetic","yzaverages_magnetic","xzaverages_magnetic"])
           parser.safe_subs_to_remove.extend(["diagnostic_magnetic","xyaverages_magnetic","yzaverages_magnetic","xzaverages_magnetic"])
-          for mod in ["density","magnetic","viscosity","energy","dustvelocity","dustdensity","hydro","interstellar","cosmicray","gravity","chiral","selfgravity"]:
+          for mod in ["density","magnetic","viscosity","energy","dustvelocity","dustdensity","hydro","interstellar","cosmicray","gravity","chiral","selfgravity","chemistry"]:
               parser.ignored_subroutines.append(f"calc_diagnostics_{mod}")
               parser.safe_subs_to_remove.append(f"calc_diagnostics_{mod}")
 
@@ -10291,6 +10318,9 @@ def main():
 
         parser.ignored_subroutines.extend(["fatal_error","not_implemented","fatal_error_local","error","inevitably_fatal_error"])
         parser.safe_subs_to_remove.extend(["fatal_error","not_implemented","fatal_error_local","error","inevitably_fatal_error"])
+
+        parser.ignored_subroutines.extend(["read_scl_factor_etc"])
+        parser.safe_subs_to_remove.extend(["read_scl_factor_etc"])
 
         parser.ignored_subroutines.extend(["vecout","vecout_finalize","vecout_initialize"])
         parser.safe_subs_to_remove.extend(["vecout","vecout_finalize","vecout_initialize"])
@@ -10382,8 +10412,7 @@ def main():
         #exit(0)
         local_variables = {parameter:v for parameter,v in parser.get_variables(new_lines, {},filename,True).items() }
         variables = merge_dictionaries(local_variables,parser.static_variables)
-        for line_index, _ in enumerate(new_lines):
-            new_lines[line_index] = parser.transform_get_shared_variable_line(new_lines[line_index],local_variables,new_lines)
+        new_lines = parser.transform_get_shared_variable_line(local_variables,new_lines)
 
         new_lines = parser.elim_empty_branches(new_lines,local_variables)
         new_lines = parser.eliminate_while(new_lines)
