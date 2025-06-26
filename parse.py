@@ -8527,6 +8527,8 @@ class Parser:
                 pexit("Wrong: ",lines[i])
             res = re.sub(r'\bac_unused_real_array_1d\b(?!\s*\()', 'ac_real_unused_scalar', res)
             res = re.sub(r'\(/\s*([^,]+?)\s*,\s*([^,]+?)\s*,\s*([^/]+?)\s*/\)', r'real3(\1, \2, \3)',res)
+            res = re.sub(r'dt1_max_loc_\d+','dt1_max_loc',res)
+                
             lines[i] = res
             if res is None:
                 pexit("WRONG did not return anything for: ",line)
