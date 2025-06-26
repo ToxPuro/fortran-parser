@@ -2501,6 +2501,7 @@ class Parser:
             # "ltime_integrals__mod__cdata":".false.",
         }
         self.safe_subs_to_remove = ["print","not_implemented","output","fatal_error","keep_compiler_quiet","warning"]
+        self.safe_subs_to_ignore=  ["print","not_implemented","output","fatal_error","keep_compiler_quiet","warning"]
         self.func_info = {}
         self.file_info = {}
         self.module_info = {}
@@ -6206,21 +6207,15 @@ class Parser:
         if(index == "7+iguij__mod__cdata"): index = "igu32__mod__cdata"
         if(index == "8+iguij__mod__cdata"): index = "igu33__mod__cdata"
 
-        if(index == "iux__mod__cdata-1+1"): index = "iux__mod__cdata"
-        if(index == "iux__mod__cdata-1+2"): index = "iuy__mod__cdata"
-        if(index == "iux__mod__cdata-1+3"): index = "iuz__mod__cdata"
-
-        if(index == "iuu__mod__cdata-1+1"): index = "iux__mod__cdata"
-        if(index == "iuu__mod__cdata-1+2"): index = "iuy__mod__cdata"
-        if(index == "iuu__mod__cdata-1+3"): index = "iuz__mod__cdata"
-
-        if(index == "iuu__mod__cdata-1+1"): index = "iux__mod__cdata"
-        if(index == "iuu__mod__cdata-1+2"): index = "iuy__mod__cdata"
-        if(index == "iuu__mod__cdata-1+3"): index = "iuz__mod__cdata"
-
-        if(index == "iaa__mod__cdata-1+1"): index = "iax__mod__cdata"
-        if(index == "iaa__mod__cdata-1+2"): index = "iay__mod__cdata"
-        if(index == "iaa__mod__cdata-1+3"): index = "iaz__mod__cdata"
+        for var in [("aa","a"),("uu","u"),("uun","un")]:
+            vec = var[0]
+            scalar = var[1]
+            if (index == f"i{vec}__mod__cdata-1+1"): index = f"i{scalar}x__mod__cdata"
+            if (index == f"i{vec}__mod__cdata-1+2"): index = f"i{scalar}y__mod__cdata"
+            if (index == f"i{vec}__mod__cdata-1+3"): index = f"i{scalar}z__mod__cdata"
+            if (index == f"i{scalar}x__mod__cdata-1+1"): index = f"i{scalar}x__mod__cdata"
+            if (index == f"i{scalar}x__mod__cdata-1+2"): index = f"i{scalar}y__mod__cdata"
+            if (index == f"i{scalar}x__mod__cdata-1+3"): index = f"i{scalar}z__mod__cdata"
 
         if(index == "istress_ij__mod__cdata+1-1"): index = "istress_0"
         if(index == "istress_ij__mod__cdata+2-1"): index = "istress_1"
@@ -7399,6 +7394,7 @@ class Parser:
             print(line)
             pexit("HMM var",var)
         dims = local_variables[vars_to_declare[0]]["dims"]
+        if local_variables[vars_to_declare[0]]["type"] in ["pencil_case","character"]: return ""
         if len(vars_to_declare) == 1 and local_variables[vars_to_declare[0]]["type"] == "logical":
             return f"bool {vars_to_declare[0]}"
         if len(vars_to_declare) == 1 and local_variables[vars_to_declare[0]]["type"] == "integer":
@@ -8525,6 +8521,8 @@ class Parser:
         file.close()
         for i,line in enumerate(lines):
             res = self.transform_line(i,lines,local_variables,loop_indexes,symbol_table,initialization_lines,orig_params, transform_func,vectors_to_replace,writes)
+            if res is None:
+                pexit("Wrong: ",lines[i])
             res = re.sub(r'\bac_unused_real_array_1d\b(?!\s*\()', 'ac_real_unused_scalar', res)
             res = re.sub(r'\(/\s*([^,]+?)\s*,\s*([^,]+?)\s*,\s*([^/]+?)\s*/\)', r'real3(\1, \2, \3)',res)
             lines[i] = res
