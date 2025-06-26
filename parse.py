@@ -2550,7 +2550,7 @@ class Parser:
         self.used_files = [file for file in self.used_files if not (self.file_info[file]["is_program_file"]) and file not in self.not_chosen_files]
         self.used_files.append(self.main_program)
         ##Intrinsic functions
-        self.ignored_subroutines = ["epsilon","alog10","count", "min1", "erf","aimag", "cmplx","len", "inquire", "floor", "matmul","ceiling", "achar", "adjustl", "index", "iabs","tiny","dble","float","nullify","associated","nint","open","close","random_seed","modulo","nearest","xor","ishft","iand","ieor","ior","random_number","all","any","deallocate","cshift","allocated","allocate","case","real","int","complex","character","if","elseif","where","while","elsewhere","forall", "dot_product", "abs", "alog", "mod", "size",  "sqrt", "sum","isnan", "exp", "spread", "present", "trim", "sign","min","max","sin","cos","log","log10","tan","tanh","cosh","sinh","asin","acos","atan","atan2","write","read","char","merge","scan","precision","flush", "adjustr","transpose","repeat"]
+        self.ignored_subroutines = ["epsilon","alog10","count", "min1", "erf","aimag", "cmplx","len", "inquire", "floor", "matmul","ceiling", "achar", "adjustl", "index", "iabs","tiny","dble","float","nullify","associated","nint","open","close","random_seed","modulo","nearest","xor","ishft","iand","ieor","ior","random_number","all","any","deallocate","cshift","allocated","allocate","case","real","int","complex","character","if","elseif","where","while","elsewhere","forall", "dot_product", "abs", "alog", "mod", "size",  "sqrt", "sum","isnan", "exp", "spread", "present", "itoa","trim", "sign","min","max","sin","cos","log","log10","tan","tanh","cosh","sinh","asin","acos","atan","atan2","write","read","char","merge","scan","precision","flush", "adjustr","transpose","repeat"]
         ##Ask Matthias about these
         self.ignored_subroutines.extend(["DCONST","fatal_error", "terminal_highlight_fatal_error","warning","caller","caller2", "coeffsx","coeffsy","coeffsz","r1i","sth1i","yh_","not_implemented","die","deri_3d","u_dot_grad_mat"])
         self.ignored_subroutines.extend(farray_register_funcs)
@@ -7292,6 +7292,8 @@ class Parser:
                     if len(parts) == 2:
                         lower = parts[0]
                         upper = parts[1]
+                        if upper in self.static_variables and self.static_variables[upper]["parameter"] and self.static_variables[upper]["value"]:
+                            upper = self.static_variables[upper]["value"]
                         # print("DO LINE",line)
                         # print("PARTS:",lower,upper)
 
