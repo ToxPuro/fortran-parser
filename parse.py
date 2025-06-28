@@ -2594,7 +2594,7 @@ class Parser:
         return self.replace_segments(segments,line,self.map_val_func,{},{"map_val": [new_vars[line[x[1]:x[2]]] for x in segments]})
 
 
-    def get_vtxbuf_name_from_index(self,prefix, index):
+    def get_vtxbuf_name_from_index_base(self,prefix, index):
         index_map = {
                 "imi__mod__cdata": "DUST_ICE_MASS",
                 "imd__mod__cdata": "DUST_MASS",
@@ -2655,6 +2655,11 @@ class Parser:
     
             return f"{prefix}{(base[1:]).upper()}VEC.{vec_index}"
         return f"{prefix}{index[1:].upper()}"
+    def get_vtxbuf_name_from_index(self,prefix, index):
+        res = self.get_vtxbuf_name_from_index_base(prefix,index)
+        if "+" in res:
+            pexit("WRONG: ",f"{index} ---> {res}")
+        return res
 
     def map_to_new_index(self,index,i,local_variables,line,possible_values=[],make_sure_indexes_safe=False):
         if ":" in index:
@@ -6207,15 +6212,27 @@ class Parser:
         if(index == "7+iguij__mod__cdata"): index = "igu32__mod__cdata"
         if(index == "8+iguij__mod__cdata"): index = "igu33__mod__cdata"
 
-        for var in [("aa","a"),("uu","u"),("uun","un")]:
+        for var in [("aa","a"),("uu","u"),("uun","un"),("vv","v")]:
             vec = var[0]
             scalar = var[1]
+
             if (index == f"i{vec}__mod__cdata-1+1"): index = f"i{scalar}x__mod__cdata"
             if (index == f"i{vec}__mod__cdata-1+2"): index = f"i{scalar}y__mod__cdata"
             if (index == f"i{vec}__mod__cdata-1+3"): index = f"i{scalar}z__mod__cdata"
+
+            if (index == f"0+i{vec}__mod__cdata"): index = f"i{scalar}x__mod__cdata"
+            if (index == f"1+i{vec}__mod__cdata"): index = f"i{scalar}y__mod__cdata"
+            if (index == f"2+i{vec}__mod__cdata"): index = f"i{scalar}z__mod__cdata"
+
             if (index == f"i{scalar}x__mod__cdata-1+1"): index = f"i{scalar}x__mod__cdata"
             if (index == f"i{scalar}x__mod__cdata-1+2"): index = f"i{scalar}y__mod__cdata"
             if (index == f"i{scalar}x__mod__cdata-1+3"): index = f"i{scalar}z__mod__cdata"
+
+        for pair in [("tij","hydro")]:
+            var,mod = pair
+            for i in range(6):
+                if (index == f"i{var}__mod__{mod}+{i}"): index = f"i{var}_{i}"
+                if (index == f"{i}+i{var}__mod__{mod}"): index = f"i{var}_{i}"
 
         if(index == "istress_ij__mod__cdata+1-1"): index = "istress_0"
         if(index == "istress_ij__mod__cdata+2-1"): index = "istress_1"
@@ -6238,7 +6255,7 @@ class Parser:
             vtxbuf_name = self.get_vtxbuf_name_from_index("F_", index)
             #if "VEC" in vtxbuf_name:
             #  vtxbuf_name = vtxbuf_name.replace("VEC",vtxbuf_name[-4])
-            if i > 0 or rhs_var is None or rhs_var != "f":
+            if (rhs_var is None or rhs_var not in ["df","f"]) and i > 0:
               base = index.split("(")[0].strip()
               if index in self.static_variables and len(self.static_variables[index]["dims"]) == 1:
                 return f"{vtxbuf_name}"
@@ -6895,9 +6912,11 @@ class Parser:
                           print("what to do?")
                           print(indexes)
                           pexit(line)
-                    elif src[segment[0]]["dims"] == [global_subdomain_range_x,"3"]:
+                    elif src[segment[0]]["dims"] in [[global_subdomain_range_x,"3"],[global_subdomain_range_x_with_halos,"3"]]:
                         indexes = [self.evaluate_indexes(index) for index in indexes]
-                        if indexes[0] == ":":
+                        if len(indexes) == 0:
+                            res = segment[0]
+                        elif indexes[0] == ":":
                           if indexes[1] in [":","1:3"]:
                             res = segment[0]
                           elif indexes[1] not in ["1","2","3"]:
