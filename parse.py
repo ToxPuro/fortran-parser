@@ -6230,9 +6230,9 @@ class Parser:
 
         for pair in [("tij","hydro")]:
             var,mod = pair
-            for i in range(6):
-                if (index == f"i{var}__mod__{mod}+{i}"): index = f"i{var}_{i}"
-                if (index == f"{i}+i{var}__mod__{mod}"): index = f"i{var}_{i}"
+            for j in range(6):
+                if (index == f"i{var}__mod__{mod}+{j}"): index = f"i{var}_{j}"
+                if (index == f"{j}+i{var}__mod__{mod}"): index = f"i{var}_{j}"
 
         if(index == "istress_ij__mod__cdata+1-1"): index = "istress_0"
         if(index == "istress_ij__mod__cdata+2-1"): index = "istress_1"
@@ -6255,7 +6255,7 @@ class Parser:
             vtxbuf_name = self.get_vtxbuf_name_from_index("F_", index)
             #if "VEC" in vtxbuf_name:
             #  vtxbuf_name = vtxbuf_name.replace("VEC",vtxbuf_name[-4])
-            if (rhs_var is None or rhs_var not in ["df","f"]) and i > 0:
+            if (rhs_var is None or rhs_var not in ["df","f"]) or i > 0:
               base = index.split("(")[0].strip()
               if index in self.static_variables and len(self.static_variables[index]["dims"]) == 1:
                 return f"{vtxbuf_name}"
@@ -6274,6 +6274,7 @@ class Parser:
               return f"D{vtxbuf_name}"
 
     def get_f_array_access(self,line,segment,local_variables,i,rhs_var,loop_indexes,writes):
+
         in_global_loop = get_if_in_global_loop(loop_indexes)
         src = merge_dictionaries(local_variables,self.static_variables)
         if in_global_loop:
@@ -7428,7 +7429,7 @@ class Parser:
             else:
                 return f"real {vars_to_declare[0]}"
         if local_variables[vars_to_declare[0]]["dims"] in [[],[global_subdomain_range_x],[global_subdomain_range_x_with_halos]]:
-            var_type = local_variables[vars_to_declare[0]]["type"]
+            var_type = translate_to_DSL(local_variables[vars_to_declare[0]]["type"])
             res = ""
             for var in vars_to_declare:
                 res = res + f"{var_type} {var}\n"
