@@ -9,6 +9,7 @@ import cProfile
 import ctypes
 ##import my-ast
 
+assumed_boundary = None
 def format_lines(lines):
     tab = '  '
     n_tabs = 0
@@ -72,17 +73,35 @@ def get_if_in_global_loop(indexes):
     return False
 def inside_nx_loop(indexes):
     for i in range(len(indexes)):
-        if indexes[i][1] and indexes[i][2] == "nx__mod__cparam":
-            return True
-        if indexes[i][1] and indexes[i][2] == "mx__mod__cparam":
-            return True
+        for dim in ["x","y","z"]:
+            if indexes[i][1] and indexes[i][2] == f"n{dim}__mod__cparam":
+                return True
+            if indexes[i][1] and indexes[i][2] == f"m{dim}__mod__cparam":
+                return True
+            if indexes[i][1] and indexes[i][2] == f"n{dim}__mod__cparam+2*3":
+                return True
         if indexes[i][3] == "l1__mod__cparam" and indexes[i][2] == "l2__mod__cdata":
             return True
     return False
 def get_nx_loop_index(indexes):
     for i in range(len(indexes)):
-        if indexes[i][1] and indexes[i][2] == "nx__mod__cparam":
-            return indexes[i][0]
+        for dim in ["x","y","z"]:
+            if indexes[i][1] and indexes[i][2] == f"n{dim}__mod__cparam":
+                return indexes[i][0]
+            if indexes[i][1] and indexes[i][2] == f"m{dim}__mod__cparam":
+                return indexes[i][0]
+            if indexes[i][1] and indexes[i][2] == f"n{dim}__mod__cparam+2*3":
+                return indexes[i][0]
+    return ""
+def get_nx_loop_index_upper(indexes):
+    for i in range(len(indexes)):
+        for dim in ["x","y","z"]:
+            if indexes[i][1] and indexes[i][2] == f"n{dim}__mod__cparam":
+                return indexes[i][2]
+            if indexes[i][1] and indexes[i][2] == f"m{dim}__mod__cparam":
+                return indexes[i][2]
+            if indexes[i][1] and indexes[i][2] == f"n{dim}__mod__cparam+2*3":
+                return indexes[i][2]
     return ""
 def get_if_compatible(first_index,loop_index,loop_range):
         if(first_index == loop_index):
@@ -104,6 +123,8 @@ def get_if_compatible(first_index,loop_index,loop_range):
         if first_index == f"{loop_index}+l1__mod__cparam-1":
             return True
         if first_index == "l1__mod__cparam":
+            return True
+        if first_index == f"l1__mod__cparam+({loop_index}-1)":
             return True
         return False 
 class ASTNode:
@@ -280,7 +301,7 @@ nghost_val = "3"
 global_subdomain_range_with_halos_x = f"{global_subdomain_range_x}+2*{nghost_val}"
 global_subdomain_range_with_halos_y = f"{global_subdomain_range_y}+2*{nghost_val}"
 global_subdomain_range_with_halos_z = f"{global_subdomain_range_z}+2*{nghost_val}"
-global_subdomain_ranges = [global_subdomain_range_x,global_subdomain_range_with_halos_x,global_subdomain_range_with_halos_y,global_subdomain_range_with_halos_z, global_subdomain_range_x_with_halos]
+global_subdomain_ranges = [global_subdomain_range_x,global_subdomain_range_with_halos_x,global_subdomain_range_y,global_subdomain_range_with_halos_y,global_subdomain_range_z,global_subdomain_range_with_halos_z, global_subdomain_range_x_with_halos]
 global_subdomain_range_x_upper = "l2__mod__cdata"
 global_subdomain_range_x_lower= "l1__mod__cparam"
 global_subdomain_range_x_inner = f"{global_subdomain_range_x_lower}:{global_subdomain_range_x_upper}"
@@ -2654,11 +2675,10 @@ class Parser:
                 pexit("WHAT TO DO? ",base,index)
     
             return f"{prefix}{(base[1:]).upper()}VEC.{vec_index}"
+        if len(index) == 1: return index
         return f"{prefix}{index[1:].upper()}"
     def get_vtxbuf_name_from_index(self,prefix, index):
         res = self.get_vtxbuf_name_from_index_base(prefix,index)
-        if "+" in res:
-            pexit("WRONG: ",f"{index} ---> {res}")
         return res
 
     def map_to_new_index(self,index,i,local_variables,line,possible_values=[],make_sure_indexes_safe=False):
@@ -6243,6 +6263,8 @@ class Parser:
 
         if segment[0] == "df":
             vtxbuf_name = self.get_vtxbuf_name_from_index("DF_", index)
+            if "+" in vtxbuf_name:
+                pexit("WRONG: ",f"{index} ---> {res}")
             #if vtxbuf_name == "DF_UX":
             #    pexit("WRONG: ",index)
             if "VEC" in vtxbuf_name:
@@ -6271,6 +6293,8 @@ class Parser:
             else:
               #write to f variable, presumably this is because auxiliary variables
               #reuse DF_variable for now
+              if "+" in vtxbuf_name:
+                  pexit("WRONG: ",f"{index} ---> {res}")
               return f"D{vtxbuf_name}"
 
     def get_f_array_access(self,line,segment,local_variables,i,rhs_var,loop_indexes,writes):
@@ -6456,6 +6480,7 @@ class Parser:
             mod_key = mod
             if mod == "cdata":
                 mod_key = "run_module"
+            if mod == "run_module": continue
             res[mod] = [[],0]
             for file in self.module_info[mod_key]["files"]:
                 if file in self.func_info["pushpars2c"]["files"]:
@@ -6470,6 +6495,24 @@ class Parser:
                                 index = func_call["parameters"][1].split("(")[-1].split(")")[0].strip()
                                 res[mod][1] = max(res[mod][1],int(index))
         return res
+
+    def gen_macros(self):
+        already_pushed_pars = self.get_already_pushed_pars();
+        all_pushed_vars = []
+        for mod in already_pushed_pars:
+            for var in already_pushed_pars[mod][0]:
+                if "pretend" in var: print("HMM: ",var,mod)
+                all_pushed_vars.append(var)
+        from collections import Counter
+        counts = Counter(all_pushed_vars)
+        file = open("macros.h","w")
+        for mod in already_pushed_pars:
+            for var in already_pushed_pars[mod][0]:
+                if counts[var] == 1:
+                    file.write(f"#define AC_{var} AC_{var}__mod__{mod}\n")
+                    file.write(f"#define {var} AC_{var}__mod__{mod}\n")
+                elif "pretend" in var: print("HMM: ",var,counts[var])
+        file.close()
 
     def gen_pushpars(self):
         already_pushed_pars = self.get_already_pushed_pars();
@@ -7112,13 +7155,14 @@ class Parser:
                 res.append(index)
         return res
     def transform_line_boundcond_DSL(self,line,num_of_looped_dims, local_variables, rhs_var,vectors_to_replace, writes,loop_indexes):
+        global assumed_boundary
         variables = merge_dictionaries(self.static_variables, local_variables)
         array_segments_indexes = self.get_array_segments_in_line(line,variables)
         last_index = 0
         res_line = ""
-        assumed_boundary = None
-        if (num_of_looped_dims==0 or num_of_looped_dims==2 or num_of_looped_dims is None) and (rhs_var in local_variables or rhs_var == "f" or rhs_var is None): 
+        if (num_of_looped_dims==0 or num_of_looped_dims == 1 or num_of_looped_dims==2 or num_of_looped_dims is None) and (rhs_var in local_variables or rhs_var == "f" or rhs_var is None): 
             for i in range(len(array_segments_indexes)):
+                res = None
                 segment = array_segments_indexes[i]
                 var = segment[0]
                 if var in local_variables:
@@ -7140,33 +7184,59 @@ class Parser:
                 if(num_of_looped_dims == 2 and indexes in [[":",":"],[global_subdomain_range_x_inner,":"]]):
                     res = segment[0]
                 if var == "f":
+                    vtxbuf_name = self.get_vtxbuf_name_from_index("",indexes[3])
                     if((assumed_boundary is None or assumed_boundary == "z") and len(indexes) == 4 and indexes[:2] in [[":",":"], [global_subdomain_range_x_inner,":"]]):
                         f_index = f"[vertexIdx.x][vertexIdx.y][{indexes[2]}-1]"
-                        vtxbuf_name = self.get_vtxbuf_name_from_index("",indexes[3])
                         res = f"{vtxbuf_name}{f_index}"
                         assumed_boundary = "z"
                     elif((assumed_boundary is None or assumed_boundary == "y") and len(indexes) == 4 and indexes[0] in [":",global_subdomain_range_x_inner] and indexes[2] == ":"):
                         f_index = f"[vertexIdx.x][{indexes[1]}-1][vertexIdx.z]"
-                        vtxbuf_name = self.get_vtxbuf_name_from_index("",indexes[3])
                         res = f"{vtxbuf_name}{f_index}"
                         assumed_boundary = "y"
                     elif((assumed_boundary is None or assumed_boundary == "x") and len(indexes) == 4 and indexes[1] == ":" and indexes[2] == ":"):
                         f_index = f"[{indexes[0]}-1][vertexIdx.y][vertexIdx.z]"
-                        vtxbuf_name = self.get_vtxbuf_name_from_index("",indexes[3])
                         res = f"{vtxbuf_name}{f_index}"
                         assumed_boundary = "x"
                     elif((assumed_boundary is None or assumed_boundary == "z") and len(indexes) == 4 and len(loop_indexes) >= 2 and all([x[1] == True for x in loop_indexes[:2]])):
                         f_index = f"[vertexIdx.x][vertexIdx.y][{indexes[2]}-1]"
-                        vtxbuf_name = self.get_vtxbuf_name_from_index("",indexes[3])
                         res = f"{vtxbuf_name}{f_index}"
                         assumed_boundary = "z"
                     elif (all(":" not in x for x in indexes)):
                         f_index = f"[{indexes[0]}-1][{indexes[1]}-1][{indexes[2]}-1]"
-                        vtxbuf_name = self.get_vtxbuf_name_from_index("",indexes[3])
                         res = f"{vtxbuf_name}{f_index}"
+                    elif inside_nx_loop(loop_indexes):
+                        nx_index = get_nx_loop_index(loop_indexes)
+                        if((assumed_boundary in ["x","z"] or assumed_boundary is None) and nx_index == indexes[1]):
+                            if ":" not in indexes[0] and indexes[2] == ":":
+                                res = f"{vtxbuf_name}[{indexes[0]}-1][vertexIdx.y][vertexIdx.z]"
+                            else:
+                                pexit("Y loop: ",line)
+                        elif((assumed_boundary in ["y","z"] or assumed_boundary is None) and nx_index == indexes[0]):
+                            if ":" not in indexes[1] and indexes[2] == ":":
+                                res = f"{vtxbuf_name}[vertexIdx.x][{indexes[0]}-1][vertexIdx.z]"
+                            else:
+                                pexit("X loop: ",line)
+                        else:
+                            pexit("What to do? ",line,nx_index)
+                    else:
+                        pexit("What to do with f?",line,loop_indexes)
+                elif inside_nx_loop(loop_indexes):
+                    nx_index = get_nx_loop_index(loop_indexes)
+                    upper = get_nx_loop_index_upper(loop_indexes)
+                    if len(src[var]["dims"]) == 1: 
+                        if indexes[0] == nx_index and upper == "ny__mod__cparam+2*3":
+                            res = f"{var}[vertexIdx.y]"
+                        elif indexes[0] == nx_index and upper == "nx__mod__cparam+2*3":
+                            res = f"{var}[vertexIdx.x]"
+                        elif nx_index not in indexes[0]:
+                            if(len(indexes) == 1 and indexes != [":"] and len(src[var]["dims"]) == 1):
+                                ##-1 since from 1 to 0-based indexing
+                                res = f"{var}[{indexes[0]}-1]"
                 elif(len(indexes) == 1 and indexes != [":"] and len(src[var]["dims"]) == 1):
                     ##-1 since from 1 to 0-based indexing
                     res = f"{var}[{indexes[0]}-1]"
+                elif indexes == [":"] and src[var]["dims"] in [["nx__mod__cparam+2*3"],["mx__mod__cparam"]]:
+                    res = f"{var}[vertexIdx.x]"
                 #comes from spread statement
                 elif(len(indexes) == 2 and num_of_looped_dims == 2 and indexes[0] == ":" and ":" not in indexes[1]):
                     if segment[0] in local_variables:
@@ -7193,15 +7263,21 @@ class Parser:
                     elif (assumed_boundary == "z" or assumed_boundary is None) and var_dims == ["mx__mod__cparam","my__mod__cparam"]:
                         assumed_boundary = "z"
                         res = segment[0]
+                    elif assumed_boundary == "x" and indexes == [":",":"]:
+                        res = segment[0]
                     else:
-                        pexit("WHAT TO DO 2D looped? ",line[segment[1]:segment[2]],var_dims,assumed_boundary)
+                        pexit("WHAT TO DO 2D looped? ",line[segment[1]:segment[2]],var_dims,assumed_boundary,line)
                 elif len(var_dims) == 2 and len(indexes) == 2:
                     res = f"{segment[0]}[{indexes[0]}-1][{indexes[1]}-1]"
                 else:
                     print(loop_indexes)
                     print("Assumed boundary: ",assumed_boundary, assumed_boundary is None)
+                    print(src[var])
+                    print(indexes)
                     print(line[segment[1]:segment[2]])
                     pexit("What to do",segment)
+                if res is None:
+                    pexit("What to do? ",line)
                 res_line = res_line + line[last_index:segment[1]]
                 res_line = res_line + res 
                 last_index = segment[2]
@@ -7538,7 +7614,7 @@ class Parser:
                 type = local_variables[param]["type"]
                 print(type)
                 if param == "j":
-                    param_strings.append(f"VtxBuffer j")
+                    param_strings.append(f"Field j")
                 elif param == "topbot":
                     param_strings.append(f"AC_TOP_BOT topbot")
                 elif param != "f":
@@ -8257,6 +8333,8 @@ class Parser:
                   #if can't find target assume it is never used
                   if self.static_variables[pointer_in]["type"]  == "logical":
                       return ".false."
+                  if self.static_variables[pointer_in]["type"] == "real" and len(self.static_variables[pointer_in]["dims"]) == 0:
+                      return "ac_unused_real"
                   if self.static_variables[pointer_in]["type"] == "real" and len(self.static_variables[pointer_in]["dims"]) == 1:
                       return "ac_unused_real_array_1d"
                   if self.static_variables[pointer_in]["type"] == "real" and len(self.static_variables[pointer_in]["dims"]) == 3:
@@ -8265,7 +8343,7 @@ class Parser:
                       return "ac_unused_real_array_4d"
                   pexit("No targets for: ",pointer_in)
 
-              possible_modules = [x for x in possible_modules if "particles" not in x]
+              possible_modules = [x for x in possible_modules if "particles" not in x and "initialcondition" not in x]
               if(len(possible_modules) > 1):
                   print("Var: ",pointer_in)
                   print("Possible modules ",possible_modules)
@@ -10308,7 +10386,7 @@ def main():
           parser.safe_subs_to_remove.extend(["sum_mn_name","max_mn_name","yzsum_mn_name_x","xzsum_mn_name_y","xysum_mn_name_z","zsum_mn_name_xy","ysum_mn_name_xz","phizsum_mn_name_r","phisum_mn_name_rz","integrate_mn_name","sum_lim_mn_name","save_name"])
           parser.ignored_subroutines.extend(["diagnostic_magnetic","xyaverages_magnetic","yzaverages_magnetic","xzaverages_magnetic"])
           parser.safe_subs_to_remove.extend(["diagnostic_magnetic","xyaverages_magnetic","yzaverages_magnetic","xzaverages_magnetic"])
-          for mod in ["density","magnetic","viscosity","energy","dustvelocity","dustdensity","hydro","interstellar","cosmicray","gravity","chiral","selfgravity","chemistry"]:
+          for mod in ["density","magnetic","viscosity","energy","dustvelocity","dustdensity","hydro","interstellar","cosmicray","gravity","chiral","selfgravity","chemistry","special"]:
               parser.ignored_subroutines.append(f"calc_diagnostics_{mod}")
               parser.safe_subs_to_remove.append(f"calc_diagnostics_{mod}")
 
@@ -10409,7 +10487,7 @@ def main():
         parser.get_allocations_in_init_func("initialize_density",subs_not_to_inline)
         parser.get_allocations_in_init_func("initialize_hydro",subs_not_to_inline)
         parser.get_allocations_in_init_func("initialize_eos",subs_not_to_inline)
-        parser.get_allocations_in_init_func("initialize_radiation",subs_not_to_inline)
+        parser.get_allocations_in_init_func("initialize_chemistry",subs_not_to_inline)
 
 
         if not os.path.isfile("res-inlined.txt"):
@@ -10636,6 +10714,7 @@ def main():
         ##TP this is slow for some reason but can cache it to an include file
         var_declares_file = open("var_declares.h","w")
         cparam_file       = open("cparam.h","w")
+        parser.gen_macros()
         parser.gen_var_declares(var_declares_file,cparam_file)
         var_declares_file.close()
         cparam_file.close()
