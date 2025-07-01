@@ -7051,6 +7051,8 @@ class Parser:
                         res = f"{segment[0]}[{indexes[0]}-1][{indexes[1]}-1][{indexes[2]}-1]"
                     elif len(var_dims) == 4 and len(indexes) == 4:
                         res = f"{segment[0]}[{indexes[0]}-1][{indexes[1]}-1][{indexes[2]}-1][{indexes[3]}-1]"
+                    elif var_dims == ["max_n__mod__cparam"] and indexes == []:
+                        res = f"{segment[0]}[vertexIdx.x-NGHOST]"
                     else:
                         print("what to do?")
                         print(line[segment[1]:segment[2]])
@@ -10500,6 +10502,8 @@ def main():
         parser.get_allocations_in_init_func("initialize_hydro",subs_not_to_inline)
         parser.get_allocations_in_init_func("initialize_eos",subs_not_to_inline)
         parser.get_allocations_in_init_func("initialize_chemistry",subs_not_to_inline)
+        parser.get_allocations_in_init_func("initialize_energy",subs_not_to_inline)
+        parser.get_allocations_in_init_func("chit_profile",subs_not_to_inline)
 
 
         if not os.path.isfile("res-inlined.txt"):
