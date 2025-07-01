@@ -7170,14 +7170,14 @@ class Parser:
                 else:
                     src = self.static_variables
                 var_dims = src[segment[0]]["dims"]
-                for i in range(len(var_dims)):
-                    dim = var_dims[i]
+                for j in range(len(var_dims)):
+                    dim = var_dims[j]
                     if dim in ["nx__mod__cparam+2*3"]:
-                        var_dims[i] = "mx__mod__cparam"
+                        var_dims[j] = "mx__mod__cparam"
                     elif dim in ["ny__mod__cparam+2*3"]:
-                        var_dims[i] = "my__mod__cparam"
+                        var_dims[j] = "my__mod__cparam"
                     elif dim in ["nz__mod__cparam+2*3"]:
-                        var_dims[i] = "mz__mod__cparam"
+                        var_dims[j] = "mz__mod__cparam"
                 indexes = [self.evaluate_indexes(index) for index in get_segment_indexes(segment,line, len(src[var]["dims"]))]
                 #print(num_of_looped_dims)
                 #print(indexes)
@@ -7213,7 +7213,7 @@ class Parser:
                                 pexit("Y loop: ",line)
                         elif((assumed_boundary in ["y","z"] or assumed_boundary is None) and nx_index == indexes[0]):
                             if ":" not in indexes[1] and indexes[2] == ":":
-                                res = f"{vtxbuf_name}[vertexIdx.x][{indexes[0]}-1][vertexIdx.z]"
+                                res = f"{vtxbuf_name}[vertexIdx.x][{indexes[1]}-1][vertexIdx.z]"
                             else:
                                 pexit("X loop: ",line)
                         else:
@@ -7225,9 +7225,15 @@ class Parser:
                     upper = get_nx_loop_index_upper(loop_indexes)
                     if len(src[var]["dims"]) == 1: 
                         if indexes[0] == nx_index and upper == "ny__mod__cparam+2*3":
-                            res = f"{var}[vertexIdx.y]"
+                            if var in local_variables:
+                                res = f"{var}"
+                            else:
+                                res = f"{var}[vertexIdx.y]"
                         elif indexes[0] == nx_index and upper == "nx__mod__cparam+2*3":
-                            res = f"{var}[vertexIdx.x]"
+                            if var in local_variables:
+                                res = f"{var}"
+                            else:
+                                res = f"{var}[vertexIdx.x]"
                         elif nx_index not in indexes[0]:
                             if(len(indexes) == 1 and indexes != [":"] and len(src[var]["dims"]) == 1):
                                 ##-1 since from 1 to 0-based indexing
@@ -7236,7 +7242,11 @@ class Parser:
                     ##-1 since from 1 to 0-based indexing
                     res = f"{var}[{indexes[0]}-1]"
                 elif indexes == [":"] and src[var]["dims"] in [["nx__mod__cparam+2*3"],["mx__mod__cparam"]]:
-                    res = f"{var}[vertexIdx.x]"
+                    print("HI: ",i,var, var in self.static_variables,indexes)
+                    if i == 0:
+                        res = f"{var}"
+                    else:
+                        res = f"{var}[vertexIdx.x]"
                 #comes from spread statement
                 elif(len(indexes) == 2 and num_of_looped_dims == 2 and indexes[0] == ":" and ":" not in indexes[1]):
                     if segment[0] in local_variables:
@@ -8018,10 +8028,12 @@ class Parser:
             new = self.get_pointer_target(old)
             map = {old: new}
             tmp = []
-            print("HMM: ",map)
             for line in lines:
                 line = self.replace_variables_multi(line,map)
-                tmp.append(line)
+                if is_init_line(line) and new in line:
+                    pass
+                else:
+                    tmp.append(line)
             lines = tmp
         return lines
 
