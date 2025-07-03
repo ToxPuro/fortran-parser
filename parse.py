@@ -661,8 +661,8 @@ def map_u_dot_grad_vec(func_call):
         print("\n\n")
         print([x[0] for x in params])
         pexit("optional params not supported\n")
-    #main_line = f"{names[4]} = u_dot_grad({gen_field3(names[1])},{names[2]},{names[3]})"
-    main_line = f"{names[4]} = {names[2]}*{names[3]}"
+    main_line = f"{names[4]} = u_dot_grad({gen_field3(names[1])},{names[2]},{names[3]})"
+    #main_line = f"{names[4]} = {names[2]}*{names[3]}"
     res.append(main_line)
     if len(add_line) > 0:
         res.append(add_line)
@@ -3042,6 +3042,7 @@ class Parser:
         local_variables = {parameter:v for parameter,v in self.get_variables(inlined_func, {},filename,True).items() }
         inlined_func = self.rename_lines_to_internal_names(inlined_func,local_variables,filename,init_func_name)
 
+        local_variables = {parameter:v for parameter,v in self.get_variables(inlined_func, {},filename,True).items() }
         for line in inlined_func:
             func_calls = self.get_function_calls_in_line(line,local_variables)
             for call in func_calls:
@@ -7835,7 +7836,7 @@ class Parser:
                        #print("RES: ",res_line)
                        res_lines.append(res_line)
                     ##TP: hack
-                    elif len(param_info[3]) == 1 and rhs_var == "f" and param_info[3][0] == "mx__mod__cparam" and call["parameters"][2] == "my__mod__cparam":
+                    elif len(param_info[3]) == 1 and rhs_var == "f" and param_info[3][0] in ["nx__mod__cparam","mx__mod__cparam"] and call["parameters"][2] == "my__mod__cparam":
                        #print("SAFE TO REMOVE SPREAD")
                        res_line = self.replace_func_call(line,call,call["parameters"][0])
                        #print("RES: ",res_line)
@@ -10504,6 +10505,8 @@ def main():
         parser.get_allocations_in_init_func("initialize_chemistry",subs_not_to_inline)
         parser.get_allocations_in_init_func("initialize_energy",subs_not_to_inline)
         parser.get_allocations_in_init_func("chit_profile",subs_not_to_inline)
+        parser.get_allocations_in_init_func("chit_profile_fluct",subs_not_to_inline)
+        parser.get_allocations_in_init_func("read_hcond",subs_not_to_inline)
 
 
         if not os.path.isfile("res-inlined.txt"):
