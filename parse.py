@@ -1254,10 +1254,10 @@ sub_funcs = {
         "map_func": map_spline_integral
     },
 
-    "u_dot_grad_alt":
+    "u_dot_grad_scl_alt":
     {
       "output_params_indexes": [],
-      "map_func": map_u_dot_grad_alt
+      "map_func": map_u_dot_grad_scl_alt
     },
     "u_grad_kurganov_tadmore":
     {
