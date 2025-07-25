@@ -83,16 +83,22 @@ def inside_nx_loop(indexes):
         if indexes[i][3] == "l1__mod__cparam" and indexes[i][2] == "l2__mod__cdata":
             return True
     return False
-def get_nx_loop_index(indexes):
+def get_nx_loop_indexes(indexes):
+    res = []
     for i in range(len(indexes)):
         for dim in ["x","y","z"]:
             if indexes[i][1] and indexes[i][2] == f"n{dim}__mod__cparam":
-                return indexes[i][0]
+                res.append(indexes[i][0])
             if indexes[i][1] and indexes[i][2] == f"m{dim}__mod__cparam":
-                return indexes[i][0]
+                res.append(indexes[i][0])
             if indexes[i][1] and indexes[i][2] == f"n{dim}__mod__cparam+2*3":
-                return indexes[i][0]
-    return ""
+                res.append(indexes[i][0])
+    return res
+
+def get_nx_loop_index(indexes):
+    res = get_nx_loop_indexes(indexes)
+    if len(res) == 0: return ""
+    return res[0]
 def get_nx_loop_index_upper(indexes):
     for i in range(len(indexes)):
         for dim in ["x","y","z"]:
@@ -1175,7 +1181,7 @@ def map_u_grad_kurganov_tadmore(func_call):
 def map_u_dot_grad_scl_alt(func_call):
     params = func_call["parameters"]
     if len(params) == 6:
-        return [f"{params[4]} = u_dot_grad_scl_alt({params[1]},{params[2]},{params[3]},{params[5]})"]
+        return [f"{params[4]} = u_dot_grad_alt(Field({params[1]}),{params[2]},{params[3]},{params[5]})"]
     pexit("WHAT TO DO?\n", params)
 def map_spline_derivative(func_call):
     line = func_call["line"]
@@ -1248,10 +1254,10 @@ sub_funcs = {
         "map_func": map_spline_integral
     },
 
-    "u_dot_grad_scl_alt":
+    "u_dot_grad_alt":
     {
       "output_params_indexes": [],
-      "map_func": map_u_dot_grad_scl_alt
+      "map_func": map_u_dot_grad_alt
     },
     "u_grad_kurganov_tadmore":
     {
@@ -6233,6 +6239,13 @@ class Parser:
         if(index == "7+iguij__mod__cdata"): index = "igu32__mod__cdata"
         if(index == "8+iguij__mod__cdata"): index = "igu33__mod__cdata"
 
+        for arr in ["iud"]:
+            for k in range(10):
+                if index == f"{arr}x__mod__cdata{k}-1+1": 
+                    index = f"{arr}x__mod__cdata({k})"
+                    print("HI after: ",index)
+                if index == f"{arr}x__mod__cdata{k}-1+2": index = f"{arr}y__mod__cdata({k})"
+                if index == f"{arr}x__mod__cdata{k}-1+3": index = f"{arr}z__mod__cdata({k})"
         for var in [("aa","a"),("uu","u"),("uun","un"),("vv","v")]:
             vec = var[0]
             scalar = var[1]
@@ -6240,6 +6253,10 @@ class Parser:
             if (index == f"i{vec}__mod__cdata-1+1"): index = f"i{scalar}x__mod__cdata"
             if (index == f"i{vec}__mod__cdata-1+2"): index = f"i{scalar}y__mod__cdata"
             if (index == f"i{vec}__mod__cdata-1+3"): index = f"i{scalar}z__mod__cdata"
+            
+            if (index == f"i{vec}__mod__cdata+1-1"): index = f"i{scalar}x__mod__cdata"
+            if (index == f"i{vec}__mod__cdata+2-1"): index = f"i{scalar}y__mod__cdata"
+            if (index == f"i{vec}__mod__cdata+3-1"): index = f"i{scalar}z__mod__cdata"
 
             if (index == f"0+i{vec}__mod__cdata"): index = f"i{scalar}x__mod__cdata"
             if (index == f"1+i{vec}__mod__cdata"): index = f"i{scalar}y__mod__cdata"
@@ -6248,6 +6265,10 @@ class Parser:
             if (index == f"i{scalar}x__mod__cdata-1+1"): index = f"i{scalar}x__mod__cdata"
             if (index == f"i{scalar}x__mod__cdata-1+2"): index = f"i{scalar}y__mod__cdata"
             if (index == f"i{scalar}x__mod__cdata-1+3"): index = f"i{scalar}z__mod__cdata"
+
+            if (index == f"i{scalar}x__mod__cdata+1-1"): index = f"i{scalar}x__mod__cdata"
+            if (index == f"i{scalar}x__mod__cdata+2-1"): index = f"i{scalar}y__mod__cdata"
+            if (index == f"i{scalar}x__mod__cdata+3-1"): index = f"i{scalar}z__mod__cdata"
 
         for pair in [("tij","hydro")]:
             var,mod = pair
@@ -6264,8 +6285,8 @@ class Parser:
 
         if segment[0] == "df":
             vtxbuf_name = self.get_vtxbuf_name_from_index("DF_", index)
-            if "+" in vtxbuf_name:
-                pexit("WRONG: ",f"{index} ---> {res}")
+            #if "+" in vtxbuf_name:
+            #    pexit("WRONG: ",f"{index} ---> {vtxbuf_name}")
             #if vtxbuf_name == "DF_UX":
             #    pexit("WRONG: ",index)
             if "VEC" in vtxbuf_name:
@@ -6276,6 +6297,8 @@ class Parser:
         elif segment[0] == "f":
             #split in case range
             vtxbuf_name = self.get_vtxbuf_name_from_index("F_", index)
+            if vtxbuf_name == "DF_U_131_133":
+                pexit("WRONG: ",f"{index} ---> {vtxbuf_name}")
             #if "VEC" in vtxbuf_name:
             #  vtxbuf_name = vtxbuf_name.replace("VEC",vtxbuf_name[-4])
             if (rhs_var is None or rhs_var not in ["df","f"]) or i > 0:
@@ -6371,6 +6394,7 @@ class Parser:
         prof_type = src[segment[0]]["profile_type"]
         res_index = None
         if inside_nx_loop(loop_indexes):
+            print("HI: ",segment[0])
             if prof_type == "vtxbuf":
                 nx_index = get_nx_loop_index(loop_indexes)
                 if all([not get_if_compatible(indexes[0],loop_indexes[i][0],loop_indexes[i][2]) for i in range(len(loop_indexes))]):
@@ -6387,9 +6411,9 @@ class Parser:
             elif prof_type == "vtxbuf_bundle" and len(loop_indexes) == 1 and indexes[0] == f"l1__mod__cparam+{loop_indexes[0][0]}-1" and indexes[1] == "m__mod__cdata" and indexes[2] == "n__mod__cdata" and indexes[3] == "1:nchemspec__mod__cparam" and loop_indexes[0][3] == "1" and loop_indexes[0][2] == "nx__mod__cparam":
                 return f"{segment[0]}"
             elif prof_type == "z" and indexes == ["n__mod__cdata"]:
-                return f"{segment[0]}"
+                return f"{segment[0]}[vertexIdx.z]"
             elif prof_type == "y" and indexes == ["m__mod__cdata"]:
-                return f"{segment[0]}"
+                return f"{segment[0]}[vertexIdx.y]"
             pexit("PROF ACCESS IN NX LOOP: ",line[segment[1]:segment[2]],prof_type,loop_indexes)
         if var_dims == ["my__mod__cparam"] and prof_type == "y" and indexes == ["m1__mod__cparam:m2__mod__cdata"]:
             return f"{segment[0]}[vertexIdx.y]"
@@ -7188,7 +7212,22 @@ class Parser:
                     res = segment[0]
                 if var == "f":
                     vtxbuf_name = self.get_vtxbuf_name_from_index("",indexes[3])
-                    if((assumed_boundary is None or assumed_boundary == "z") and len(indexes) == 4 and indexes[:2] in [[":",":"], [global_subdomain_range_x_inner,":"]]):
+                    if inside_nx_loop(loop_indexes):
+                        nx_indexes = get_nx_loop_indexes(loop_indexes)
+                        if((assumed_boundary in ["y","z"] or assumed_boundary is None) and indexes[0] in nx_indexes or indexes[0] == ":"):
+                            indexes[0] = "vertexIdx.x"
+                        if((assumed_boundary in ["x","z"] or assumed_boundary is None) and indexes[1] in nx_indexes or indexes[1] == ":"):
+                            indexes[1] = "vertexIdx.y"
+                        if((assumed_boundary in ["x","y"] or assumed_boundary is None) and indexes[2] in nx_indexes or indexes[2] == ":"):
+                            indexes[2] = "vertexIdx.z"
+                        if indexes[0] != "vertexIdx.x":
+                            indexes[0] = f"{indexes[0]}-1"
+                        if indexes[1] != "vertexIdx.y":
+                            indexes[1] = f"{indexes[1]}-1"
+                        if indexes[2] != "vertexIdx.z":
+                            indexes[2] = f"{indexes[2]}-1"
+                        res = f"{var}[{indexes[0]}][{indexes[1]}][{indexes[2]}]"
+                    elif((assumed_boundary is None or assumed_boundary == "z") and len(indexes) == 4 and indexes[:2] in [[":",":"], [global_subdomain_range_x_inner,":"]]):
                         f_index = f"[vertexIdx.x][vertexIdx.y][{indexes[2]}-1]"
                         res = f"{vtxbuf_name}{f_index}"
                         assumed_boundary = "z"
@@ -7207,26 +7246,16 @@ class Parser:
                     elif (all(":" not in x for x in indexes)):
                         f_index = f"[{indexes[0]}-1][{indexes[1]}-1][{indexes[2]}-1]"
                         res = f"{vtxbuf_name}{f_index}"
-                    elif inside_nx_loop(loop_indexes):
-                        nx_index = get_nx_loop_index(loop_indexes)
-                        if((assumed_boundary in ["x","z"] or assumed_boundary is None) and nx_index == indexes[1]):
-                            if ":" not in indexes[0] and indexes[2] == ":":
-                                res = f"{vtxbuf_name}[{indexes[0]}-1][vertexIdx.y][vertexIdx.z]"
-                            else:
-                                pexit("Y loop: ",line)
-                        elif((assumed_boundary in ["y","z"] or assumed_boundary is None) and nx_index == indexes[0]):
-                            if ":" not in indexes[1] and indexes[2] == ":":
-                                res = f"{vtxbuf_name}[vertexIdx.x][{indexes[1]}-1][vertexIdx.z]"
-                            else:
-                                pexit("X loop: ",line)
-                        else:
-                            pexit("What to do? ",line,nx_index)
                     else:
                         pexit("What to do with f?",line,loop_indexes)
                 elif inside_nx_loop(loop_indexes):
                     nx_index = get_nx_loop_index(loop_indexes)
                     upper = get_nx_loop_index_upper(loop_indexes)
-                    if len(src[var]["dims"]) == 1: 
+                    if len(src[var]["dims"]) == 0:
+                        res = f"{var}"
+                    elif len(src[var]["dims"]) == 1: 
+                        if indexes is None or len(indexes) == 0 or indexes == [":"]:
+                            res = f"{var}"
                         if indexes[0] == nx_index and upper == "ny__mod__cparam+2*3":
                             if var in local_variables:
                                 res = f"{var}"
@@ -7241,12 +7270,13 @@ class Parser:
                             if(len(indexes) == 1 and indexes != [":"] and len(src[var]["dims"]) == 1):
                                 ##-1 since from 1 to 0-based indexing
                                 res = f"{var}[{indexes[0]}-1]"
+                    else:
+                        pexit("What to do?",line)
                 elif(len(indexes) == 1 and indexes != [":"] and len(src[var]["dims"]) == 1):
                     ##-1 since from 1 to 0-based indexing
                     res = f"{var}[{indexes[0]}-1]"
                 elif indexes == [":"] and src[var]["dims"] in [["nx__mod__cparam+2*3"],["mx__mod__cparam"]]:
-                    print("HI: ",i,var, var in self.static_variables,indexes)
-                    if i == 0:
+                    if i == 0 or var in local_variables:
                         res = f"{var}"
                     else:
                         res = f"{var}[vertexIdx.x]"
@@ -7290,6 +7320,11 @@ class Parser:
                     print(line[segment[1]:segment[2]])
                     pexit("What to do",segment)
                 if res is None:
+                    print(loop_indexes)
+                    print(inside_nx_loop(loop_indexes))
+                    print(get_nx_loop_index(loop_indexes))
+                    print(var)
+                    print(indexes)
                     pexit("What to do? ",line)
                 res_line = res_line + line[last_index:segment[1]]
                 res_line = res_line + res 
@@ -10507,6 +10542,7 @@ def main():
         parser.get_allocations_in_init_func("chit_profile",subs_not_to_inline)
         parser.get_allocations_in_init_func("chit_profile_fluct",subs_not_to_inline)
         parser.get_allocations_in_init_func("read_hcond",subs_not_to_inline)
+        parser.get_allocations_in_init_func("request_border_driving",subs_not_to_inline)
 
 
         if not os.path.isfile("res-inlined.txt"):
