@@ -10469,8 +10469,8 @@ def main():
         parser.ignored_subroutines.extend(["fatal_error","not_implemented","fatal_error_local","error","inevitably_fatal_error"])
         parser.safe_subs_to_remove.extend(["fatal_error","not_implemented","fatal_error_local","error","inevitably_fatal_error"])
 
-        parser.ignored_subroutines.extend(["read_scl_factor_etc"])
-        parser.safe_subs_to_remove.extend(["read_scl_factor_etc"])
+        #parser.ignored_subroutines.extend(["read_scl_factor_etc"])
+        #parser.safe_subs_to_remove.extend(["read_scl_factor_etc"])
 
         parser.ignored_subroutines.extend(["vecout","vecout_finalize","vecout_initialize"])
         parser.safe_subs_to_remove.extend(["vecout","vecout_finalize","vecout_initialize"])
