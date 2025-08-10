@@ -653,7 +653,7 @@ def map_u_dot_grad_mat(func_call):
 def map_u_dot_grad_vec(func_call):
     params = func_call["new_param_list"]
     names  = func_call["parameters"]
-    upwind = f"del6_upwd({names[3]},{gen_field3(names[1])})"
+    upwind = f"del_upwd({names[3]},{gen_field3(names[1])})"
     res = []
     add_line = ""
     if len(params) == 6 and params[5][-1] == "upwind" and params[5][0] == ".false.":
@@ -704,9 +704,9 @@ def map_del4(func_call):
 def map_calc_del6_for_upwind(func_call):
     params = func_call["parameters"]
     if len(params) == 4:
-        return [f"{params[3]} = del6_upwd({params[2]},{gen_field(params[1])})"]
+        return [f"{params[3]} = del_upwd({params[2]},{gen_field(params[1])})"]
     else:
-        return [f"{params[3]} = del6_upwd_masked({params[2]},{gen_field(params[1])}, {params[4]})"]
+        return [f"{params[3]} = del_upwd_masked({params[2]},{gen_field(params[1])}, {params[4]})"]
 
 def map_del6(func_call):
     names = func_call["parameters"]
@@ -2445,17 +2445,20 @@ def get_chosen_modules(makefile):
         for line in lines:
             if len(line.split("=")) == 2 and all([x not in line for x in ["@",">","_obj","override","flags","_src","$",".x","ld_"]]) and line[0] != "$":
                 variable = line.split("=")[0].strip()
-                value = line.split("=")[1].strip().split("/")[-1].strip()
-                if variable not in chosen_modules:
-                    chosen_modules[variable] = value
-                if variable == "border_profiles":
-                    chosen_modules["borderprofiles"] = f"{value}"
-                if variable == "density":
-                    chosen_modules["density_methods"] = f"{value}_methods"
-                if variable == "eos":
-                    chosen_modules["equationofstate"] = f"{value}"
-                if variable == "entropy":
-                    chosen_modules["energy"] = f"{value}"
+                if variable in chosen_modules:
+                    continue
+                chosen_modules[variable] = []
+                for value in line.split("=")[1].strip().split(" "):
+                    value = value.split("/")[-1].strip()
+                    chosen_modules[variable].append(value)
+                    if variable == "border_profiles":
+                        chosen_modules["borderprofiles"] = [f"{value}"]
+                    if variable == "density":
+                        chosen_modules["density_methods"] = [f"{value}_methods"]
+                    if variable == "eos":
+                        chosen_modules["equationofstate"] = [f"{value}"]
+                    if variable == "entropy":
+                        chosen_modules["energy"] = [f"{value}"]
     return chosen_modules
 
 
@@ -3087,7 +3090,7 @@ class Parser:
 
     def get_boundcond_func_calls(self,boundcond_func,boundconds_map):
         mcom = int(self.static_variables["mcom__mod__cparam"]["value"])
-        boundcond_module = self.chosen_modules["boundcond"]
+        boundcond_module = self.chosen_modules["boundcond"][0]
         boundcond_file = f"{self.directory}/{boundcond_module}.f90"
         boundcond_lines = self.get_subroutine_lines(boundcond_func,boundcond_file)
         #stupid workaround to take the default ivar1,ivar2
@@ -3421,7 +3424,7 @@ class Parser:
                                 file_end = filepath.split("/")[-1].split(".")[0].strip().lower()
                                 if "waves" in filepath and module_name == "special":
                                     print("HI: ",file_end)
-                                if module_name in ["solid_cells_ogrid","solid_cells_ogrid_cdata","solid_cells_ogrid_sub","solid_cells","borderprofiles","special","density","energy","hydro","forcing","gravity","viscosity","poisson","neutralvelocity","neutraldensity","weno_transport","magnetic","deriv","equationofstate","pscalar","radiation","chiral","poisson","selfgravity","particles","pointmasses","shear","heatflux","detonate","chemistry","cosmicray","cosmicrayflux","opacity","fixed_point","testfield","testflow","magnetic_meanfield","timestep"] and file_end != self.chosen_modules[module_name]:
+                                if module_name in ["solid_cells_ogrid","solid_cells_ogrid_cdata","solid_cells_ogrid_sub","solid_cells","borderprofiles","special","density","energy","hydro","forcing","gravity","viscosity","poisson","neutralvelocity","neutraldensity","weno_transport","magnetic","deriv","equationofstate","pscalar","radiation","chiral","poisson","selfgravity","particles","pointmasses","shear","heatflux","detonate","chemistry","cosmicray","cosmicrayflux","opacity","fixed_point","testfield","testflow","magnetic_meanfield","timestep","particles_main"] and file_end not in self.chosen_modules[module_name]:
                                   self.not_chosen_files.append(filepath)
                                   return
                                 elif "deriv_8th" in filepath: 
@@ -4981,24 +4984,27 @@ class Parser:
         possible_filepaths = []
         for x in self.chosen_modules:
             if module == x:
-                return f"{self.directory}/{self.chosen_modules[module]}.f90"
+                return f"{self.directory}/{self.chosen_modules[module][0]}.f90"
         pexit("did not find a file for module: " + module)
-    def choose_right_module(self,filepaths,call,original_file):
+    def choose_right_modules(self,filepaths,call,original_file):
         n = len(call["parameters"])
         filepaths = unique_list(filepaths)
         if len(filepaths) == 1:
-            return filepaths[0]
+            return [filepaths[0]]
+        res = []
         for i, path in enumerate(filepaths):
-            for module in self.chosen_modules:
-                if path.lower() in [f"{self.directory}/{self.chosen_modules[module]}.f90".lower(),f"{self.directory}/special/{self.chosen_modules[module]}.f90".lower()] :
-                    if "lines" in self.func_info[call["function_name"]] and path.lower() in self.func_info[call["function_name"]]["lines"]:
-                        lines = self.func_info[call["function_name"]]["lines"][path.lower()]
-                        params = self.get_parameters(lines[0])
-                        if len(params) != n:
-                            continue
-                    return filepaths[i]
+            for modules in self.chosen_modules:
+                for module in self.chosen_modules[modules]:
+                  if path.lower() in [f"{self.directory}/{module}.f90".lower(),f"{self.directory}/special/{module}.f90".lower()] :
+                      if "lines" in self.func_info[call["function_name"]] and path.lower() in self.func_info[call["function_name"]]["lines"]:
+                          lines = self.func_info[call["function_name"]]["lines"][path.lower()]
+                          params = self.get_parameters(lines[0])
+                          if len(params) != n:
+                              continue
+                      res.append(filepaths[i])
+        if len(res) > 0: return res
         if original_file in self.func_info[call["function_name"]]["lines"]:
-          return original_file
+          return [original_file]
         func_name = call["function_name"]
         pexit(f"did not found module for {func_name} in files",filepaths)
         
@@ -5561,6 +5567,8 @@ class Parser:
           return line
         vars_in_modules = {}
         for mod in modules:
+            if mod not in self.rename_dict:
+                continue
             vars_in_modules =  merge_dictionaries(vars_in_modules, self.rename_dict[mod])
         variables = merge_dictionaries(local_variables,vars_in_modules)
         #don't rename local variables
@@ -5604,6 +5612,8 @@ class Parser:
         variables = merge_dictionaries(local_variables,self.static_variables)
         found_modules = []
         for i,mod in enumerate(info["modules"]):
+            if mod not in self.module_info:
+                continue
             if segment[0] in self.module_info[mod]["public_variables"] and segment[0] in self.rename_dict[mod]:
               if info["modules"][mod]:
                 if segment[0] in info["modules"][mod]:
@@ -8781,7 +8791,7 @@ class Parser:
             file.write(f"{line}\n")
         file.close()
         allowed_func_calls = ["constexpr", "&&", "||","sqrt","abs","sinh","cosh","tanh","min","max","pow","DEVICE_VTXBUF_IDX".lower(),"DCONST".lower(),"exp","log","if","else","for","sin","cos","tan","atan2"]
-        astaroth_funcs = ["der","der2","der3","der4","der5","der6","col","row","derx","dery","derz","derxx","deryy","derzz","der6x","der6y","der6z","der6x_upwd","der6y_upwd","der6z_upwd","sum","dot","gradient","gradients","laplace","divergence","veclaplace","value","vecvalue","field","field3","divergence_from_matrix","curl_from_matrix","traceless_strain","traceless_strain_without_divu","multm2_sym","del6_upwd","del6_upwd_vec","gradient_of_divergence","cross","bij","mult","multmm_sc_mn","del6v_strict","static_assert","d2fi_dxj","del2fi_dxjk","der5x1y","der5x1z","der5y1z","gradients_5","der6x_ignore_spacing","der6y_ignore_spacing","der6z_ignore_spacing","del6","der4x2y","der4y2z","der4x2z","hessian"]
+        astaroth_funcs = ["der","der2","der3","der4","der5","der6","col","row","derx","dery","derz","derxx","deryy","derzz","der6x","der6y","der6z","der6x_upwd","der6y_upwd","der6z_upwd","sum","dot","gradient","gradients","laplace","divergence","veclaplace","value","vecvalue","field","field3","divergence_from_matrix","curl_from_matrix","traceless_strain","traceless_strain_without_divu","multm2_sym","del_upwd","del_upwd_vec","gradient_of_divergence","cross","bij","mult","multmm_sc_mn","del6v_strict","static_assert","d2fi_dxj","del2fi_dxjk","der5x1y","der5x1z","der5y1z","gradients_5","der6x_ignore_spacing","der6y_ignore_spacing","der6z_ignore_spacing","del6","der4x2y","der4y2z","der4x2z","hessian"]
         allowed_func_calls.extend(astaroth_funcs)
 
 
@@ -9466,9 +9476,14 @@ class Parser:
                       continue
                     function_call = function_calls[0]
                     parameter_list = self.get_static_passed_parameters(function_call["parameters"],local_variables,self.static_variables)
-                    function_to_expand_filename = self.choose_right_module(file_paths,function_call,filename)
-                    #return on the first call
-                    return self.get_replaced_body(function_to_expand_filename,parameter_list, function_call,variables_in_scope,global_init_lines,subs_not_to_inline, elim_lines)
+                    function_to_expand_filenames = self.choose_right_modules(file_paths,function_call,filename)
+                    res_lines = []
+                    info = None
+                    type = None
+                    for function_to_expand_filename in function_to_expand_filenames:
+                        lines,info,type = self.get_replaced_body(function_to_expand_filename,parameter_list, function_call,variables_in_scope,global_init_lines,subs_not_to_inline, elim_lines)
+                        res_lines.extend(lines)
+                    return (res_lines,info,type)
         return ([],False,None)
     def transform_case(self,lines):
         found_case = False 
