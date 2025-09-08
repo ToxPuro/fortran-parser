@@ -10773,7 +10773,7 @@ def main():
             for i,line in enumerate(res):
                 if i == len(res)-1:
                     if subroutine_name == "rhs_cpu":
-                        file.write("#include \"handwritten_end.h\"\n")
+                        file.write("#include \"../handwritten_end.h\"\n")
                     else:
                         file.write(f"#include \"{subroutine_name}_handwritten_end.h\"\n")
                 if line.strip() in ["headtt__mod__cdata=false","lfirstpoint__mod__cdata=false","lfirstpoint__mod__cdata=true","lcommunicate=!early_finalize","dline_1__mod__cdata.z = dline_1__mod__cdata.z*AC_nphis1__mod__cdata[AC_m__mod__cdata-1]","lproc_print__mod__cdata=false","lproc_print__mod__cdata=true"]:
