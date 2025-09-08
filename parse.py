@@ -10743,6 +10743,8 @@ def main():
             res = [normalize_reals(line).replace("(:,1)",".x").replace("(:,2)",".y").replace("(:,3)",".z") for line in res]
             file = open("static_var_declares.h","w")
             for var in parser.static_variables_to_declare: 
+              if var in ["lfirstpoint__mod__cdata","lproc_print__mod__cdata"]:
+                  continue
               dims = parser.static_variables[var]["dims"]
               name = var
               type = translate_to_DSL(parser.static_variables[var]["type"])
