@@ -1771,7 +1771,7 @@ def is_contains_line(line,next_line):
       return 
     if next_line[0] == "!":
       return False
-    return (re.match("function\s+.+\(.+\)",next_line) or re.match("subroutine\s+.+\(.+\)",next_line))
+    return (re.match(r"function\s+.+\(.+\)",next_line) or re.match(r"subroutine\s+.+\(.+\)",next_line))
 def parse_declaration_value(value):
     num_of_left_brackets = 0
     num_of_right_brackets = 0
@@ -1990,7 +1990,7 @@ def replace_exp_once(line):
             num_of_left_brackets += 1
         if line[forward_index] in ")]":
             num_of_right_brackets += 1
-        if (forward_index == len(line)-1 or line[forward_index+1] in " =*+-;()/\{},") and num_of_left_brackets == num_of_right_brackets:
+        if (forward_index == len(line)-1 or line[forward_index+1] in r" =*+-;()/\{},") and num_of_left_brackets == num_of_right_brackets:
             parse = False
             exponent = exponent + line[forward_index]
         if parse:
@@ -2005,7 +2005,7 @@ def replace_exp_once(line):
             num_of_left_brackets += 1
         if line[backward_index] in ")]":
             num_of_right_brackets += 1
-        if (backward_index == 0 or line[backward_index-1] in "=*+-;()/\{},")  and num_of_left_brackets == num_of_right_brackets:
+        if (backward_index == 0 or line[backward_index-1] in r"=*+-;()/\{},")  and num_of_left_brackets == num_of_right_brackets:
             parse = False
             base = line[backward_index] + base
         if parse:
@@ -2074,7 +2074,8 @@ def common_data(list1, list2):
 def get_segment_indexes(segment,line,dims):
     return get_indexes(line[segment[1]:segment[2]],segment[0],dims)
 def get_indexes(segment,var,dim):
-    index_search = re.search(f"{var}\s*\((.*)\)",segment)
+    pattern = var + r"\s*\((.*)\)"
+    index_search = re.search(pattern,segment)
     indexes = [":" for i in range(dim)]
     if index_search:
         indexes = []
@@ -3262,7 +3263,7 @@ class Parser:
                 x["variable"] = get_mod_name(x["variable"],module)
         for i, variable_name in enumerate(variable_names):
             dims = dimension
-            search = re.search(f"{remove_mod(variable_name)}\(((.*?))\)",line) 
+            search = re.search(f"{remove_mod(variable_name)}\\(((.*?))\\)",line) 
             ## check if line is only specifying intent(in) or intent(out)
             if search:
                 dims = [index.strip() for index in search.group(1).split(",")]
@@ -3276,7 +3277,7 @@ class Parser:
             if "intent(" not in type and ".true." not in variable_name and ".false." not in variable_name:
                 #if struct type parse more to get the type
                 if "type" in type:
-                    struct_type = re.search("\((.+?)\)",line).group(1)
+                    struct_type = re.search(r"\((.+?)\)",line).group(1)
                     type = struct_type
                 if "(" in type:
                     type = type.split("(")[0].strip()
@@ -3376,7 +3377,7 @@ class Parser:
                 for x in file:
                     line = self.parse_line(x)
                     read_lines.append(line)
-                    match = re.search("include\s+(.+\.(h|inc))",line)
+                    match = re.search(r"include\s+(.+\.(h|inc))",line)
                     if match and line[0] != "!":
                         header_filename = match.group(1).replace("'","").replace('"',"")
                         header_filepath = filepath.rsplit("/",1)[0].strip() + "/" + header_filename
@@ -3440,7 +3441,7 @@ class Parser:
                                     self.file_info[filepath] = {}
                                 self.file_info[filepath]["module"] = module_name
                             if not in_sub_name:
-                                search = re.search(f"\s?subroutine\s*([a-zA-Z0-9_-]*?)($|\s|\()", search_line)
+                                search = re.search(r"\s?subroutine\s*([a-zA-Z0-9_-]*?)($|\s|\()", search_line)
                                 if(search and "subroutine" in search_line):
                                     sub_name = search.groups()[0].strip()
                                     if sub_name not in self.func_info:
@@ -3455,7 +3456,7 @@ class Parser:
                                         self.func_info[sub_name]["files"] = []
                                     in_sub_name = sub_name
                                     start = True
-                                search = re.search(f"\s?function\s*([a-zA-Z0-9_-]*?)($|\s|\()", search_line)
+                                search = re.search(r"\s?function\s*([a-zA-Z0-9_-]*?)($|\s|\()", search_line)
                                 if(not in_sub_name and search and "function" in search_line):
                                     sub_name = search.groups()[0].strip()
                                     if sub_name not in self.func_info:
@@ -3556,7 +3557,7 @@ class Parser:
         for line in [x.lower() for x in lines]:
             if "(" in function_name or ")" in function_name:
                 return False
-            if re.search(f"\s?subroutine {function_name}[\s(]",line) or re.search(f"\s?function {function_name}[\s(]",line) or re.search(f"interface {function_name}(\s|$|,)",line) or line==f"subroutine {function_name}" or line==f"function {function_name}":
+            if re.search(f"\\s?subroutine {function_name}[\\s(]",line) or re.search(f"\\s?function {function_name}[\\s(]",line) or re.search(f"interface {function_name}(\\s|$|,)",line) or line==f"subroutine {function_name}" or line==f"function {function_name}":
                 return True
         return False
 
@@ -3736,7 +3737,7 @@ class Parser:
                     num_of_single_quotes += 1
                 if line[i] == '"':
                     num_of_double_quotes += 1
-                if line[i] == "(" and (i==0 or line[i-1] not in "!^'=''\/+-.*\(\)<>^;:,") and num_of_double_quotes %2 == 0 and num_of_single_quotes %2 == 0:
+                if line[i] == "(" and (i==0 or line[i-1] not in r"!^'=''\/+-.*\(\)<>^;:,") and num_of_double_quotes %2 == 0 and num_of_single_quotes %2 == 0:
                     function_call_indexes.append(i)
             for index in function_call_indexes:
                 current_index = index-1
@@ -3875,11 +3876,11 @@ class Parser:
                 for variable in variable_names:
                     if variable in self.static_variables:
                         self.static_variables[variable]["public"] = True
-            match = re.search("include\s+(.+\.h)",line)
+            match = re.search(r"include\s+(.+\.h)",line)
             if match:
                 header_filename = match.group(1).replace("'","").replace('"',"")
-                directory = re.search('(.+)\/',filename).group(1)
-                header_filepath = f"{directory}/{header_filename}"
+                directory = re.search('(.+)\//',filename).group(1)
+                header_filepath = f"{directory}//{header_filename}"
                 if os.path.isfile(header_filepath):
                     with open(header_filepath,"r") as file:
                         lines = file.readlines()
@@ -3899,8 +3900,8 @@ class Parser:
             
             if (line.strip() == "contains" or "endmodule" in line) and not_added:
                 not_added = False
-                contents.append(f"{declaration}\n")
-            elif not_added and re.match("function\s+.+\(.+\)",line) or re.match("subroutine\s+.+\(.+\)",line):
+                contents.append(f"{declaration}\\n")
+            elif not_added and re.match(r"function\s+.+\(.+\)",line) or re.match(r"subroutine\s+.+\(.+\)",line):
                 contents.append(f"{declaration}\n")
                 not_added = False
             contents.append(line)
@@ -4023,7 +4024,7 @@ class Parser:
                             next_line = lines[index][0].strip().replace("!$omp","")
                             if len(next_line)>0:
                                 line = (line[:-1] + " " + next_line).strip()
-                search = re.search("(threadprivate|THREADPRIVATE)\((.*)\)",line)
+                search = re.search(r"(threadprivate|THREADPRIVATE)\((.*)\)",line)
                 if search:
                     variable_names = [variable.strip() for variable in search.group(2).split(",")]
                     for variable in variable_names:
@@ -4286,7 +4287,7 @@ class Parser:
 
     def get_parameters(self,line):
         line = line.lower()
-        check_subroutine= re.search("\s?subroutine.+\((.+)\)",line)
+        check_subroutine= re.search(r"\s?subroutine.+\((.+)\)",line)
         if check_subroutine:
             res =  [parameter.split("=")[-1].split("(")[0].strip().lower() for parameter in check_subroutine.group(1).split(",")]
             return res
@@ -4862,12 +4863,12 @@ class Parser:
                                 res_contents.append(last_line)
                                 res_contents.append("!omp end critical\n")
                     #handle do loop writes
-                    elif re.match("do\s+.=.+,\s?",line.split(";")[0]) and len(line.split(";"))==2:
+                    elif re.match(r"do\s+.=.+,\s?",line.split(";")[0]) and len(line.split(";"))==2:
                         for variable in variables:
                             if variable in [write["variable"] for write in writes]:
-                                res_contents[-1] = (f"{line.split(';')[0]}\n")
+                                res_contents[-1] = (f"{line.split(';')[0]}\\n")
                                 res_contents.append("!omp critical\n")
-                                res_contents.append(f"{line.split(';')[1]}\n")
+                                res_contents.append(f"{line.split(';')[1]}\\n")
                                 res_contents.append("!omp end critical\n")
                                 #let's see if there is a corresponding enddo
                                 current_index = i+1
@@ -4909,7 +4910,7 @@ class Parser:
                 if line.split(" ")[0] == "endtype":
                     in_struct = False
                 if in_module_declaration and not in_struct:
-                    if re.match("function\s+.+\(.+\)",line) or re.match("subroutine\s+.+\(.+\)",line) or line.strip() == "contains":
+                    if re.match(r"function\s+.+\(.+\)",line) or re.match(r"subroutine\s+.+\(.+\)",line) or line.strip() == "contains":
                         in_module_declaration = False
                     parts = line.split("::")
                     if len(parts) > 1:
@@ -9360,7 +9361,7 @@ class Parser:
                 allocatable = "allocatable" in [x.strip() for x in start.split(",")]
                 saved_variable = "save" in [x.strip() for x in start.split(",")]
                 public = "public" in [x.strip() for x in start.split(",")]
-                dimension = re.search("dimension\s*\((.+?)\)", start)
+                dimension = re.search(r"dimension\s*\((.+?)\)", start)
                 if dimension is None:
                     dimension = []
                 else:
