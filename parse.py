@@ -6283,11 +6283,12 @@ class Parser:
             if (index == f"i{scalar}x__mod__cdata+2-1"): index = f"i{scalar}y__mod__cdata"
             if (index == f"i{scalar}x__mod__cdata+3-1"): index = f"i{scalar}z__mod__cdata"
 
-        for pair in [("tij","hydro")]:
-            var,mod = pair
-            for j in range(6):
-                if (index == f"i{var}__mod__{mod}+{j}"): index = f"i{var}_{j}"
-                if (index == f"{j}+i{var}__mod__{mod}"): index = f"i{var}_{j}"
+        if i == 0 and segment[0] == "f": 
+          for pair in [("tij","hydro")]:
+              var,mod = pair
+              for j in range(6):
+                  if (index == f"i{var}__mod__{mod}+{j}"): index = f"i{var}_{j}"
+                  if (index == f"{j}+i{var}__mod__{mod}"): index = f"i{var}_{j}"
 
         if(index == "istress_ij__mod__cdata+1-1"): index = "istress_0"
         if(index == "istress_ij__mod__cdata+2-1"): index = "istress_1"
