@@ -2041,6 +2041,8 @@ def replace_exp(line):
     while "**" in line:
         line = replace_exp_once(line)
     return line
+def fix_scientific_notation(line):
+    return re.sub(r'(\d)([Dd](+-?\d+)',r'\1e\3',line)
 def translate_to_DSL(type):
     if type =="real":
         return "real"
@@ -8703,6 +8705,7 @@ class Parser:
 
 
         lines = [replace_exp(line) for line in lines]
+        lines = [fix_scientific_notation(line) for line in lines]
         file = open("res-replace_exp.txt","w")
         for line in lines:
             file.write(f"{line}\n")
