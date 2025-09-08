@@ -2042,7 +2042,7 @@ def replace_exp(line):
         line = replace_exp_once(line)
     return line
 def fix_scientific_notation(line):
-    return re.sub(r'(\d)([Dd](+-?\d+)',r'\1e\3',line)
+    return re.sub(r'(\d)[Dd]([+-]?\d+)',r'\1e\2',line)
 def translate_to_DSL(type):
     if type =="real":
         return "real"
