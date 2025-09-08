@@ -3595,7 +3595,7 @@ class Parser:
         res = []
         for line in filter(lambda x: not is_variable_line(x),lines):
             line = line.strip()
-            matches = re.findall("[^'=' '\/+-.*()<>]+\(.+\)", line)
+            matches = re.findall(r"[^'=' '\/+-.*()<>]+\(.+\)", line)
             if len(matches) > 0:
                 res.extend(matches)
         return res
@@ -3744,7 +3744,7 @@ class Parser:
                 if line[current_index] == " ":
                     while(line[current_index] == " "):
                         current_index -= 1
-                while(line[current_index] not in " !^'=''\/+-.*\(\)<>^,;:" and current_index >= 0):
+                while(line[current_index] not in r" !^'=''\/+-.*\(\)<>^,;:" and current_index >= 0):
                     current_index -= 1
                 current_index +=1
                 function_name = self.get_function_name(line[current_index:index])
@@ -3879,7 +3879,7 @@ class Parser:
             match = re.search(r"include\s+(.+\.h)",line)
             if match:
                 header_filename = match.group(1).replace("'","").replace('"',"")
-                directory = re.search('(.+)\//',filename).group(1)
+                directory = re.search(r'(.+)\//',filename).group(1)
                 header_filepath = f"{directory}//{header_filename}"
                 if os.path.isfile(header_filepath):
                     with open(header_filepath,"r") as file:
@@ -4048,7 +4048,7 @@ class Parser:
                             next_line = lines[index][0].strip().replace("!$omp","")
                             if len(next_line)>0:
                                 line = (line[:-1] + " " + next_line).strip()
-                search = re.search("(declare target)\((.*)\)",line)
+                search = re.search(r"(declare target)\((.*)\)",line)
                 if search:
                     function_names = [variable.strip() for variable in search.group(2).split(",")]
                     if function in function_names:
@@ -4069,7 +4069,7 @@ class Parser:
                             next_line = lines[index][0].strip().replace("!$omp","")
                             if len(next_line)>0:
                                 line = (line[:-1] + " " + next_line).strip()
-                search = re.search("(declare target)\((.*)\)",line)
+                search = re.search(r"(declare target)\((.*)\)",line)
                 if search:
                     variable_names = [variable.strip() for variable in search.group(2).split(",")]
                     for variable in variable_names:
@@ -4296,7 +4296,7 @@ class Parser:
             if "result" in line:
                 line = line.split("result")[0].strip()
 
-            param_search = re.search(".?function.+\((.+)\)",line)
+            param_search = re.search(r".?function.+\((.+)\)",line)
             if not param_search:
                 return []
             res =  [parameter.split("=")[-1].split("(")[0].strip().lower() for parameter in param_search.group(1).split(",")]
@@ -4874,7 +4874,7 @@ class Parser:
                                 current_index = i+1
                                 no_end_do = True
                                 iter_line = contents[current_index][0]
-                                while no_end_do and not re.match("do\s+.=.+,\s?",iter_line):
+                                while no_end_do and not re.match(r"do\s+.=.+,\s?",iter_line):
                                     no_end_do = not (re.match("enddo",iter_line) or re.match("end do",iter_line))
                                     current_index += 1
                                     iter_line = contents[current_index][0]
