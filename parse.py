@@ -10765,7 +10765,7 @@ def main():
             #file.write("//TP: nphis1 and nphis2 don't actually work. simply declared to compile the code\n")
             #file.write("//\n")
             #file.write("#include \"var_declares.h\"\n")
-            file.write("#include \"preamble.h\"\n");
+            file.write("#include \"../preamble.h\"\n");
 
             res = get_formatted_lines(res)
             for i,line in enumerate(res):
