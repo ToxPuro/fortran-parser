@@ -3014,13 +3014,17 @@ class Parser:
         return res
 
 
-    def parse_line(self, line):
+    def parse_line(self, line,to_lower=True):
         if len(line) == 0:
             return line
         if line[0] == "!":
-            return line.strip().lower()
+            res = line.strip()
+            if(to_lower): res = res.lower()
+            return res
         if "!" not in line:
-            return line.strip().lower()
+            res = line.strip()
+            if(to_lower): res = res.lower()
+            return res
         ## remove comment at end of the line
         iter_index = len(line)-1;
         num_of_single_quotes = 0
@@ -3033,7 +3037,10 @@ class Parser:
             if line[iter_index] == "!" and num_of_single_quotes%2 == 0 and num_of_double_quotes%2 == 0 and (iter_index+1==len(line) or line[iter_index+1] != "="):
                 line = line[0:iter_index]
                 break                          
-        return line.strip().lower()
+        res = line.strip()
+        if(to_lower): res = res.lower()
+        return res
+
     def add_write(self, variable, line_num, is_local, filename, call_trace, line):
         self.static_writes.append({"variable": variable, "line_num": line_num, "local": is_local, "filename": filename, "call_trace": call_trace, "line": line})
         if is_local and variable:
@@ -3377,8 +3384,8 @@ class Parser:
 
             with open(filepath,"r") as file:
                 for x in file:
-                    line = self.parse_line(x)
-                    read_lines.append(line)
+                    line = self.parse_line(x,False)
+                    read_lines.append(line.lower())
                     match = re.search(r"include\s+(.+\.(h|inc))",line)
                     if match and line[0] != "!":
                         header_filename = match.group(1).replace("'","").replace('"',"")
@@ -3425,8 +3432,7 @@ class Parser:
                                 module_name = search_line.split(" ")[1].strip().lower()
                                 #choose only the chosen module files
                                 file_end = filepath.split("/")[-1].split(".")[0].strip().lower()
-                                if "waves" in filepath and module_name == "special":
-                                    print("HI: ",file_end)
+                                if("/special/" in filepath): module_name = "special"
                                 if module_name in ["solid_cells_ogrid","solid_cells_ogrid_cdata","solid_cells_ogrid_sub","solid_cells","borderprofiles","special","density","energy","hydro","forcing","gravity","viscosity","poisson","neutralvelocity","neutraldensity","weno_transport","magnetic","deriv","equationofstate","pscalar","radiation","chiral","poisson","selfgravity","particles","pointmasses","shear","heatflux","detonate","chemistry","cosmicray","cosmicrayflux","opacity","fixed_point","testfield","testflow","magnetic_meanfield","timestep","particles_main"] and file_end not in self.chosen_modules[module_name]:
                                   self.not_chosen_files.append(filepath)
                                   return
