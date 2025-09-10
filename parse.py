@@ -6540,7 +6540,6 @@ class Parser:
         all_pushed_vars = []
         for mod in already_pushed_pars:
             for var in already_pushed_pars[mod][0]:
-                if "pretend" in var: print("HMM: ",var,mod)
                 all_pushed_vars.append(var)
         from collections import Counter
         counts = Counter(all_pushed_vars)
@@ -6550,7 +6549,6 @@ class Parser:
                 if counts[var] == 1:
                     file.write(f"#define AC_{var} AC_{var}__mod__{mod}\n")
                     file.write(f"#define {var} AC_{var}__mod__{mod}\n")
-                elif "pretend" in var: print("HMM: ",var,counts[var])
         file.close()
 
     def gen_pushpars(self):
