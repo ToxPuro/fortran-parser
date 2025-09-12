@@ -5637,12 +5637,13 @@ class Parser:
         if self.module_vars_the_same(found_modules,segment[0]):
             pass
         elif(len(found_modules) != 1):
+            if line[segment[1]:segment[2]] == "d0": return "d0"
             print(line[segment[1]:segment[2]])
             print(found_modules)
             print(len(found_modules))
             print(len(info["modules"]))
             print(info["modules"])
-            print(line[segment[1]:segment[2]])
+            print(line)
             pexit("should be only a single module")
         return line[segment[1]:segment[2]].replace(segment[0],self.rename_dict[found_modules[0]][segment[0]])
 
@@ -9730,6 +9731,7 @@ class Parser:
         if(self.offload_type == "stencil"):
             lines = self.transform_pencils(lines,local_variables,"pencil_case","p")
             lines = self.transform_pencils(lines,local_variables,"internalpencils","q__mod__special")
+            lines = self.transform_pencils(lines,local_variables,"internalpencils","q__mod__shallow_water")
             lines = self.transform_pencils(lines,local_variables,"internalpencils","q")
         lines = self.remove_strings(lines,local_variables)
         return lines
