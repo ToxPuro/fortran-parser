@@ -6264,6 +6264,15 @@ class Parser:
                     print("HI after: ",index)
                 if index == f"{arr}x__mod__cdata{k}-1+2": index = f"{arr}y__mod__cdata({k})"
                 if index == f"{arr}x__mod__cdata{k}-1+3": index = f"{arr}z__mod__cdata({k})"
+        for var in ["phi","dphi"]:
+          if index == f"0+i{var}__mod__klein_gordon": 
+              index = f"i{var}_up_re__mod__klein_gordon"
+          if index == f"1+i{var}__mod__klein_gordon": 
+              index = f"i{var}_up_im__mod__klein_gordon"
+          if index == f"2+i{var}__mod__klein_gordon": 
+              index = f"i{var}_down_re__mod__klein_gordon"
+          if index == f"3+i{var}__mod__klein_gordon": 
+              index = f"i{var}_down_im__mod__klein_gordon"
         for var in [("aa","a"),("uu","u"),("uun","un"),("vv","v")]:
             vec = var[0]
             scalar = var[1]
@@ -6821,6 +6830,7 @@ class Parser:
                     or (num_of_looped_dims == 2 and rhs_dim[0] == global_subdomain_range_x and rhs_dim[1] in bundle_dims)
                     or (num_of_looped_dims == 3 and rhs_dim[:-1] == [global_subdomain_range_x,"3"] and rhs_dim[-1] in bundle_dims)
                     or (num_of_looped_dims == 3 and rhs_dim in [[global_subdomain_range_x,"3","3"]])
+                    or (num_of_looped_dims == 3 and rhs_dim in [[global_subdomain_range_x,"4","4"]])
                     or (num_of_looped_dims == 3 and rhs_dim in [[global_subdomain_range_x_with_halos,global_subdomain_range_y_with_halos,global_subdomain_range_z_with_halos]])
                     or (num_of_looped_dims == 3 and rhs_dim in [[global_subdomain_range_x,global_subdomain_range_y,global_subdomain_range_z]])
                     or (num_of_looped_dims == 4 and rhs_dim in [[global_subdomain_range_x,"3","3","3"]])
@@ -7034,6 +7044,11 @@ class Parser:
                     #nx var -> AcMatrix
                     elif src[segment[0]]["dims"] == [global_subdomain_range_x,"3","3"] and indexes[0] == ":": 
                       res = self.get_ac_matrix_res(segment,indexes[1:])
+                    #nx var -> [n][n]
+                    elif src[segment[0]]["dims"] == [global_subdomain_range_x,"4","4"] and indexes[0] == ":" and ":" not in indexes[1] and ":" not in indexes[2]: 
+                        res = f"{segment[0]}[{indexes[1]}-1][{indexes[2]}-1]"
+                    elif src[segment[0]]["dims"] == [global_subdomain_range_x,"4","4"] and len(indexes) == 0:
+                        res = f"{segment[0]}"
                     #nx var -> AcMatrix
                     elif len(src[segment[0]]["dims"]) == 4 and src[segment[0]]["dims"][:-1] == [global_subdomain_range_x,"3","3"] and indexes[0] == ":" and src[segment[0]]["dims"][3] in bundle_dims: 
                       res = self.get_ac_matrix_res(segment,indexes[1:])
