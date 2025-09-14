@@ -3015,6 +3015,9 @@ class Parser:
 
 
     def parse_line(self, line,to_lower=True):
+        line = re.sub(r"\(/\s*", r"(/", line)
+        line = re.sub(r"\s*/", r"/", line)
+        line = re.sub(r",\s*", r",", line)
         if len(line) == 0:
             return line
         if line[0] == "!":
@@ -5180,6 +5183,7 @@ class Parser:
         init_lines = [line for line in subroutine_lines if is_init_line(line)]
 
         lines = subroutine_lines
+
         local_variables = {parameter:v for parameter,v in self.get_variables(subroutine_lines, {},filename, True).items() }
         variables = merge_dictionaries(self.static_variables,local_variables)
 
@@ -5303,6 +5307,7 @@ class Parser:
 
 
         init_variables= {parameter:v for parameter,v in self.get_variables(init_lines, {},filename,True).items() }
+
         global_init_lines.extend(init_lines)
         global_init_lines = unique_list(global_init_lines)
 
@@ -7596,6 +7601,8 @@ class Parser:
             return res
         if local_variables[vars_to_declare[0]]["type"] != "real":
             return ""
+        if local_variables[vars_to_declare[0]]["dims"] in [[global_subdomain_range_x,"2"],["2"]]:
+            return "real2 " + ", ".join(vars_to_declare)
         for dim in ["2","6"]:
             if local_variables[vars_to_declare[0]]["dims"] in [[dim],["nx__mod__cparam",dim]]:
                 res = ""
@@ -7608,8 +7615,6 @@ class Parser:
             return "Matrix " + ", ".join(vars_to_declare) + f"[AC_{dims[-1]}]"
         if local_variables[vars_to_declare[0]]["dims"] in [[global_subdomain_range_x,"3"],["3"]]:
             return "real3 " + ", ".join(vars_to_declare)
-        if local_variables[vars_to_declare[0]]["dims"] in [[global_subdomain_range_x,"2"],["2"]]:
-            return "real2 " + ", ".join(vars_to_declare)
         if local_variables[vars_to_declare[0]]["dims"] == [global_subdomain_range_x,"3","3","3"]:
             #tensors are not yet supported
             return "Tensor " + ", ".join(vars_to_declare)
@@ -8104,7 +8109,7 @@ class Parser:
             tmp = []
             for line in lines:
                 line = self.replace_variables_multi(line,map)
-                if is_init_line(line) and new in line:
+                if new not in ["0.0",".false."] and is_init_line(line) and new in line:
                     pass
                 else:
                     tmp.append(line)
