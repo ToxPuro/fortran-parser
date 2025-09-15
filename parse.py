@@ -9896,8 +9896,8 @@ def print_ranges(parser):
 def get_formatted_lines(lines):
     tab_num = 0
     res = []
-    line = line.replace("--","+")
     for line in lines:
+        line = line.replace("--","+")
         line = line.strip()
         if line[-1] == "}":
             tab_num -= 1
