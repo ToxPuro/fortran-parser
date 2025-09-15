@@ -6689,7 +6689,7 @@ class Parser:
           type = self.static_variables[var]["type"]
           name = var
 
-          if dims == [] and type in ["integer","real","double","logical"] and var not in ["n__mod__cparam","m__mod__cparam"]:
+          if dims == [] and type in ["integer","real","double","logical"] and var not in ["n__mod__cparam","m__mod__cparam","yhmax","yhmin"]:
               if self.static_variables[var]["parameter"] and "value" in self.static_variables[var]:
                 val = self.static_variables[var]["value"]
                 if is_arithmetic_expression(val) or val in [".false.",".true."]:
@@ -7359,6 +7359,7 @@ class Parser:
                     print(src[var])
                     print(indexes)
                     print(line[segment[1]:segment[2]])
+                    print("LINE: ",line)
                     pexit("What to do",segment)
                 if res is None:
                     print(loop_indexes)
@@ -9895,6 +9896,7 @@ def print_ranges(parser):
 def get_formatted_lines(lines):
     tab_num = 0
     res = []
+    line = line.replace("--","+")
     for line in lines:
         line = line.strip()
         if line[-1] == "}":
