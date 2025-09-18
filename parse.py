@@ -10811,6 +10811,13 @@ def main():
                 file.write(f"{type} {name}[AC_{dims[1]}]\n")
               elif len(dims) == 3 and dims[0]  == "nx__mod__cparam" and dims[1] in bundle_dims and dims[2] in bundle_dims:
                 file.write(f"{type} {name}[AC_{dims[1]}][AC_{dims[2]}]\n")
+              elif len(dims) == 3 and dims == ["nx__mod__cparam","3","3"]::
+                file.write(f"{Matrix {name}\n")
+              elif len(dims) != 0:
+                  res = f"{type} {name}"
+                  for dim in dims:
+                      res = f"[{dim}]"
+                  file.write(f"{res}\n")
               else:
                 file.write(f"{type} {name}\n")
             file = open(output_filename,"w")
