@@ -1026,6 +1026,9 @@ def map_random_number_wrapper_arr(func_call):
         first  =  f"{names[0]}(1) = rand_uniform()"
         second =  f"{names[0]}(2) = rand_uniform()"
         return [first,second]
+    if(params[0][3] == ["nx__mod__cparam"]):
+        first  =  f"{names[0]} = rand_uniform()"
+        return [first]
     pexit("WHAT TO DO? ", params)
 
 def map_der4i2j(func_call):
@@ -2533,7 +2536,7 @@ class Parser:
             # #for now set off
             # "ltime_integrals__mod__cdata":".false.",
         }
-        self.safe_subs_to_remove = ["print","not_implemented","output","fatal_error","keep_compiler_quiet","warning"]
+        self.safe_subs_to_remove = ["print","not_implemented","output","fatal_error","keep_compiler_quiet","warning","random_seed_wrapper"]
         self.safe_subs_to_ignore=  ["print","not_implemented","output","fatal_error","keep_compiler_quiet","warning"]
         self.func_info = {}
         self.file_info = {}
@@ -3435,6 +3438,8 @@ class Parser:
                                 module_name = search_line.split(" ")[1].strip().lower()
                                 #choose only the chosen module files
                                 file_end = filepath.split("/")[-1].split(".")[0].strip().lower()
+                                if "/special/" in filepath and file_end not in self.chosen_modules["special"]:
+                                    return
                                 if module_name in ["solid_cells_ogrid","solid_cells_ogrid_cdata","solid_cells_ogrid_sub","solid_cells","borderprofiles","special","density","energy","hydro","forcing","gravity","viscosity","poisson","neutralvelocity","neutraldensity","weno_transport","magnetic","deriv","equationofstate","pscalar","radiation","chiral","poisson","selfgravity","particles","pointmasses","shear","heatflux","detonate","chemistry","cosmicray","cosmicrayflux","opacity","fixed_point","testfield","testflow","magnetic_meanfield","timestep","particles_main"] and file_end not in self.chosen_modules[module_name]:
                                   self.not_chosen_files.append(filepath)
                                   return
@@ -5001,21 +5006,21 @@ class Parser:
         n = len(call["parameters"])
         filepaths = unique_list(filepaths)
         if len(filepaths) == 1:
-            return [filepaths[0]]
+            return [(filepaths[0],0)]
         res = []
         for i, path in enumerate(filepaths):
             for modules in self.chosen_modules:
-                for module in self.chosen_modules[modules]:
+                for mod_order,module in enumerate(self.chosen_modules[modules]):
                   if path.lower() in [f"{self.directory}/{module}.f90".lower(),f"{self.directory}/special/{module}.f90".lower()] :
                       if "lines" in self.func_info[call["function_name"]] and path.lower() in self.func_info[call["function_name"]]["lines"]:
                           lines = self.func_info[call["function_name"]]["lines"][path.lower()]
                           params = self.get_parameters(lines[0])
                           if len(params) != n:
                               continue
-                      res.append(filepaths[i])
+                      res.append((filepaths[i],mod_order))
         if len(res) > 0: return res
         if original_file in self.func_info[call["function_name"]]["lines"]:
-          return [original_file]
+          return [(original_file,0)]
         func_name = call["function_name"]
         pexit(f"did not found module for {func_name} in files",filepaths)
         
@@ -6231,9 +6236,11 @@ class Parser:
             #         pexit("check res-initialize-energy")
         
         
-    def get_ac_matrix_res(self,segment,indexes):
+    def get_ac_matrix_res(self,segment,indexes,line):
       #read/write to matrix indexes
       if len(indexes) == 0:
+          return segment[0]
+      if indexes == [":",":"]:
           return segment[0]
       if ":" not in indexes[0] and ":" not in indexes[1] and len(indexes) == 3:
         return f"{segment[0]}[{indexes[2]}-1][{indexes[0]}-1][{indexes[1]}-1]"
@@ -6689,7 +6696,7 @@ class Parser:
           type = self.static_variables[var]["type"]
           name = var
 
-          if dims == [] and type in ["integer","real","double","logical"] and var not in ["n__mod__cparam","m__mod__cparam","yhmax","yhmin"]:
+          if dims == [] and type in ["integer","real","double","logical"] and var not in ["n__mod__cparam","m__mod__cparam"]:
               if self.static_variables[var]["parameter"] and "value" in self.static_variables[var]:
                 val = self.static_variables[var]["value"]
                 if is_arithmetic_expression(val) or val in [".false.",".true."]:
@@ -7046,10 +7053,10 @@ class Parser:
                         res = f"{segment[0]}[{indexes[1]}-1]"
                     #AcMatrix
                     elif src[segment[0]]["dims"] == ["3","3"]:
-                      res = self.get_ac_matrix_res(segment,indexes)
+                      res = self.get_ac_matrix_res(segment,indexes,line)
                     #nx var -> AcMatrix
                     elif src[segment[0]]["dims"] == [global_subdomain_range_x,"3","3"] and indexes[0] == ":": 
-                      res = self.get_ac_matrix_res(segment,indexes[1:])
+                      res = self.get_ac_matrix_res(segment,indexes[1:],line)
                     #nx var -> [n][n]
                     elif src[segment[0]]["dims"] == [global_subdomain_range_x,"4","4"] and indexes[0] == ":" and ":" not in indexes[1] and ":" not in indexes[2]: 
                         res = f"{segment[0]}[{indexes[1]}-1][{indexes[2]}-1]"
@@ -7057,7 +7064,7 @@ class Parser:
                         res = f"{segment[0]}"
                     #nx var -> AcMatrix
                     elif len(src[segment[0]]["dims"]) == 4 and src[segment[0]]["dims"][:-1] == [global_subdomain_range_x,"3","3"] and indexes[0] == ":" and src[segment[0]]["dims"][3] in bundle_dims: 
-                      res = self.get_ac_matrix_res(segment,indexes[1:])
+                      res = self.get_ac_matrix_res(segment,indexes[1:],line)
                     elif len(src[segment[0]]["dims"]) == 4 and src[segment[0]]["dims"] == ["nx__mod__cparam","ny__mod__cparam","nz__mod__cparam","3"] and indexes[0] == ":":
                       res = f"{segment[0]}[vertexIdx.x-NGHOST][{indexes[1]}-1][{indexes[2]}-1][{indexes[3]}-1]"
                     #AcTensor
@@ -7359,7 +7366,6 @@ class Parser:
                     print(src[var])
                     print(indexes)
                     print(line[segment[1]:segment[2]])
-                    print("LINE: ",line)
                     pexit("What to do",segment)
                 if res is None:
                     print(loop_indexes)
@@ -8404,6 +8410,7 @@ class Parser:
                 return pointer_in
             pointer = remove_mod(pointer_in)
             possible_modules = [mod for mod in self.module_info if mod in self.shared_flags_given and f"{pointer}__mod__{mod}" in self.shared_flags_given[mod]]
+
             #print(pointer)
             #If the target module is not gotten from the put/get_shared_variable then we get it from the source assuming that it is the only non pointer refence to the variable
             if(possible_modules == []):
@@ -9510,6 +9517,8 @@ class Parser:
                     function_call = function_calls[0]
                     parameter_list = self.get_static_passed_parameters(function_call["parameters"],local_variables,self.static_variables)
                     function_to_expand_filenames = self.choose_right_modules(file_paths,function_call,filename)
+                    function_to_expand_filenames.sort(key = lambda x: x[1])
+                    function_to_expand_filenames = [x[0] for x in function_to_expand_filenames]
                     res_lines = []
                     info = None
                     type = None
@@ -9738,6 +9747,8 @@ class Parser:
             lines = self.transform_pencils(lines,local_variables,"pencil_case","p")
             lines = self.transform_pencils(lines,local_variables,"internalpencils","q__mod__special")
             lines = self.transform_pencils(lines,local_variables,"internalpencils","q__mod__shallow_water")
+            lines = self.transform_pencils(lines,local_variables,"internalpencils","q__mod__turbpotential")
+            lines = self.transform_pencils(lines,local_variables,"internalpencils","q__mod__newton_cooling")
             lines = self.transform_pencils(lines,local_variables,"internalpencils","q")
         lines = self.remove_strings(lines,local_variables)
         return lines
@@ -9894,10 +9905,11 @@ def print_ranges(parser):
         print(f"{x_dim},{y_dim},{z_dim}")
 
 def get_formatted_lines(lines):
+
     tab_num = 0
     res = []
     for line in lines:
-        line = line.replace("--","+")
+        line = line.replace("--","+");
         line = line.strip()
         if line[-1] == "}":
             tab_num -= 1
