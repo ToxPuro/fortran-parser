@@ -6326,8 +6326,13 @@ class Parser:
 
         if segment[0] == "df":
             vtxbuf_name = self.get_vtxbuf_name_from_index("DF_", index)
-            #if "+" in vtxbuf_name:
-            #    pexit("WRONG: ",f"{index} ---> {vtxbuf_name}")
+            if "+" in vtxbuf_name:
+                index = index.lower()
+                arr_name = index.split("+")[0].upper()
+                index    = index.split("+")[1]
+                vtxbuf_name = f"DF_{arr_name}[{index}]"
+
+                #pexit("WRONG: ",f"{index} ---> {vtxbuf_name}")
             #if vtxbuf_name == "DF_UX":
             #    pexit("WRONG: ",index)
             if "VEC" in vtxbuf_name:
@@ -7610,11 +7615,17 @@ class Parser:
             return ""
         if local_variables[vars_to_declare[0]]["dims"] in [[global_subdomain_range_x,"2"],["2"]]:
             return "real2 " + ", ".join(vars_to_declare)
-        for dim in ["2","6"]:
+        for dim in ["2","4","6"]:
             if local_variables[vars_to_declare[0]]["dims"] in [[dim],["nx__mod__cparam",dim]]:
                 res = ""
                 for var in vars_to_declare:
                     res = res + "real " + var + f"[{dim}]\n"
+                return res
+        for dim in ["2","4","6"]:
+            if local_variables[vars_to_declare[0]]["dims"] in [["nx__mod__cparam",dim,dim]]:
+                res = ""
+                for var in vars_to_declare:
+                    res = res + "real " + var + f"[{dim}][{dim}]\n"
                 return res
         if local_variables[vars_to_declare[0]]["dims"] == [global_subdomain_range_x,"3","3"]:
             return "Matrix " + ", ".join(vars_to_declare)
