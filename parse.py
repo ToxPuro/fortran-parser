@@ -10603,6 +10603,7 @@ def main():
 
         
         parser.get_allocations_in_init_func("initialize_chemistry",subs_not_to_inline)
+        parser.get_allocations_in_init_func("initialize_radiation",subs_not_to_inline)
         parser.get_allocations_in_init_func("chemkin_data",subs_not_to_inline)
         parser.get_allocations_in_init_func("astrobiology_data",subs_not_to_inline)
         parser.get_allocations_in_init_func("initialize_forcing",subs_not_to_inline)
@@ -10796,6 +10797,8 @@ def main():
         gen_only_vars = False
         if(not gen_only_vars):
             res = parser.transform_lines(new_lines,new_lines, local_variables,transform_func)
+
+            
             print("DONE TRANSFORMING LINES\n")
             res = [normalize_reals(line).replace("(:,1)",".x").replace("(:,2)",".y").replace("(:,3)",".z") for line in res]
             file = open("static_var_declares.h","w")
@@ -10811,15 +10814,18 @@ def main():
                 file.write(f"{type} {name}[AC_{dims[1]}]\n")
               elif len(dims) == 3 and dims[0]  == "nx__mod__cparam" and dims[1] in bundle_dims and dims[2] in bundle_dims:
                 file.write(f"{type} {name}[AC_{dims[1]}][AC_{dims[2]}]\n")
-              elif len(dims) == 3 and dims == ["nx__mod__cparam","3","3"]::
-                file.write(f"{Matrix {name}\n")
+              elif len(dims) == 3 and dims == ["nx__mod__cparam","3","3"]:
+                file.write(f"Matrix {name}\n")
               elif len(dims) != 0:
-                  res = f"{type} {name}"
+                  tmp_res = f"{type} {name}"
                   for dim in dims:
-                      res = f"[{dim}]"
+                      tmp_res = f"[{dim}]"
                   file.write(f"{res}\n")
               else:
                 file.write(f"{type} {name}\n")
+            file.close()
+
+
             file = open(output_filename,"w")
             #file.write("const int NGHOST_VAL = 3\n")
             #file.write("#include \"../../../../acc-runtime/stdlib/math\"\n")
