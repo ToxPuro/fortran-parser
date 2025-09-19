@@ -1993,7 +1993,7 @@ def replace_exp_once(line):
             num_of_left_brackets += 1
         if line[forward_index] in ")]":
             num_of_right_brackets += 1
-        if (forward_index == len(line)-1 or line[forward_index+1] in r" =*+-;()/\{},") and num_of_left_brackets == num_of_right_brackets:
+        if (forward_index == len(line)-1 or line[forward_index+1] in r" <>=*+-;()/\{},") and num_of_left_brackets == num_of_right_brackets:
             parse = False
             exponent = exponent + line[forward_index]
         if parse:
