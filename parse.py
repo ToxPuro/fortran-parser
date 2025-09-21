@@ -10825,7 +10825,7 @@ def main():
                   tmp_res = f"{type} {name}"
                   for dim in dims:
                       tmp_res = f"[{dim}]"
-                  file.write(f"{res}\n")
+                  file.write(f"{tmp_res}\n")
               else:
                 file.write(f"{type} {name}\n")
             file.close()
