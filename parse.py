@@ -8891,9 +8891,6 @@ class Parser:
         for line in formatted_lines:
             file.write(f"{remove_mod(line)}\n")
         file.close()
-        lines = [line.replace("AC_top__mod__cparam","AC_top") for line in lines]
-        lines = [line.replace("AC_bot__mod__cparam","AC_bot") for line in lines]
-        lines = [re.sub(r"AC_(.*?)__mod__cparam",r"\1",line) for line in lines]
         return lines
     def add_known_value(self,variable,val):
         self.known_values[variable] = val
@@ -10776,6 +10773,9 @@ def main():
             assert(len(func_calls) == 1)
             #make one kernel for top and one for bot
             res_lines = parser.transform_lines(new_lines,new_lines,local_variables,transform_func)
+            res_lines = [line.replace("AC_top__mod__cparam","AC_top") for line in res_lines]
+            res_lines = [line.replace("AC_bot__mod__cparam","AC_bot") for line in res_lines]
+            res_lines = [re.sub(r"AC_(.*?)__mod__cparam",r"\1",line)  for line in res_lines]
             #res_lines = [remove_mod(line) for line in res_lines]
             res_lines = get_formatted_lines(res_lines)
             file = open(output_filename,"w")
