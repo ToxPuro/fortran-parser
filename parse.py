@@ -10821,7 +10821,7 @@ def main():
                 file.write(f"{type} {name}[AC_{dims[1]}][AC_{dims[2]}]\n")
               elif len(dims) == 3 and dims == ["nx__mod__cparam","3","3"]:
                 file.write(f"Matrix {name}\n")
-              elif dims == ["nx__mod__cparam"]::
+              elif dims == ["nx__mod__cparam"]:
                 file.write(f"{type} {name}\n")
               elif len(dims) != 0:
                   tmp_res = f"{type} {name}"
