@@ -7717,6 +7717,8 @@ class Parser:
             function_name = func_call["function_name"]
             params = func_call["parameters"]
             param_strings = []
+            if self.offload_type == "boundcond":
+                param_strings.append("AcBoundary boundary")
             for param in params:
                 type = local_variables[param]["type"]
                 print(type)
@@ -7732,7 +7734,7 @@ class Parser:
             if self.test_to_c:
                 return ""
             elif self.offload_type == "boundcond":
-                return f"{function_name}({','.join(param_strings)})\n"+"{\n"
+                return f"{function_name}({','.join(param_strings)})\n"+"{\n" + "suppress_unused_warning(boundary)\n"
             elif self.offload_type == "stencil":
                 if function_name == "rhs_cpu":
                     return "Kernel twopass_solve_intermediate(PC_SUB_STEP_NUMBER step_num, real AC_dt__mod__cdata, real AC_t__mod__cdata,bool AC_lrmv__mod__cdata){\n#include \"static_var_declares.h\"\n#include \"../df_declares.h\"\n"
@@ -8889,6 +8891,9 @@ class Parser:
         for line in formatted_lines:
             file.write(f"{remove_mod(line)}\n")
         file.close()
+        lines = [line.replace("AC_top__mod__cparam","AC_top") for line in lines]
+        lines = [line.replace("AC_bot__mod__cparam","AC_bot") for line in lines]
+        lines = [re.sub(r"AC_(.*?)__mod__cparam",r"\1",line) for line in lines]
         return lines
     def add_known_value(self,variable,val):
         self.known_values[variable] = val
