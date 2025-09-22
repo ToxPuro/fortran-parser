@@ -7070,6 +7070,8 @@ class Parser:
                     #nx var -> AcMatrix
                     elif len(src[segment[0]]["dims"]) == 4 and src[segment[0]]["dims"][:-1] == [global_subdomain_range_x,"3","3"] and indexes[0] == ":" and src[segment[0]]["dims"][3] in bundle_dims: 
                       res = self.get_ac_matrix_res(segment,indexes[1:],line)
+                    elif len(src[segment[0]]["dims"]) == 4 and src[segment[0]]["dims"] == ["nx__mod__cparam","ny__mod__cparam","nz__mod__cparam","3"] and indexes[0] == ":" and indexes[3] == ":":
+                      res = f"{segment[0]}[vertexIdx.x-NGHOST][{indexes[1]}-1][{indexes[2]}-1]"
                     elif len(src[segment[0]]["dims"]) == 4 and src[segment[0]]["dims"] == ["nx__mod__cparam","ny__mod__cparam","nz__mod__cparam","3"] and indexes[0] == ":":
                       res = f"{segment[0]}[vertexIdx.x-NGHOST][{indexes[1]}-1][{indexes[2]}-1][{indexes[3]}-1]"
                     #AcTensor
