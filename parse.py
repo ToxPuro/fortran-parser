@@ -8008,7 +8008,7 @@ class Parser:
             orig_line_len = len(lines)
             remove_indexes = []
             for line_index, line in enumerate(lines):
-                if line[:1] == "if" and "then" in line and "else" not in line:
+                if line[:2] == "if" and "then" in line and "else" not in line:
                     if_calls = [call for call in self.get_function_calls_in_line(line,local_variables) if call["function_name"] == "if"]
                     if len(if_calls) == 1:
                         if any([x == lines[line_index+1] for x in ["endif", "end if"]]):
