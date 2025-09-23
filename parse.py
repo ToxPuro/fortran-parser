@@ -5657,6 +5657,35 @@ class Parser:
             pexit("should be only a single module")
         return line[segment[1]:segment[2]].replace(segment[0],self.rename_dict[found_modules[0]][segment[0]])
 
+    def unroll_indexing_with_arrays_line(self,line,local_variables,variables):
+        arr_segs_in_line = self.get_array_segments_in_line(line,variables)
+        if len(arr_segs_in_line) == 0 or len(arr_segs_in_line) > 1:
+            return [line]
+        array_segment = arr_segs_in_line[0]
+        var = array_segment[0]
+        indexes = get_segment_indexes(array_segment,line,0)
+        if len(indexes) == 0:
+            return [line]
+        if variables[var]["dims"][-1] == "3" and indexes[-1] == "(/1,3/)":
+            index_num = len(indexes)-1
+            index_to_replace = indexes[-1]
+            first = "1"
+            info = {
+                "index_num": index_num,
+                "old_index": index_to_replace,
+                "new_index": first
+            }
+            line_first = self.replace_segments(arr_segs_in_line,line,self.unroll_range,local_variables,info)
+            info["new_index"] = "3"
+            line_second = self.replace_segments(arr_segs_in_line,line,self.unroll_range,local_variables,info)
+            return [line_first,line_second]
+        return [line]
+    def unroll_indexing_with_arrays(self,lines,local_variables,variables):
+        res = []
+        for line in lines:
+            res.extend(self.unroll_indexing_with_arrays_line(line,local_variables,variables))
+        return res
+
     def unroll_range(self,segment,segment_index,line,local_variables,info):
         variables = merge_dictionaries(local_variables,self.static_variables)
         sg_indexes = get_segment_indexes(segment,line,0)
@@ -7469,33 +7498,6 @@ class Parser:
         else:
             print("NO case for",line)
             exit()
-    def unroll_indexing_with_arrays(self,lines,local_variables,variables):
-        res = []
-        for line in lines:
-            arr_segs_in_line = self.get_array_segments_in_line(line,variables)
-            if len(arr_segs_in_line) == 0 or len(arr_segs_in_line) > 1:
-                res.append(line)
-            else:
-                array_segment = arr_segs_in_line[0]
-                var = array_segment[0]
-                indexes = get_segment_indexes(array_segment,line,0)
-                if len(indexes) == 0:
-                    res.append(line)
-                else:
-                    if variables[var]["dims"][-1] == "3" and indexes[-1] == "(/1,3/)":
-                        index_num = len(indexes)-1
-                        index_to_replace = indexes[-1]
-                        first = "1"
-                        info = {
-                            "index_num": index_num,
-                            "old_index": index_to_replace,
-                            "new_index": first
-                        }
-                        line_first = self.replace_segments(arr_segs_in_line,line,self.unroll_range,local_variables,info)
-                        info["new_index"] = "3"
-                        line_second = self.replace_segments(arr_segs_in_line,line,self.unroll_range,local_variables,info)
-                        res.extend([line_first,line_second])
-        return res
     def unroll_constant_loops(self,lines,local_variables):
         found_constant_loop = True
         while(found_constant_loop):
@@ -8006,7 +8008,7 @@ class Parser:
             orig_line_len = len(lines)
             remove_indexes = []
             for line_index, line in enumerate(lines):
-                if "if" in line and "then" in line and "else" not in line:
+                if line[:1] == "if" and "then" in line and "else" not in line:
                     if_calls = [call for call in self.get_function_calls_in_line(line,local_variables) if call["function_name"] == "if"]
                     if len(if_calls) == 1:
                         if any([x == lines[line_index+1] for x in ["endif", "end if"]]):
@@ -8575,7 +8577,7 @@ class Parser:
 
         lines = self.unroll_forall(lines,local_variables,variables)
         lines = self.change_strings_to_enums(lines,local_variables,variables)
-
+        lines = self.unroll_indexing_with_arrays(lines,local_variables,variables)
         variables = merge_dictionaries(self.static_variables, local_variables)
         print("Unrolling constant loops")
         lines = [line.strip() for line in lines]
@@ -8639,7 +8641,6 @@ class Parser:
             remove_indexes.append(x["line_num"])
         lines = [x[1] for x in enumerate(lines) if x[0] not in remove_indexes]
         lines = self.unroll_constant_loops(lines,local_variables)
-        lines = self.unroll_indexing_with_arrays(lines,local_variables,variables)
         file = open("res-before-inlined-spread.txt","w")
         for line in lines:
             file.write(f"{line}\n")
@@ -8713,7 +8714,6 @@ class Parser:
         lines = self.elim_empty_dos(lines,local_variables)
         local_variables = {parameter:v for parameter,v in self.get_variables(lines, {},"",True).items() }
         lines = self.unroll_constant_loops(lines,local_variables)
-
         file = open("res-before-unroll-ranges.txt","w")
         for line in lines:
             file.write(f"{line}\n")
@@ -10660,6 +10660,7 @@ def main():
             for line in new_lines:
                 file.write(f"{line}\n")
             file.close()
+
         else:
             file = open("res-inlined.txt","r")
             new_lines = []
@@ -10675,15 +10676,18 @@ def main():
         local_variables = {parameter:v for parameter,v in parser.get_variables(new_lines, {},filename,True).items() }
         variables = merge_dictionaries(local_variables,parser.static_variables)
         new_lines = parser.transform_get_shared_variable_line(local_variables,new_lines)
-
         new_lines = parser.elim_empty_branches(new_lines,local_variables)
+        file = open("res-after-elim-empty.txt","w")
+        for line in new_lines:
+          file.write(f"{remove_mod(line)}\n")
+        file.close()
         new_lines = parser.eliminate_while(new_lines)
 
 
         local_variables = {parameter:v for parameter,v in parser.get_variables(new_lines, {},filename,True).items() }
         #new_lines = parser.transform_any_calls(new_lines,local_variables,merge_dictionaries(local_variables,parser.static_variables))
 
-        file = open("res-without-mod-names.txt","w")
+        file = open("res-after-elim-while.txt","w")
         for line in new_lines:
           file.write(f"{remove_mod(line)}\n")
         file.close()
@@ -10711,10 +10715,6 @@ def main():
         file.close()
         new_lines = parser.eliminate_while(new_lines)
         new_lines = parser.eliminate_while(new_lines)
-        file = open("res-before-transform-lines.txt","w")
-        for line in new_lines:
-          file.write(f"{line}\n")
-        file.close()
         new_lines = parser.eliminate_while(new_lines)
         orig_lines = new_lines.copy()
         variables = merge_dictionaries(variables,local_variables)
@@ -10793,6 +10793,10 @@ def main():
 
         # all_inlined_lines = [line.replace("\n","") for line in open("res-all-inlined.txt","r").readlines()]
         # res = parser.transform_lines(new_lines,all_inlined_lines, local_variables,transform_func)
+        file = open("res-before-transform-lines.txt","w")
+        for line in new_lines:
+          file.write(f"{line}\n")
+        file.close()
         if parser.offload_type == "stencil":
           output_filename = "mhdsolver-rhs.inc"
         elif parser.offload_type == "boundcond":
@@ -10806,7 +10810,7 @@ def main():
             res_lines = parser.transform_lines(new_lines,new_lines,local_variables,transform_func)
             res_lines = [line.replace("AC_top__mod__cparam","AC_top") for line in res_lines]
             res_lines = [line.replace("AC_bot__mod__cparam","AC_bot") for line in res_lines]
-            res_lines = [re.sub(r"AC_(.*?)__mod__cparam",r"\1",line)  for line in res_lines]
+            res_lines = [re.sub(r"AC_(.*?)__mod__cparam",r"\1",line) for line in  res_lines]
             #res_lines = [remove_mod(line) for line in res_lines]
             res_lines = get_formatted_lines(res_lines)
             file = open(output_filename,"w")
