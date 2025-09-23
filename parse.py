@@ -5752,6 +5752,24 @@ class Parser:
             res_lines.append(line)
 
         return res_lines
+    def transform_merge_calls(self,lines,local_variables):
+        variables = merge_dictionaries(local_variables,self.static_variables)
+        for line_index,line in enumerate(lines):
+            merge_calls =  [x for x in self.get_function_calls_in_line(line,variables) if x["function_name"] == "merge" ]
+            modified_merge= True
+            while(len(merge_calls)>0 and modified_merge):
+                call = merge_calls[0]
+                modified_merge = False 
+                if call["parameters"][0] != "1":
+                    pexit("WHAT TO DO?")
+                if call["parameters"][1] != "0":
+                    pexit("WHAT TO DO?")
+                condition = call["parameters"][2]
+                res = f"({condition})"
+                line = self.replace_func_call(line,call,res)
+                lines[line_index] = line
+                merge_calls =  [x for x in self.get_function_calls_in_line(line,variables) if x["function_name"] == "merge" ]
+        return lines
     def transform_sum_calls(self,lines,local_variables):
         variables = merge_dictionaries(local_variables,self.static_variables)
         for line_index,line in enumerate(lines):
@@ -8675,6 +8693,7 @@ class Parser:
 
         #for dim=2 sums for AcReal3 replace with simpl sum, which will sum components
         lines = self.transform_sum_calls(lines,local_variables)
+        lines = self.transform_merge_calls(lines,local_variables)
 
         writes = self.get_writes(lines)
 
