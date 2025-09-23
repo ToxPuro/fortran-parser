@@ -7469,6 +7469,33 @@ class Parser:
         else:
             print("NO case for",line)
             exit()
+    def unroll_indexing_with_arrays(self,lines,local_variables,variables):
+        res = []
+        for line in lines:
+            arr_segs_in_line = self.get_array_segments_in_line(line,variables)
+            if len(arr_segs_in_line) == 0 or len(arr_segs_in_line) > 1:
+                res.append(line)
+            else:
+                array_segment = arr_segs_in_line[0]
+                var = array_segment[0]
+                indexes = get_segment_indexes(array_segment,line,0)
+                if len(indexes) == 0:
+                    res.append(line)
+                else:
+                    if variables[var]["dims"][-1] == "3" and indexes[-1] == "(/1,3/)":
+                        index_num = len(indexes)-1
+                        index_to_replace = indexes[-1]
+                        first = "1"
+                        info = {
+                            "index_num": index_num,
+                            "old_index": index_to_replace,
+                            "new_index": first
+                        }
+                        line_first = self.replace_segments(arr_segs_in_line,line,self.unroll_range,local_variables,info)
+                        info["new_index"] = "3"
+                        line_second = self.replace_segments(arr_segs_in_line,line,self.unroll_range,local_variables,info)
+                        res.extend([line_first,line_second])
+        return res
     def unroll_constant_loops(self,lines,local_variables):
         found_constant_loop = True
         while(found_constant_loop):
@@ -8612,6 +8639,7 @@ class Parser:
             remove_indexes.append(x["line_num"])
         lines = [x[1] for x in enumerate(lines) if x[0] not in remove_indexes]
         lines = self.unroll_constant_loops(lines,local_variables)
+        lines = self.unroll_indexing_with_arrays(lines,local_variables,variables)
         file = open("res-before-inlined-spread.txt","w")
         for line in lines:
             file.write(f"{line}\n")
@@ -8685,6 +8713,7 @@ class Parser:
         lines = self.elim_empty_dos(lines,local_variables)
         local_variables = {parameter:v for parameter,v in self.get_variables(lines, {},"",True).items() }
         lines = self.unroll_constant_loops(lines,local_variables)
+
         file = open("res-before-unroll-ranges.txt","w")
         for line in lines:
             file.write(f"{line}\n")
