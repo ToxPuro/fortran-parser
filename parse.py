@@ -1216,6 +1216,11 @@ sub_funcs = {
         "output_param_indexes": [0],
         "map_func": map_not_implemented
     },
+    "ac_unused_real_array_2d":
+    {
+        "output_param_indexes": [],
+        "map_func": map_not_implemented
+    },
     "calc_kapparho_b2_w2":
     {
         "output_param_indexes": [0],
@@ -3270,7 +3275,6 @@ class Parser:
                 self.rename_dict[module][name] = get_mod_name(name,module)
                 # print(line)
                 # print(filename)
-                assert(module != "density" or name != "chi")
             #don't rewrite local variables
             variable_names = [get_mod_name(name,module) for name in variable_names]
             if writes:
@@ -4364,6 +4368,9 @@ class Parser:
                         if var_name in self.rename_dict[mod]:
                             if not self.static_variables[f"{var_name}__mod__{mod}"]["is_pointer"]:
                                 pos_mods.append(mod)
+                    #TP: we assume the array is not used
+                    if(len(pos_mods) == 0):
+                        return (var,True, self.static_variables[var]["type"],self.static_variables[var]["dims"])
                     assert(len(pos_mods) == 1)
                     src_var = f"{var_name}__mod__{pos_mods[0]}"
                     sizes = self.static_variables[src_var]["dims"]
@@ -8498,6 +8505,8 @@ class Parser:
                       return "ac_unused_real"
                   if self.static_variables[pointer_in]["type"] == "real" and len(self.static_variables[pointer_in]["dims"]) == 1:
                       return "ac_unused_real_array_1d"
+                  if self.static_variables[pointer_in]["type"] == "real" and len(self.static_variables[pointer_in]["dims"]) == 2:
+                      return "ac_unused_real_array_2d"
                   if self.static_variables[pointer_in]["type"] == "real" and len(self.static_variables[pointer_in]["dims"]) == 3:
                       return "ac_unused_real_array_3d"
                   if self.static_variables[pointer_in]["type"] == "real" and len(self.static_variables[pointer_in]["dims"]) == 4:
