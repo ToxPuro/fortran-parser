@@ -7710,7 +7710,7 @@ class Parser:
                 dims = local_variables[var]["dims"]
                 print("HI: ",dims)
                 var_type = local_variables[var]["type"]
-                if dims in [["mx__mod__cparam","my__mod__cparam"],["nx__mod__cparam+2*3","ny__mod__cparam+2*3"]] and var_type == "real":
+                if dims in [["mx__mod__cparam","my__mod__cparam"],["nx__mod__cparam+2*3","ny__mod__cparam+2*3"],["mx__mod__cparam","my__mod__cparam"],["my__mod__cparam","mz__mod__cparam"]] and var_type == "real":
                     res = res + f"real {var}\n"
             return res
         return ""
