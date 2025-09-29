@@ -3898,7 +3898,7 @@ class Parser:
             match = re.search(r"include\s+(.+\.h)",line)
             if match:
                 header_filename = match.group(1).replace("'","").replace('"',"")
-                directory = re.search(r'(.+)\//',filename).group(1)
+                directory = re.search(r'(.*)/',filename).group(1)
                 header_filepath = f"{directory}//{header_filename}"
                 if os.path.isfile(header_filepath):
                     with open(header_filepath,"r") as file:
