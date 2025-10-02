@@ -3430,7 +3430,7 @@ class Parser:
                                 func_name = search_line.split(" ")[1].strip()
                                 self.func_info[func_name] = {"files": [], "lines": {filepath: []}}
                                 self.external_funcs.append(func_name)
-                            if search_line[:len("program")] == "program"
+                            if search_line[:len("program")] == "program":
                                 has_program_line = True
                                 self.file_info[filepath]["is_program_file"] = True
                                 #don't need to rest since this file will not be used
