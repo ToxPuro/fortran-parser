@@ -5595,6 +5595,7 @@ class Parser:
             if mod not in self.rename_dict:
                 continue
             vars_in_modules =  merge_dictionaries(vars_in_modules, self.rename_dict[mod])
+        vars_in_modules =  merge_dictionaries(vars_in_modules, self.rename_dict[own_module])
         variables = merge_dictionaries(local_variables,vars_in_modules)
         #don't rename local variables
         for var in [x for x in variables]:
