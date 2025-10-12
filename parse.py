@@ -9982,6 +9982,8 @@ def get_formatted_lines(lines):
     tab_num = 0
     res = []
     for line in lines:
+        if line.strip() == "stop":
+            continue
         line = line.replace("--","+");
         line = line.strip()
         if line[-1] == "}":
