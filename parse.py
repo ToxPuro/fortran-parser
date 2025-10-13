@@ -9958,8 +9958,6 @@ def get_used_files(make_output,directory):
     #     return files
     return glob.glob(f"{directory}/**/*.f90",recursive=True)
 
-                    
-
 def print_ranges(parser):
         print("Ranges:")
         has_x_range = False
