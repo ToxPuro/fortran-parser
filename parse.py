@@ -6947,6 +6947,8 @@ class Parser:
                         src[segment[0]]["profile_type"] = prof_type
                     if len(var_dims) == 2 and var_dims[0] == "mx__mod__cparam" and var_dims[1] in bundle_dims and indexes[0] == "l1__mod__cparam:l2__mod__cdata" and ":" not in indexes[1]:
                         res = f"{segment[0]}[vertexIdx.x][{indexes[1]}]"
+                    elif len(src[segment[0]]["dims"]) == 4 and src[segment[0]]["dims"] == ["nx__mod__cparam","ny__mod__cparam","nz__mod__cparam","3"] and indexes[0] == ":" and indexes[3] == ":":
+                      res = f"{segment[0]}[vertexIdx.x-NGHOST][{indexes[1]}-1][{indexes[2]}-1]"
                     elif src[segment[0]]["profile_type"]:
                         res = self.get_profile_access(var_dims,indexes,segment,src,line,loop_indexes,i == 0)
                     elif len(var_dims) == 3 and var_dims[2] in bundle_dims and var_dims[1] == "3" and var_dims[0] == global_subdomain_range_x and len(indexes) == 3 and indexes[1].isnumeric() and ":" not in indexes[2]:
@@ -7125,8 +7127,6 @@ class Parser:
                     #nx var -> AcMatrix
                     elif len(src[segment[0]]["dims"]) == 4 and src[segment[0]]["dims"][:-1] == [global_subdomain_range_x,"3","3"] and indexes[0] == ":" and src[segment[0]]["dims"][3] in bundle_dims: 
                       res = self.get_ac_matrix_res(segment,indexes[1:],line)
-                    elif len(src[segment[0]]["dims"]) == 4 and src[segment[0]]["dims"] == ["nx__mod__cparam","ny__mod__cparam","nz__mod__cparam","3"] and indexes[0] == ":" and indexes[3] == ":":
-                      res = f"{segment[0]}[vertexIdx.x-NGHOST][{indexes[1]}-1][{indexes[2]}-1]"
                     elif len(src[segment[0]]["dims"]) == 4 and src[segment[0]]["dims"] == ["nx__mod__cparam","ny__mod__cparam","nz__mod__cparam","3"] and indexes[0] == ":":
                       res = f"{segment[0]}[vertexIdx.x-NGHOST][{indexes[1]}-1][{indexes[2]}-1][{indexes[3]}-1]"
                     #AcTensor
