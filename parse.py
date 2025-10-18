@@ -578,7 +578,17 @@ def map_grad_other(func_call):
 def map_div(func_call):
     params = func_call["parameters"]
     if len(params)>3:
-        pexit("optional params not supported\n")
+        full_params = func_call["new_param_list"]
+        if len(full_params) == 4 and full_params[3][-1] == 'inds':
+            if "(/" in full_params[3][-2]:
+                indexes = full_params[3][-2].split("(/")[-1].split("/)")[0].strip().split(",")
+                indexes = [f"{index}-1" for index in indexes]
+                field3_str = "(Field3){"
+                field3_str += ",".join(indexes)
+                field3_str += "}"
+                res = f"{params[2]} = divergence({field3_str})"
+                return [res]
+        pexit("optional params not supported\n",full_params)
     return [f"{params[2]} = divergence({gen_field3(params[1])})"]
 def map_div_mn(func_call):
     params = func_call["parameters"]
