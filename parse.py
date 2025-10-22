@@ -9901,7 +9901,11 @@ class Parser:
         #       pexit("abort")
 
         #function name is not in func info if is library call like mpi_bcast
-        func_calls_to_replace = [call for call in self.get_function_calls(new_lines,local_variables) if call["function_name"] != subroutine_name and call["function_name"] not in subs_not_to_inline and call["function_name"] in self.func_info and ("interface_funcs" not in self.func_info[call["function_name"]] or all([x not in subs_not_to_inline for x in self.func_info[call["function_name"]]["all_interface_funcs"]]) )]
+        func_calls_to_replace = []
+        for line in new_lines:
+            func_calls_to_replace.extend(self.get_function_calls_in_line(line,local_variables))
+
+        func_calls_to_replace = [call for call in func_calls_to_replace if call["function_name"] != subroutine_name and call["function_name"] not in subs_not_to_inline and call["function_name"] in self.func_info and ("interface_funcs" not in self.func_info[call["function_name"]] or all([x not in subs_not_to_inline for x in self.func_info[call["function_name"]]["all_interface_funcs"]]) )]
         for call in func_calls_to_replace:
             if call["function_name"] == "dot":
                 pexit("wrong")
