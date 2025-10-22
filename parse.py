@@ -8894,7 +8894,10 @@ class Parser:
             for var in static_variables_in_line:
                 #pow is a function in this context not a parameter
                 if var.lower() not in ["bot","top","nghost","pow"] and var.lower() not in local_variables and var.upper() != var:
-                    res_line = replace_variable(res_line, var, f"AC_{var.lower()}")
+                    if "__mod__cparam" in var:
+                      res_line = replace_variable(res_line, var, remove_mod(var).lower())
+                    else:
+                      res_line = replace_variable(res_line, var, f"AC_{var.lower()}")
             lines[i] = res_line
 
 
