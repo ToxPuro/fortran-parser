@@ -7190,6 +7190,8 @@ class Parser:
                         res = f"{segment[0]}[{indexes[0]}-1]"
                     elif len(var_dims) == 2 and len(indexes) == 2:
                         res = f"{segment[0]}[{indexes[0]}-1][{indexes[1]}-1]"
+                    elif (segment[0] in self.static_variables_to_declare or segment[0] in local_variables) and len(var_dims) == 3 and len(indexes) == 3 and num_of_looped_dims == 1 and indexes[0] == ":" and var_dims[0] == "nx__mod__cparam":
+                        res = f"{segment[0]}[{indexes[1]}-1][{indexes[2]}-1]"
                     elif len(var_dims) == 3 and len(indexes) == 3 and num_of_looped_dims == 1 and indexes[0] == ":" and var_dims[0] == "nx__mod__cparam":
                         res = f"{segment[0]}[vertexIdx.x-NGHOST][{indexes[1]}-1][{indexes[2]}-1]"
                     elif len(var_dims) == 3 and len(indexes) == 3:
@@ -7703,6 +7705,9 @@ class Parser:
         if local_variables[vars_to_declare[0]]["dims"] == [global_subdomain_range_x,"3","3","3"]:
             #tensors are not yet supported
             return "Tensor " + ", ".join(vars_to_declare)
+        dims = local_variables[vars_to_declare[0]]["dims"]
+        if len(dims) == 3 and dims[0]  == global_subdomain_range_x and dims[1].isnumeric() and dims[2].isnumeric():
+            return "real " + var + f"[{dims[1]}][{dims[2]}]"
         if dims[:-1] ==  [global_subdomain_range_x,"3"] and dims[-1] in bundle_dims:
             #tensors are not yet supported
             res = ""
@@ -10904,6 +10909,8 @@ def main():
                 file.write(f"Matrix {name}\n")
               elif dims == ["nx__mod__cparam"]:
                 file.write(f"{type} {name}\n")
+              elif len(dims) == 3 and dims[0] == "nx__mod__cparam" and dims[1].isnumeric() and dims[2].isnumeric():
+                file.write(f"{type} {name}[{dims[1]}][{dims[2]}]\n")
               elif len(dims) != 0:
                   tmp_res = f"{type} {name}"
                   for dim in dims:
