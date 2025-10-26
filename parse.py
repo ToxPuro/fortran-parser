@@ -10598,8 +10598,9 @@ def main():
               parser.safe_subs_to_remove.append(f"calc_diagnostics_{mod}")
 
         #These are here until the issues with the subroutines are resolved
-        parser.ignored_subroutines.extend(["get_cs2_cheminp","get_1step_test_sum_dydts","get_1step_test_reaction_rate"])
-        parser.safe_subs_to_remove.extend(["get_cs2_cheminp","get_1step_test_sum_dydts","get_1step_test_reaction_rate"])
+        parser.ignored_subroutines.extend(["get_cs2_cheminp","get_1step_test_sum_dydts","get_1step_test_reaction_rate","get_deltavd_turbu"])
+        parser.safe_subs_to_remove.extend(["get_cs2_cheminp","get_1step_test_sum_dydts","get_1step_test_reaction_rate","get_deltavd_turbu"])
+
         #These are here until the issues with the subroutines are resolved
         parser.ignored_subroutines.extend(["get_ccondens","get_del6nd_via_global_nd","add_pseudo_coriolis_force"])
         parser.safe_subs_to_remove.extend(["get_ccondens","get_del6nd_via_global_nd","add_pseudo_coriolis_force"])
