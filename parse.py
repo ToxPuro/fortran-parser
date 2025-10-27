@@ -10933,8 +10933,8 @@ def main():
               elif len(dims) != 0:
                   tmp_res = f"{type} {name}"
                   for dim in dims:
-                      if dim == "mseed__mod__cparam":
-                          dim = "mseed"
+                      if "__mod__cparam" in dim:
+                          dim = remove_mod(dim)
                       tmp_res = tmp_res + f"[{dim}]"
                   file.write(f"{tmp_res}\n")
               else:
