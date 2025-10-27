@@ -10697,6 +10697,7 @@ def main():
 
         
         parser.get_allocations_in_init_func("initialize_chemistry",subs_not_to_inline)
+        parser.get_allocations_in_init_func("chemistry_allocate_rhs_arrays",subs_not_to_inline)
         parser.get_allocations_in_init_func("initialize_radiation",subs_not_to_inline)
         parser.get_allocations_in_init_func("chemkin_data",subs_not_to_inline)
         parser.get_allocations_in_init_func("astrobiology_data",subs_not_to_inline)
