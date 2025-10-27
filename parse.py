@@ -8278,10 +8278,18 @@ class Parser:
                             elif len(dims) == 1 and dims[0] in bundle_dims:
                               keep_doing = False
                             else:
-                                print(lower)
-                                print(dims)
+                                print("!!WARNING!!")
+                                print("!!WARNING!!")
+                                print("!!WARNING!!")
+                                print("Dropping any call across pencil: in general this is not safe!!")
+                                lines[line_index] = self.replace_func_call(line,call,call["parameters"][0])
                                 print(line)
-                                pexit("WHAT TO DO?")
+                                any_calls=  [x for x in self.get_function_calls_in_line(lines[line_index],variables) if x["function_name"] == "any"]
+
+                                #print(lower)
+                                #print(dims)
+                                #print(line)
+                                #pexit("WHAT TO DO?")
                         elif(len(parts) == 1):
                             #print(parts[0])
                             dims = variables[parts[0]]["dims"]
