@@ -582,7 +582,7 @@ def map_div(func_call):
         if len(full_params) == 4 and full_params[3][-1] == 'inds':
             if "(/" in full_params[3][-2]:
                 indexes = full_params[3][-2].split("(/")[-1].split("/)")[0].strip().split(",")
-                indexes = [f"{index}-1" for index in indexes]
+                indexes = [f"Field({index}-1)" for index in indexes]
                 field3_str = "(Field3){"
                 field3_str += ",".join(indexes)
                 field3_str += "}"
