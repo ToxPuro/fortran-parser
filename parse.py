@@ -6321,7 +6321,7 @@ class Parser:
           print("unsupported matrix read/write")
           print(line[segment[1]:segment[2]])
           pexit(indexes)
-    def gen_f_access(self,i,rhs_var,segment,index):
+    def gen_f_access(self,i,rhs_var,segment,index,to_value=True):
 
         if(index == "0+iguij__mod__cdata"): index = "igu11__mod__cdata"
         if(index == "1+iguij__mod__cdata"): index = "igu12__mod__cdata"
@@ -6420,11 +6420,20 @@ class Parser:
               #TP TODO: this should really work even if we have an index there
               if ":" not in index and "(" not in index:
                 #This is needed in case of accesses like ieosvar2 which is dynamically set
-                return f"value(Field({index}-1))"
+                if to_value:
+                    return f"value(Field({index}-1))"
+                else:
+                    return f"Field({index}-1)"
               if "+" in vtxbuf_name and not (base in self.static_variables and len(self.static_variables[base]["dims"]) == 1):
-                return f"value(Field({index}))"
+                if to_value:
+                    return f"value(Field({index}))"
+                else:
+                    return f"Field({index})"
               else:
-                return f"value({vtxbuf_name})"
+                if to_value:
+                    return f"value({vtxbuf_name})"
+                else:
+                    return f"{vtxbuf_name}"
             else:
               #write to f variable, presumably this is because auxiliary variables
               #reuse DF_variable for now
@@ -6454,10 +6463,8 @@ class Parser:
                 print("HMM: ",f"nghost__mod__cparam+{loop_indexes[0][0]}",first_index)
                 print("HMM: ",f"nghost__mod__cparam+{loop_indexes[0][0]}" == first_index.strip())
                 pexit("WEIRD FIRST DIM: ",loop_indexes)
-            if(orig_indexes[1] not in ["m__mod__cdata","nghost__mod__cparam+iky"]):
-                pexit("WEIRD SECOND DIM: ",orig_indexes[1])
-            if(orig_indexes[2] not in ["n__mod__cdata","nghost__mod__cparam+ikz"]):
-                pexit("WEIRD THIRD DIM: ",orig_indexes[2])
+            weird_y_access = (orig_indexes[1] not in ["m__mod__cdata","nghost__mod__cparam+iky"])
+            weird_z_access = (orig_indexes[2] not in ["n__mod__cdata","nghost__mod__cparam+ikz"])
             if ":" in orig_indexes[3]:
                 parts = [x.split("(")[0].strip() for x in orig_indexes[3].split(":")]
                 if len(parts) == 2:
@@ -6467,6 +6474,15 @@ class Parser:
                     
                 #pexit("WEIRD FOURTH DIM: ",orig_indexes[3])
             indexes = [self.evaluate_indexes(index) for index  in orig_indexes]
+            if weird_y_access and weird_z_access:
+                res = self.gen_f_access(i,rhs_var,segment,indexes[-1],to_value=False)
+                return f"{res}[vertexIdx.x][{indexes[1]}][{indexes[2]}]"
+            if weird_y_access:
+                res = self.gen_f_access(i,rhs_var,segment,indexes[-1],to_value=False)
+                return f"{res}[vertexIdx.x][{indexes[1]}][vertexIdx.z]"
+            if weird_z_access:
+                res = self.gen_f_access(i,rhs_var,segment,indexes[-1],to_value=False)
+                return f"{res}[vertexIdx.x][vertexIdx.y][{indexes[2]}]"
             return self.gen_f_access(i,rhs_var,segment,indexes[-1])
 
 
@@ -10626,12 +10642,6 @@ def main():
 
         parser.ignored_subroutines.append(f"accumulate_schur_averages")
         parser.safe_subs_to_remove.append(f"accumulate_schur_averages")
-
-        parser.ignored_subroutines.append(f"time_integrals_hydro")
-        parser.safe_subs_to_remove.append(f"time_integrals_hydro")
-
-        parser.ignored_subroutines.append(f"time_integrals_magnetic")
-        parser.safe_subs_to_remove.append(f"time_integrals_magnetic")
 
         parser.ignored_subroutines.append(f"density_after_boundary")
         parser.safe_subs_to_remove.append(f"density_after_boundary")
