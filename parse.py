@@ -6684,8 +6684,26 @@ class Parser:
             "sigb1m_all_nonaver__mod__klein_gordon",
 
             "m__mod__cdata",
-            "n__mod__cdata"
+            "n__mod__cdata",
+            "llast__mod__cdata",
+            "allproc_print__mod__cdata",
+            "ascale__mod__cdata",
+            "headt__mod__cdata",
+
+            "hcond_prof__mod__energy",
+            "dlnhcond_prof__mod__energy",
+            "chit_prof_stored__mod__energy",
+            "chit_prof_fluct_stored__mod__energy",
+            "dchit_prof_stored__mod__energy",
+            "dchit_prof_fluct_stored__mod__energy",
+            "ssmz__mod__energy",
+            "del2ssmz__mod__energy",
+
+            "uumxy__mod__hydro",
+            "uu_average_cyl__mod__hydro",
+            "uu_average_sph__mod__hydro"
         ]
+
         already_pushed_pars = self.get_already_pushed_pars();
         res_file = open("mhdsolver-rhs.inc","r")
         contents = res_file.read()
@@ -11117,4 +11135,4 @@ def main():
     
 
 if __name__ == "__main__":
-    main()
+    
