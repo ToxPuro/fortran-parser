@@ -10128,7 +10128,7 @@ def main():
     argparser.add_argument("-s", "--stencil",default=False,action="store_true", help="Whether the subroutine to offload is a stencil op e.g. RK3 or not")
     argparser.add_argument("--to-c",default=False,action="store_true", help="Whether to translate offloadable function to single threaded C for testing")
     argparser.add_argument("--diagnostics",default=False,action="store_true", help="Whether to include diagnostics calculations in rhs calc")
-    argparser.add_argument("--modify_source_function",default=False,action="store_true", help="Whether to modify the fortran source code to include the pushpars etc. automatically")
+    argparser.add_argument("--modify_source_code",default=False,action="store_true", help="Whether to modify the fortran source code to include the pushpars etc. automatically")
     
     args = argparser.parse_args()
     config = vars(args)
