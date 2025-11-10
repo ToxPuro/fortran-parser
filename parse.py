@@ -6681,6 +6681,8 @@ class Parser:
             "b2m_all__mod__cdata",
             "sige1m_all_nonaver__mod__cdata",
             "sigb1m_all_nonaver__mod__cdata"
+            "m__mod__cdata",
+            "n__mod__cdata"
         ]
         already_pushed_pars = self.get_already_pushed_pars();
         res_file = open("mhdsolver-rhs.inc","r")
@@ -6688,7 +6690,8 @@ class Parser:
         res_file.close()
         res = {}
         for var in [var for var in self.static_variables if var not in self.static_variables_to_declare and var in contents]:
-          if var in ["m__mod__cdata","n__mod__cdata"]: continue
+          if var in vars_not_to_push:
+              continue
           if self.static_variables[var]["parameter"]:
                 continue
           if self.static_variables[var]["is_pointer"]:
@@ -6725,7 +6728,7 @@ class Parser:
           type = self.static_variables[var]["type"]
           name = remove_mod(var)
           mod  = get_mod(var)
-          if name in vars_not_to_push:
+          if var in vars_not_to_push:
               continue
           if name in already_pushed_pars[mod][0]: 
               continue
