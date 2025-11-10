@@ -6816,7 +6816,7 @@ class Parser:
           filename = [x for x in self.file_info if "module" in self.file_info[x] and self.file_info[x]["module"] == mod][0]
           is_special = "/special" in filename
 
-          if self.modify_source_code
+          if self.modify_source_code:
             read_in = open(filename,"r")
             out = []
             for line in read_in:
