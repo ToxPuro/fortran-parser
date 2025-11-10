@@ -6812,6 +6812,21 @@ class Parser:
             file.write(f"{line}\n")
           file.close()
 
+          filename = [x for x in self.file_info if "module" in self.file_info[x] and self.file_info[x]["module"] == mod][0]
+          read_in = open(filename,"r")
+          out = []
+          for line in read_in:
+              if "endsubroutine pushpars2c" in line:
+                  for push_line in res[mod][0]:
+                      out.append(f"    {push_line}\n")
+              out.append(line)
+          read_in.close()
+          write_out = open(filename,"w")
+          for line in out:
+              write_out.write(f"{line}")
+          write_out.close()
+
+
 
 
               
