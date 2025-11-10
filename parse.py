@@ -2486,6 +2486,7 @@ def get_chosen_modules(makefile):
 class Parser:
 
     def __init__(self, files,config):
+        self.modify_source_code = config["modify_source_code"]
         self.pde_index_counter = 1
         self.enum_strings = []
         self.vars_to_pad = []
@@ -6813,18 +6814,25 @@ class Parser:
           file.close()
 
           filename = [x for x in self.file_info if "module" in self.file_info[x] and self.file_info[x]["module"] == mod][0]
-          read_in = open(filename,"r")
-          out = []
-          for line in read_in:
-              if "endsubroutine pushpars2c" in line:
-                  for push_line in res[mod][0]:
-                      out.append(f"    {push_line}\n")
-              out.append(line)
-          read_in.close()
-          write_out = open(filename,"w")
-          for line in out:
-              write_out.write(f"{line}")
-          write_out.close()
+          is_special = "/special" in filename
+
+          if self.modify_source_code
+            read_in = open(filename,"r")
+            out = []
+            for line in read_in:
+                if "endsubroutine pushpars2c" in line:
+                    for push_line in res[mod][0]:
+                        out.append(f"    {push_line}\n")
+                line = line.replace(f"module {mod}","module Special")
+                line = line.replace(f"{mod}_dummies.inc","special_dummies.inc")
+                line = line.replace(f"{mod}_run_pars","special_init_pars")
+                line = line.replace(f"{mod}_init_pars","special_start_pars")
+                out.append(line)
+            read_in.close()
+            write_out = open(filename,"w")
+            for line in out:
+                write_out.write(f"{line}")
+            write_out.close()
 
 
 
@@ -10120,6 +10128,7 @@ def main():
     argparser.add_argument("-s", "--stencil",default=False,action="store_true", help="Whether the subroutine to offload is a stencil op e.g. RK3 or not")
     argparser.add_argument("--to-c",default=False,action="store_true", help="Whether to translate offloadable function to single threaded C for testing")
     argparser.add_argument("--diagnostics",default=False,action="store_true", help="Whether to include diagnostics calculations in rhs calc")
+    argparser.add_argument("--modify_source_function",default=False,action="store_true", help="Whether to modify the fortran source code to include the pushpars etc. automatically")
     
     args = argparser.parse_args()
     config = vars(args)
