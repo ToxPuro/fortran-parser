@@ -6702,7 +6702,15 @@ class Parser:
             "uumxy__mod__hydro",
             "uu_average_cyl__mod__hydro",
             "uu_average_sph__mod__hydro",
-            "arms__mod__magnetic"
+            "arms__mod__magnetic",
+            "a2rhom_all__mod__backreact_infl",
+            "edotbm_all__mod__backreact_infl",
+            "e2m_all__mod__backreact_infl",
+            "b2m_all__mod__backreact_infl",
+            "sige1m_all_nonaver__mod__backreact_infl",
+            "sigb1m_all_nonaver__mod__backreact_infl",
+
+            "ij_table__mod__gravitational_waves_htxk"
         ]
 
         already_pushed_pars = self.get_already_pushed_pars();
