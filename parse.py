@@ -9894,30 +9894,52 @@ class Parser:
             line = re.sub(pattern, replacement, line)
             res_lines.append(line)
         #TP: filter too long strings out
-        all_strings = [x for x in all_strings if len(x) < 40]
-        file = open("res-string-enums","w")
-        #file.write(f"integer, parameter :: enum_unknown_string_string = 0\n")
-        largest_string_int = 0
-        for var in self.static_variables:
-            if "__mod__cparam" in var:
-                if len(var) >= len("enum_") and var[0:len("enum_")] == "enum_" and self.static_variables[var]["parameter"]:
-                    largest_string_int = max(largest_string_int,int(self.static_variables[var]["value"]))
+        if self.modify_source_code:
+
+            enum_file = f"{self.directory}/cparam_enum.h"
+            general_file = f"{self.directory}/general.f90"
+            read_in = open(enum_file,"r")
+            out = [line for line in read_in]
+            read_in.close()
+            all_strings = [x for x in all_strings if len(x) < 40]
+            #file.write(f"integer, parameter :: enum_unknown_string_string = 0\n")
+            largest_string_int = 0
+            for var in self.static_variables:
+                if "__mod__cparam" in var:
+                    if len(var) >= len("enum_") and var[0:len("enum_")] == "enum_" and self.static_variables[var]["parameter"]:
+                        largest_string_int = max(largest_string_int,int(self.static_variables[var]["value"]))
 
 
-        for i,string in enumerate(all_strings):
-            string = remove_invalid_symbols(string.replace(" ","_"))
-            res = f"enum_{string}_string"
-            if f"{res}__mod__cparam".lower() not in self.static_variables:
-                largest_string_int += 1
-                file.write(f"integer, parameter :: {res} = {largest_string_int}\n")
-        file.close()
-        file = open("strings-to-enums","w")
-        for string in all_strings:
-            enum = remove_invalid_symbols(string.replace(" ","_"))
-            var = f"enum_{enum}_string"
-            if f"{var}__mod__cparam".lower() not in self.static_variables:
-                file.write(f"case('{string}')\n  dst = {var}\n")
-        file.close()
+            for i,string in enumerate(all_strings):
+                string = remove_invalid_symbols(string.replace(" ","_"))
+                res = f"enum_{string}_string"
+                if f"{res}__mod__cparam".lower() not in self.static_variables:
+                    largest_string_int += 1
+                    out.append(f"integer, parameter :: {res} = {largest_string_int}\n")
+            write_out = open(enum_file,"w")
+            for line in out:
+                write_out.write(f"{line}")
+            write_out.close()
+
+            mappings = []
+            for string in all_strings:
+                enum = remove_invalid_symbols(string.replace(" ","_"))
+                var = f"enum_{enum}_string"
+                if f"{var}__mod__cparam".lower() not in self.static_variables:
+                    mappings.append(f"      case('{string}')\n        dst = {var}\n")
+
+            out = []
+            read_in = open(general_file,"r")
+            for line in read_in:
+                if "case" in line and "waterfall" in line:
+                    for mapping in mappings:
+                        out.append(f"{mapping}")
+                out.append(line)
+            read_in.close()
+            write_out= open(general_file,"w")
+            for line in out:
+                write_out.write(f"{line}")
+            write_out.close()
 
         return res_lines
     def normalize(self, lines):
