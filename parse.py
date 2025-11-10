@@ -6675,12 +6675,14 @@ class Parser:
             "lmultithread__mod__cdata",
             "reac_chem__mod__cdata",
             "reac_dust__mod__cdata",
-            "a2rhom_all__mod__cdata",
-            "edotbm_all__mod__cdata",
-            "e2m_all__mod__cdata",
-            "b2m_all__mod__cdata",
-            "sige1m_all_nonaver__mod__cdata",
-            "sigb1m_all_nonaver__mod__cdata"
+
+            "a2rhom_all__mod__klein_gordon",
+            "edotbm_all__mod__klein_gordon",
+            "e2m_all__mod__klein_gordon",
+            "b2m_all__mod__klein_gordon",
+            "sige1m_all_nonaver__mod__klein_gordon",
+            "sigb1m_all_nonaver__mod__klein_gordon",
+
             "m__mod__cdata",
             "n__mod__cdata"
         ]
