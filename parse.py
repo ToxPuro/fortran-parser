@@ -6665,6 +6665,23 @@ class Parser:
         file.close()
 
     def gen_pushpars(self):
+        vars_not_to_push = [
+            "t__mod__cdata",
+            "lfirst__mod__cdata",
+            "lupdate_courant_dt__mod__cdata",
+            "trelax_poly__mod__cdata",
+            "nt__mod__cdata",
+            "lrmv__mod__cdata",
+            "lmultithread__mod__cdata",
+            "reac_chem__mod__cdata",
+            "reac_dust__mod__cdata",
+            "a2rhom_all__mod__cdata",
+            "edotbm_all__mod__cdata",
+            "e2m_all__mod__cdata",
+            "b2m_all__mod__cdata",
+            "sige1m_all_nonaver__mod__cdata",
+            "sigb1m_all_nonaver__mod__cdata"
+        ]
         already_pushed_pars = self.get_already_pushed_pars();
         res_file = open("mhdsolver-rhs.inc","r")
         contents = res_file.read()
@@ -6708,6 +6725,8 @@ class Parser:
           type = self.static_variables[var]["type"]
           name = remove_mod(var)
           mod  = get_mod(var)
+          if name in vars_not_to_push:
+              continue
           if name in already_pushed_pars[mod][0]: 
               continue
           if "particles" in mod:
