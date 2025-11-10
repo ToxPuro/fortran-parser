@@ -6701,7 +6701,8 @@ class Parser:
 
             "uumxy__mod__hydro",
             "uu_average_cyl__mod__hydro",
-            "uu_average_sph__mod__hydro"
+            "uu_average_sph__mod__hydro",
+            "arms__mod__magnetic"
         ]
 
         already_pushed_pars = self.get_already_pushed_pars();
