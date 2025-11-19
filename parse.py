@@ -2692,6 +2692,10 @@ class Parser:
                 lower = lower.split("(",1)[0].strip()
                 upper = upper.split("(",1)[0].strip()
                 return f"{prefix}{(lower[1:-1]+lower_indexes[0]).upper()}VEC"
+            if "+3" in lower:
+                return f"{prefix}{lower[1:-3].upper()}_1_VEC"
+            if "+6" in lower:
+                return f"{prefix}{lower[1:-3].upper()}_2_VEC"
             return f"{prefix}{lower[1:-1].upper()}VEC"
         if "(" in index:
             base = index.split("(",1)[0].strip()
@@ -6507,6 +6511,18 @@ class Parser:
             elif lower == "ireaci__mod__chemistry(1)" and upper == "ireaci__mod__chemistry(nchemspec__mod__cparam)":
                 pass
             else:
+                if lower[:2] == "3+" and upper[:2] == "5+":
+                    lower = lower[2:]
+                    upper = f"2+{lower}"
+                    index = f"{lower}:{upper}"
+                    res = self.gen_f_access(i,rhs_var,segment,index)
+                    return f"{res}_1"
+                if lower[:2] == "6+" and upper[:2] == "8+":
+                    lower = lower[2:]
+                    upper = f"2+{lower}"
+                    index = f"{lower}:{upper}"
+                    res = self.gen_f_access(i,rhs_var,segment,index)
+                    return f"{res}_2"
                 print("range in df index 3")
                 print(line[segment[1]:segment[2]])
                 print(indexes)
@@ -7078,7 +7094,11 @@ class Parser:
                         nx_index = get_nx_loop_index(loop_indexes)
                         #becomes a write to 2d array of bundle dims
                         if nx_index:
-                            if len(var_dims) == 3 and len(indexes) == 3 and indexes[0] == nx_index and var_dims[1] in bundle_dims and var_dims[2] in bundle_dims:
+                            if len(indexes) == 0:
+                                res = f"{segment[0]}"
+                            elif len(var_dims) == 3 and len(indexes) == 3 and indexes[0] == nx_index and indexes[1] == ":" and indexes[2] == ":":
+                                res = f"{segment[0]}"
+                            elif len(var_dims) == 3 and len(indexes) == 3 and indexes[0] == nx_index and var_dims[1] in bundle_dims and var_dims[2] in bundle_dims:
                                 res = f"{segment[0]}[{indexes[1]}-1][{indexes[2]}-1]"
                             elif len(var_dims) == 1 and len(indexes) == 1 and indexes[0] == nx_index and var_dims[0]  == "nx__mod__cparam":
                                 res = f"{segment[0]}"
@@ -7105,7 +7125,7 @@ class Parser:
                             elif len(var_dims) == 3 and len(indexes) == 3:
                                 res = f"{segment[0]}[{indexes[0]}-1][{indexes[1]}-1][{indexes[2]}-1]"
                             else:
-                                print(indexes)
+                                print(indexes,len(indexes))
                                 pexit("What to do?",line[segment[1]:segment[2]])
                         elif loop_indexes[-1][3] == "l1__mod__cparam" and loop_indexes[-1][2] == "l2__mod__cdata" and len(loop_indexes) == 1:
                             if all([loop_indexes[-1][0] not in index for index in indexes]):
