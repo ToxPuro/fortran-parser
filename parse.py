@@ -6830,8 +6830,6 @@ class Parser:
           is_special = "/special" in filename
 
           if self.modify_source_code:
-            realpath = os.path.realpath(filename)
-            os.system(f"git restore {realpath}")
             read_in = open(filename,"r")
             out = []
             for line in read_in:
@@ -11115,6 +11113,9 @@ def main():
         cparam_file.close()
 
         print("CREATING PUSHPARS\n")
+        if config["modify_source_code"]:
+            #Needed because build process modifies special files
+            os.system("git restore $PENCIL_HOME")
         parser.gen_pushpars()
         print("CREATED PUSHPARS\n")
 
