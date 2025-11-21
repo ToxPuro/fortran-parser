@@ -5628,11 +5628,8 @@ class Parser:
         if("character" in type):
             res = f"enum_{segment[0]}"
             mod = get_mod(segment[0])
-            if res not in self.enum_strings:
+            if res not in self.enum_strings and res not in self.static_variables:
                 self.enum_strings.append(res)
-                file = open(f"{mod}_enum_strings","a")
-                file.write(f"integer :: {remove_mod(res)} = 0\n")
-                file.close()
             return res
         return line[segment[1]:segment[2]]
 
@@ -6833,13 +6830,25 @@ class Parser:
           is_special = "/special" in filename
 
           if self.modify_source_code:
+            realpath = os.path.realpath(filename)
+            os.system(f"git restore {realpath}")
             read_in = open(filename,"r")
             out = []
             for line in read_in:
+                if line.strip().lower() == "contains":
+                    for enum in self.enum_strings:
+                        if f"__mod__{mod}" in enum:
+                            out.append(f"  integer :: {remove_mod(enum)} = 0\n")
                 if "endsubroutine pushpars2c" in line:
                     for push_line in res[mod][0]:
                         out.append(f"    {push_line}\n")
-                line = line.replace(f"module {mod}","module Special")
+                    for enum in self.enum_strings:
+                        if f"__mod__{mod}" in enum:
+                            res[mod][1] += 1
+                            name = remove_mod(enum)
+                            out.append( "    call string_to_enum(enum_{name},{name})\n")
+                            out.append(f"    call copy_addr({name},p_par({res[mod][1]})) ! int\n")
+                            
                 line = line.replace(f"{mod}_dummies.inc","special_dummies.inc")
                 line = line.replace(f"{mod}_run_pars","special_run_pars")
                 line = line.replace(f"{mod}_init_pars","special_init_pars")
