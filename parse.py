@@ -7288,6 +7288,9 @@ class Parser:
                         res = f"{line[segment[1]:segment[2]]}"
                     elif len(var_dims) == 1 and var_dims[0] == global_subdomain_range_x and len(indexes) == 1 and indexes[0] == global_subdomain_range_x_inner:
                         res = f"{segment[0]}"
+                    ##TP: here we are being lenient/optimistic that for pencils that are mx because of technical reasons we assume the ghost zones to not have an impact
+                    elif len(var_dims) == 1 and len(indexes) == 1 and indexes[0] == global_subdomain_range_x_inner and segment[0] in local_variables:
+                        res = f"{segment[0]}"
                     elif len(var_dims) == 1 and len(indexes) == 1 and indexes[0] == global_subdomain_range_x_inner:
                         res = f"{segment[0]}[vertexIdx.x]"
                     elif len(var_dims) == 2 and num_of_looped_dims == 1 and indexes[1] == ":" and var_dims[1] == "nx__mod__cparam":
