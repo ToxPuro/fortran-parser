@@ -9822,6 +9822,8 @@ class Parser:
                         print("TP HMM", line[start_index+1:])
                         pexit(line)
                 else:
+                    if "else" in line and "if" in line and "then" in line:
+                        line = line.split("then")[0] + " then"
                     res_lines.append(line)
             else:
                 res_lines.append(self.remove_name_after_keyword(line))
