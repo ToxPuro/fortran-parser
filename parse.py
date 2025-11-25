@@ -5801,8 +5801,7 @@ class Parser:
                     modified_sum = False 
                     #if (len(call["parameters"]) == 2 and call["parameters"][1] == "2" and self.get_param_info((call["parameters"][0],False),local_variables,self.static_variables)[3] == [global_subdomain_range_x,"3"]):
                     param_dims = self.get_param_info((call["parameters"][0],False),local_variables,self.static_variables)[3]
-                    #if (len(call["parameters"]) == 2 and call["parameters"][1] == "2" and len() == 2:
-                    if len(call["parameters"]) == 2 and call["parameters"][1] == "2" and len(param_dims) == 2 and param_dims[0] == global_subdomain_range_x:
+                    if len(call["parameters"]) == 2 and call["parameters"][1].split("=")[-1].strip() == "2" and len(param_dims) == 2 and param_dims[0] == global_subdomain_range_x:
                         line = self.replace_func_call(line,call,f"sum({call['parameters'][0]})")
                         lines[line_index] = line
                         modified_sum = True
