@@ -452,13 +452,14 @@ def map_curl_mn(func_call):
 
     #This corresponds to no-correction term so can work only in cartesian coordinates!
     if(len(params) == 2):
-        return [f"{params[1][0]}=curl({params[0][0]})"]
+        return [f"{params[1][-2]}=curl({params[0][-2]})"]
     elif(len(params) == 4):
         res = []
-        res.append([f"if {params[3][0]} {params[1][0]} = curl({params[0][0]},{params[2][0]})"])
-        res.append([f"else              {params[1][0]} = covariant_curl({params[0][0]},{params[2][0]})"])
+        res.append([f"if {params[3][-2]} {params[1][-2]} = curl({params[0][-2]},{params[2][-2]})"])
+        res.append([f"else              {params[1][-2]} = covariant_curl({params[0][-2]},{params[2][-2]})"])
         
-    return [f"{params[1][0]}=curl({params[0][0]},{params[2][0]})"]
+    res = f"{params[1][-2]}=curl({params[0][-2]},{params[2][-2]})"
+    return [res]
 
 def map_dot_mn(func_call):
     params = func_call["parameters"]
