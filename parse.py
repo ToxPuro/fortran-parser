@@ -11106,8 +11106,20 @@ def main():
                 if line != "real3 ac_transformed_pencil_":
                   file.write(f"{line}\n") 
             file.close()
+            res[0] =  "Kernel GW_rhs(real AC_t__mod__cdata,real AC_dt__mod__cdata){\nconst int step_num = 0\n"
+            file = open("GW-rhs.ac","w")
+            for i,line in enumerate(res):
+                if i == len(res)-1:
+                    if subroutine_name == "rhs_cpu":
+                        file.write("#include \"../GW_end.h\"\n")
+                    else:
+                        file.write(f"#include \"{subroutine_name}_handwritten_end.h\"\n")
+                if line.strip() in ["headtt__mod__cdata=false","lfirstpoint__mod__cdata=false","lfirstpoint__mod__cdata=true","lcommunicate=!early_finalize","dline_1__mod__cdata.z = dline_1__mod__cdata.z*AC_nphis1__mod__cdata[AC_m__mod__cdata-1]","lproc_print__mod__cdata=false","lproc_print__mod__cdata=true"]:
+                    continue
+                if line != "real3 ac_transformed_pencil_":
+                  file.write(f"{line}\n") 
+            file.close()
             print("DONE")
-
 
         ##TP this is slow for some reason but can cache it to an include file
         var_declares_file = open("var_declares.h","w")
