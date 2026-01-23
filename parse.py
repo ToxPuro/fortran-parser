@@ -2051,6 +2051,8 @@ def replace_exp_once(line):
               res = res + f"({base}*{base}*{base}*{base}*{base}*{base}*{base}*{base})"
             elif exponent.strip() == "9":
               res = res + f"({base}*{base}*{base}*{base}*{base}*{base}*{base}*{base}*{base})"
+            elif exponent.strip() == "10":
+              res = res + f"({base}*{base}*{base}*{base}*{base}*{base}*{base}*{base}*{base}*{base})"
             else:
               if exponent.isnumeric():
                 pexit("HMM ",exponent)
