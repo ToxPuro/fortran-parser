@@ -2037,6 +2037,7 @@ def replace_exp_once(line):
         elif i ==backward_index:
             if exponent.isnumeric():
                res = res + f"({base}"
+               int_exp = int(exponent)
                for i in range(int_exp-1):
                    res = res + f"*{base}"
                 res = res + ")"
