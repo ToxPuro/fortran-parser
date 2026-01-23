@@ -2035,27 +2035,12 @@ def replace_exp_once(line):
         if i<backward_index or i>forward_index:
             res = res + x
         elif i ==backward_index:
-            if exponent.strip() == "2":
-              res = res + f"({base}*{base})"
-            elif exponent.strip() == "3":
-              res = res + f"({base}*{base}*{base})"
-            elif exponent.strip() == "4":
-              res = res + f"({base}*{base}*{base}*{base})"
-            elif exponent.strip() == "5":
-              res = res + f"({base}*{base}*{base}*{base}*{base}*{base})"
-            elif exponent.strip() == "6":
-              res = res + f"({base}*{base}*{base}*{base}*{base}*{base})"
-            elif exponent.strip() == "7":
-              res = res + f"({base}*{base}*{base}*{base}*{base}*{base}*{base})"
-            elif exponent.strip() == "8":
-              res = res + f"({base}*{base}*{base}*{base}*{base}*{base}*{base}*{base})"
-            elif exponent.strip() == "9":
-              res = res + f"({base}*{base}*{base}*{base}*{base}*{base}*{base}*{base}*{base})"
-            elif exponent.strip() == "10":
-              res = res + f"({base}*{base}*{base}*{base}*{base}*{base}*{base}*{base}*{base}*{base})"
+            if exponent.isnumeric():
+               res = res + f"({base}"
+               for i in range(int_exp-1):
+                   res = res + f"*{base}"
+                res = res + ")"
             else:
-              if exponent.isnumeric():
-                pexit("HMM ",exponent)
               res = res + f"pow({base},{exponent})"
     return res
 def replace_exp(line):
