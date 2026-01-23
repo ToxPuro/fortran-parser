@@ -2040,7 +2040,7 @@ def replace_exp_once(line):
                int_exp = int(exponent)
                for i in range(int_exp-1):
                    res = res + f"*{base}"
-                res = res + ")"
+               res = res + ")"
             else:
               res = res + f"pow({base},{exponent})"
     return res
