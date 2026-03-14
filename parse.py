@@ -6495,6 +6495,8 @@ class Parser:
                 pass
             elif lower == "ireaci__mod__chemistry(1)" and upper == "ireaci__mod__chemistry(nchemspec__mod__cparam)":
                 pass
+            elif upper == f"{lower}_end":
+                pass
             else:
                 if lower[:2] == "3+" and upper[:2] == "5+":
                     lower = lower[2:]
@@ -6508,6 +6510,8 @@ class Parser:
                     index = f"{lower}:{upper}"
                     res = self.gen_f_access(i,rhs_var,segment,index)
                     return f"{res}_2"
+                if remove_mod(upper) == f"{remove_mod(lower)}_end":
+                    return f"DF_{lower}".upper()
                 print("range in df index 3")
                 print(line[segment[1]:segment[2]])
                 print(indexes)
@@ -8101,8 +8105,15 @@ class Parser:
                 elif num_of_looped_dims == 1:
                        res_line = self.replace_func_call(line,call,call["parameters"][0])
                        res_lines.append(res_line)
+                elif call["parameters"][2] in bundle_dims:
+                       res_line = self.replace_func_call(line,call,call["parameters"][0])
+                       res_lines.append(res_line)
                 #not really a spread
                 elif call["parameters"][2] == "1":
+                    res_lines.append(res_line)
+                #Used to contort an array to a pencil
+                elif call["parameters"][2] == "nx__mod__cparam" and call["parameters"][1] == "1":
+                    res_line = self.replace_func_call(line,call,call["parameters"][0])
                     res_lines.append(res_line)
                 elif call["parameters"][1] == "2" and len(rhs_info[3]) == 2:
                     param_info = self.get_param_info((call["parameters"][0],False),local_variables,self.static_variables)
@@ -8117,6 +8128,8 @@ class Parser:
                        res_line = self.replace_func_call(line,call,call["parameters"][0])
                        #print("RES: ",res_line)
                        res_lines.append(res_line)
+                    elif rhs_var == "df":
+                        res_lines.append(line)
                     else:
                         pexit("WHAT TO DO? ",line)
                     #pexit("spread: what to do?")
@@ -10743,8 +10756,8 @@ def main():
         parser.safe_subs_to_remove.extend(["get_cs2_cheminp","get_1step_test_sum_dydts","get_1step_test_reaction_rate","get_deltavd_turbu"])
 
         #These are here until the issues with the subroutines are resolved
-        parser.ignored_subroutines.extend(["get_ccondens","get_del6nd_via_global_nd","add_pseudo_coriolis_force"])
-        parser.safe_subs_to_remove.extend(["get_ccondens","get_del6nd_via_global_nd","add_pseudo_coriolis_force"])
+        parser.ignored_subroutines.extend(["get_ccondens","get_del6nd_via_global_nd","add_pseudo_coriolis_force","mean_friction_cc"])
+        parser.safe_subs_to_remove.extend(["get_ccondens","get_del6nd_via_global_nd","add_pseudo_coriolis_force","mean_friction_cc"])
 
 
 
@@ -10847,6 +10860,7 @@ def main():
         parser.get_allocations_in_init_func("chit_profile_fluct",subs_not_to_inline)
         parser.get_allocations_in_init_func("read_hcond",subs_not_to_inline)
         parser.get_allocations_in_init_func("request_border_driving",subs_not_to_inline)
+        parser.get_allocations_in_init_func("initialize_pscalar",subs_not_to_inline)
 
 
         if not os.path.isfile("res-inlined.txt"):
