@@ -10751,6 +10751,9 @@ def main():
               parser.ignored_subroutines.append(f"calc_diagnostics_{mod}")
               parser.safe_subs_to_remove.append(f"calc_diagnostics_{mod}")
 
+        parser.ignored_subroutines.append(f"calc_diagnostic_pencils")
+        parser.safe_subs_to_remove.append(f"calc_diagnostic_pencils")
+
         #These are here until the issues with the subroutines are resolved
         parser.ignored_subroutines.extend(["get_cs2_cheminp","get_1step_test_sum_dydts","get_1step_test_reaction_rate","get_deltavd_turbu"])
         parser.safe_subs_to_remove.extend(["get_cs2_cheminp","get_1step_test_sum_dydts","get_1step_test_reaction_rate","get_deltavd_turbu"])
