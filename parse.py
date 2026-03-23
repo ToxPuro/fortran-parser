@@ -7921,7 +7921,7 @@ class Parser:
                 return f"{function_name}({','.join(param_strings)})\n"+"{\n" + "suppress_unused_warning(boundary)\n"
             elif self.offload_type == "stencil":
                 if function_name == "rhs_cpu":
-                    return "Kernel twopass_solve_intermediate(PC_SUB_STEP_NUMBER step_num, real AC_dt__mod__cdata, real AC_t__mod__cdata,bool AC_lrmv__mod__cdata){\n#include \"static_var_declares.h\"\n#include \"../df_declares.h\"\n"
+                    return "Kernel twopass_solve_intermediate(PC_SUB_STEP_NUMBER step_num, real AC_dt__mod__cdata, real AC_t__mod__cdata,bool AC_lrmv__mod__cdata, bool AC_lsubstepping_in_time__mod__cdata){\n#include \"static_var_declares.h\"\n#include \"../df_declares.h\"\n"
                 else:
                     return f"Kernel {function_name}()"+"{\n"
         if is_use_line(line):
