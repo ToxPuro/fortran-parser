@@ -45,7 +45,7 @@ jobs:
           cd pencil-code
           source sourceme.sh || true
           cd src/astaroth
-          python3 update_fortran.py -p $PENCIL_HOME sample0
+          python3 update_fortran.py -p $PENCIL_HOME -s sample0
 
       - name: Sample0CommitAndPush
         shell: bash
@@ -67,7 +67,7 @@ jobs:
           cd pencil-code
           source sourceme.sh || true
           cd src/astaroth
-          python3 update_fortran.py -p $PENCIL_HOME sample1
+          python3 update_fortran.py -p $PENCIL_HOME -s sample1
 
       - name: Sample1CommitAndPush
         shell: bash
