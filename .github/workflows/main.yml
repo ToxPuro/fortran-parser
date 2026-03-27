@@ -30,16 +30,10 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: true
-      - name: Clone PC 
-        uses: actions/checkout@v4
-        with:
-          repository: pencil-code/pencil-code
-          ref: main
-          fetch-depth: 1
-          path: pencil-code
 
-      - name: Run
+      - name: Job
         run: |
+          git clone --recurse-submodules --remote https://github.com/pencil-code/pencil-code.git
           cd pencil-code
           . ./sourceme.sh
           git remote set-url origin https://ToxPuro@pencil-code.org/git/
