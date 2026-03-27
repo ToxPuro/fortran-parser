@@ -55,6 +55,7 @@ jobs:
           if ! git diff --quiet; then
             git remote set-url origin https://ToxPuro:${{ secrets.PENCIL_PASSWORD }}@pencil-code.org/git/
             git add src/*.f90
+            git add src/special/*.f90
             git commit -m"Automatic commit to keep code GPU-enabled"
             git push
           fi
