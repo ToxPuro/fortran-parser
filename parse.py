@@ -11234,9 +11234,5 @@ def main():
     for x in checked_local_writes:
       print(x)
 
-            
-
-    
-
 if __name__ == "__main__":
    main() 
