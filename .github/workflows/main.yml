@@ -33,6 +33,7 @@ jobs:
 
 
       - name: Setup
+        shell: bash
         run: |
           git clone --recurse-submodules --remote https://github.com/pencil-code/pencil-code.git
           cd pencil-code
@@ -40,11 +41,13 @@ jobs:
           git remote set-url origin https://ToxPuro:${{ secrets.PENCIL_PASSWORD }}@pencil-code.org/git/
 
       - name: Sample0
+        shell: bash
         run: |
           cd $PENCIL_HOME/src/astaroth
           python3 update_fortran.py -p ~/pencil-code
 
       - name: Sample0_commit
+        shell: bash
         if: steps.sample0.outputs.code != '0'
         run: |
           cd $PENCIL_HOME
