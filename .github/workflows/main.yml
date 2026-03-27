@@ -40,7 +40,7 @@ jobs:
           git remote set-url origin https://ToxPuro@pencil-code.org/git/
       - name: Sample0
         run: |
-          cd src/astaroth
+          cd ~/pencil-code/src/astaroth
           python3 update_fortran.py -p ~/pencil-code
 
       - name: Sample0_commit
