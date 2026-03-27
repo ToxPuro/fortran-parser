@@ -50,6 +50,8 @@ jobs:
         shell: bash
         run: |
           cd pencil-code
+          git config --global user.email "touko.puro@aalto.fi"
+          git config --global user.name "ToxPuro"
           if ! git diff --quiet; then
             git remote set-url origin https://ToxPuro:${{ secrets.PENCIL_PASSWORD }}@pencil-code.org/git/
             git add src/*.f90
