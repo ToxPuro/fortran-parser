@@ -53,7 +53,7 @@ jobs:
           cd pencil-code
           git config --global user.email "touko.puro@aalto.fi"
           git config --global user.name "ToxPuro"
-          if ! git diff src --quiet; then
+          if ! git diff --quiet src; then
             git remote set-url origin https://ToxPuro:${{ secrets.PENCIL_PASSWORD }}@pencil-code.org/git/
             git add src/*.f90
             git add src/special/*.f90
@@ -75,7 +75,7 @@ jobs:
           cd pencil-code
           git config --global user.email "touko.puro@aalto.fi"
           git config --global user.name "ToxPuro"
-          if ! git diff src --quiet; then
+          if ! git diff --quiet src; then
             git remote set-url origin https://ToxPuro:${{ secrets.PENCIL_PASSWORD }}@pencil-code.org/git/
             git add src/*.f90
             git add src/special/*.f90
