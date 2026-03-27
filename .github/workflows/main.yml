@@ -38,6 +38,7 @@ jobs:
           cd pencil-code
 
       - name: Sample0
+        id: sample0
         shell: bash
         run: |
           cd pencil-code
