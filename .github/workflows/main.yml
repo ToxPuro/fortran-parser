@@ -31,11 +31,26 @@ jobs:
         with:
           submodules: true
 
-      - name: Job
+
+      - name: Setup
         run: |
           git clone --recurse-submodules --remote https://github.com/pencil-code/pencil-code.git
           cd pencil-code
           . ./sourceme.sh
           git remote set-url origin https://ToxPuro@pencil-code.org/git/
+      - name: Sample0
+        cd src/astaroth
+        python3 update_fortran.py -p ~/pencil-code
+
+      - name: Sample0_commit
+        if: steps.sample0.outputs.code != '0'
+        run: |
+          cd ~/pencil-code
+          git add src/*.f90
+          git commit -m"Automatic commit to keep code GPU-enabled"
+          git push
+
+          
+
 
 
