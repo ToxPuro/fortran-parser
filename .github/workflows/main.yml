@@ -45,6 +45,7 @@ jobs:
           source sourceme.sh || true
           cd src/astaroth
           python3 update_fortran.py -p $PENCIL_HOME
+          echo "exitcode=$?" >> $GITHUB_OUTPUT
 
       - name: Sample0_commit
         shell: bash
