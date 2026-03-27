@@ -36,8 +36,9 @@ jobs:
         run: |
           git clone --recurse-submodules --remote https://github.com/pencil-code/pencil-code.git
           cd pencil-code
-          . ./sourceme.sh
-          git remote set-url origin https://ToxPuro@pencil-code.org/git/
+          source sourceme.sh
+          git remote set-url origin https://ToxPuro:${{ secrets.PENCIL_PASSWORD }}@pencil-code.org/git/
+
       - name: Sample0
         run: |
           cd $PENCIL_HOME/src/astaroth
