@@ -1,0 +1,56 @@
+name: CI with CUDA
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: nvidia/cuda:12.9.0-devel-ubuntu24.04
+
+    timeout-minutes: 180
+    steps:
+      - name: Set timezone
+        run: ln -fs /usr/share/zoneinfo/Europe/Helsinki /etc/localtime
+
+      - name: Install dependencies
+        run: |
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get update
+          apt-get install -y apt-transport-https ca-certificates gnupg software-properties-common wget
+          wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc 2>/dev/null | gpg --dearmor - | tee /etc/apt/trusted.gpg.d/kitware.gpg >/dev/null
+          apt-add-repository 'deb https://apt.kitware.com/ubuntu/ noble main'
+          apt-get update
+          apt-get install -y cmake flex bison openmpi-bin libopenmpi-dev gfortran git python3 python3-numpy python3-pandas
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Start SSH agent and add key
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.CI_CD_KEY }}
+
+
+
+      - name: Clone PC 
+        uses: actions/checkout@v4
+        with:
+          repository: pencil-code/pencil-code
+          ref: main
+          fetch-depth: 1
+          path: pencil-code
+          ssh-key: ${{ secrets.CI_CD_KEY }}
+
+      - name: Run
+        run: |
+          cd pencil-code
+          . ./sourceme.sh
+          git remote set-url origin https://ToxPuro@pencil-code.org/git/
+
+
