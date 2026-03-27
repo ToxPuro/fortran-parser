@@ -48,18 +48,18 @@ jobs:
           python3 update_fortran.py -p $PENCIL_HOME -s sample0
 
       - name: Sample0CommitAndPush
+        continue-on-error: true
         shell: bash
         run: |
           cd pencil-code
           git config --global user.email "touko.puro@aalto.fi"
           git config --global user.name "ToxPuro"
-          if ! git diff --quiet src; then
-            git remote set-url origin https://ToxPuro:${{ secrets.PENCIL_PASSWORD }}@pencil-code.org/git/
-            git add src/*.f90
-            git add src/special/*.f90
-            git commit -m"Automatic commit to keep code GPU-enabled"
-            git push
-          fi
+          git remote set-url origin https://ToxPuro:${{ secrets.PENCIL_PASSWORD }}@pencil-code.org/git/
+          git add src/*.f90
+          git add src/special/*.f90
+          git commit -m"Automatic commit to keep code GPU-enabled"
+          git push
+
 
       - name: Sample1
         shell: bash
@@ -70,18 +70,17 @@ jobs:
           python3 update_fortran.py -p $PENCIL_HOME -s sample1
 
       - name: Sample1CommitAndPush
+        continue-on-error: true
         shell: bash
         run: |
           cd pencil-code
           git config --global user.email "touko.puro@aalto.fi"
           git config --global user.name "ToxPuro"
-          if ! git diff --quiet src; then
-            git remote set-url origin https://ToxPuro:${{ secrets.PENCIL_PASSWORD }}@pencil-code.org/git/
-            git add src/*.f90
-            git add src/special/*.f90
-            git commit -m"Automatic commit to keep code GPU-enabled"
-            git push
-          fi
+          git remote set-url origin https://ToxPuro:${{ secrets.PENCIL_PASSWORD }}@pencil-code.org/git/
+          git add src/*.f90
+          git add src/special/*.f90
+          git commit -m"Automatic commit to keep code GPU-enabled"
+          git push
 
           
 
