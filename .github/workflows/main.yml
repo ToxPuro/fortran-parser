@@ -39,8 +39,9 @@ jobs:
           . ./sourceme.sh
           git remote set-url origin https://ToxPuro@pencil-code.org/git/
       - name: Sample0
-        cd src/astaroth
-        python3 update_fortran.py -p ~/pencil-code
+        run: |
+          cd src/astaroth
+          python3 update_fortran.py -p ~/pencil-code
 
       - name: Sample0_commit
         if: steps.sample0.outputs.code != '0'
