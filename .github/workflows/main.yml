@@ -75,6 +75,7 @@ jobs:
           pc_build
           make distclean
           cd ../../..
+          cd src/astaroth
           python3 update_fortran.py -p $PENCIL_HOME -s sample1
 
       - name: Sample1CommitAndPush
