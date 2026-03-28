@@ -47,7 +47,7 @@ jobs:
           cd samples/build-samples/sample1
           pc_build
           make distclean
-          cd ../..
+          cd ../../..
           cd src/astaroth
           python3 update_fortran.py -p $PENCIL_HOME -s sample0
 
@@ -74,7 +74,7 @@ jobs:
           cd samples/build-samples/sample1
           pc_build
           make distclean
-          cd ../..
+          cd ../../..
           python3 update_fortran.py -p $PENCIL_HOME -s sample1
 
       - name: Sample1CommitAndPush
@@ -99,7 +99,7 @@ jobs:
           cd samples/build-samples/sample2
           pc_build
           make distclean
-          cd ../..
+          cd ../../..
           cd src/astaroth
           python3 update_fortran.py -p $PENCIL_HOME -s sample2
 
@@ -125,7 +125,7 @@ jobs:
           cd samples/build-samples/sample3
           pc_build
           make distclean
-          cd ../..
+          cd ../../..
           cd src/astaroth
           python3 update_fortran.py -p $PENCIL_HOME -s sample3
 
@@ -151,7 +151,7 @@ jobs:
           cd samples/build-samples/sample4
           pc_build
           make distclean
-          cd ../..
+          cd ../../..
           cd src/astaroth
           python3 update_fortran.py -p $PENCIL_HOME -s sample4
 
@@ -177,7 +177,7 @@ jobs:
           cd samples/build-samples/sample5
           pc_build
           make distclean
-          cd ../..
+          cd ../../..
           cd src/astaroth
           python3 update_fortran.py -p $PENCIL_HOME -s sample5
 
@@ -203,7 +203,7 @@ jobs:
           cd samples/build-samples/sample6
           pc_build
           make distclean
-          cd ../..
+          cd ../../..
           cd src/astaroth
           python3 update_fortran.py -p $PENCIL_HOME -s sample6
 
