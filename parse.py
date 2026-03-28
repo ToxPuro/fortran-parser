@@ -6844,9 +6844,6 @@ class Parser:
                             out.append( "    call string_to_enum(enum_{name},{name})\n")
                             out.append(f"    call copy_addr({name},p_par({res[mod][1]})) ! int\n")
                             
-                line = line.replace(f"{mod}_dummies.inc","special_dummies.inc")
-                line = line.replace(f"{mod}_run_pars","special_run_pars")
-                line = line.replace(f"{mod}_init_pars","special_init_pars")
                 out.append(line)
             read_in.close()
             write_out = open(filename,"w")
