@@ -6722,7 +6722,19 @@ class Parser:
 
             "ij_table__mod__gravitational_waves_htxk",
             "cp_full__mod__equationofstate",
-            "srad__mod__radiation"
+            "srad__mod__radiation",
+
+            "mu1_full__mod__equationofstate",
+            "cp_full__mod__chemistry",
+            "cv_full__mod__chemistry",
+            "lambda_full__mod__chemistry",
+            "cv_r_spec__mod__chemistry",
+            "cv_r_spec_full__mod__chemistry",
+            "diff_full__mod__chemistry",
+            "diff_full_add__mod__chemistry",
+            "xx_full__mod__chemistry",
+            "rhs_y_full__mod__chemistry"
+
         ]
 
         already_pushed_pars = self.get_already_pushed_pars();

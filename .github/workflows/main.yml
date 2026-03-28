@@ -44,6 +44,10 @@ jobs:
         run: |
           cd pencil-code
           source sourceme.sh || true
+          cd samples/build-samples/sample1
+          pc_build
+          make distclean
+          cd ../..
           cd src/astaroth
           python3 update_fortran.py -p $PENCIL_HOME -s sample0
 
@@ -67,7 +71,10 @@ jobs:
         run: |
           cd pencil-code
           source sourceme.sh || true
-          cd src/astaroth
+          cd samples/build-samples/sample1
+          pc_build
+          make distclean
+          cd ../..
           python3 update_fortran.py -p $PENCIL_HOME -s sample1
 
       - name: Sample1CommitAndPush
@@ -89,6 +96,10 @@ jobs:
         run: |
           cd pencil-code
           source sourceme.sh || true
+          cd samples/build-samples/sample2
+          pc_build
+          make distclean
+          cd ../..
           cd src/astaroth
           python3 update_fortran.py -p $PENCIL_HOME -s sample2
 
@@ -111,6 +122,10 @@ jobs:
         run: |
           cd pencil-code
           source sourceme.sh || true
+          cd samples/build-samples/sample3
+          pc_build
+          make distclean
+          cd ../..
           cd src/astaroth
           python3 update_fortran.py -p $PENCIL_HOME -s sample3
 
@@ -133,6 +148,10 @@ jobs:
         run: |
           cd pencil-code
           source sourceme.sh || true
+          cd samples/build-samples/sample4
+          pc_build
+          make distclean
+          cd ../..
           cd src/astaroth
           python3 update_fortran.py -p $PENCIL_HOME -s sample4
 
@@ -155,6 +174,10 @@ jobs:
         run: |
           cd pencil-code
           source sourceme.sh || true
+          cd samples/build-samples/sample5
+          pc_build
+          make distclean
+          cd ../..
           cd src/astaroth
           python3 update_fortran.py -p $PENCIL_HOME -s sample5
 
@@ -177,6 +200,10 @@ jobs:
         run: |
           cd pencil-code
           source sourceme.sh || true
+          cd samples/build-samples/sample6
+          pc_build
+          make distclean
+          cd ../..
           cd src/astaroth
           python3 update_fortran.py -p $PENCIL_HOME -s sample6
 
