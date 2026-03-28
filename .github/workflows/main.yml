@@ -1,4 +1,4 @@
-name: CI with CUDA
+name: Fortran code update
 
 on:
   push:
