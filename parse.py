@@ -7,6 +7,7 @@ import argparse
 import glob
 import cProfile
 import ctypes
+import copy
 ##import my-ast
 
 assumed_boundary = None
@@ -2477,6 +2478,8 @@ class Parser:
     def __init__(self, files,config):
         self.modify_source_code = config["modify_source_code"]
         self.pde_index_counter = 1
+        self.general_out = []
+        self.cparam_out  = []
         self.enum_strings = []
         self.vars_to_pad = []
         self.known_ints = {
@@ -9918,6 +9921,12 @@ class Parser:
             strings = re.findall(pattern,line)
             for string in strings:
                 if string not in all_strings:
+                    if line.strip()[:len("print")] == "print":
+                        continue
+                    if line.strip()[:len("call fatal_error")] == "call fatal_error":
+                        continue
+                    if "fatal_error" in line:
+                        print("WROOONG: ",line)
                     all_strings.append(string)
             line = re.sub(pattern, replacement, line)
             ##for " " strings
@@ -9926,6 +9935,12 @@ class Parser:
             strings = re.findall(pattern,line)
             for string in strings:
                 if string not in all_strings:
+                    if line.strip()[:len("print")] == "print":
+                        continue
+                    if line.strip()[:len("call fatal_error")] == "call fatal_error":
+                        continue
+                    if "fatal_error" in line:
+                        print("WROOONG: ",line)
                     all_strings.append(string)
             line = re.sub(pattern, replacement, line)
             res_lines.append(line)
@@ -9952,10 +9967,7 @@ class Parser:
                 if f"{res}__mod__cparam".lower() not in self.static_variables:
                     largest_string_int += 1
                     out.append(f"integer, parameter :: {res} = {largest_string_int}\n")
-            write_out = open(enum_file,"w")
-            for line in out:
-                write_out.write(f"{line}")
-            write_out.close()
+            self.cparam_out = copy.deepcopy(out)
 
             mappings = []
             for string in all_strings:
@@ -9972,10 +9984,7 @@ class Parser:
                         out.append(f"{mapping}")
                 out.append(line)
             read_in.close()
-            write_out= open(general_file,"w")
-            for line in out:
-                write_out.write(f"{line}")
-            write_out.close()
+            self.general_out = copy.deepcopy(out)
 
         return res_lines
     def normalize(self, lines):
@@ -11137,6 +11146,19 @@ def main():
         if config["modify_source_code"]:
             #Needed because build process modifies special files
             os.system("git restore $PENCIL_HOME")
+            enum_file = f"{parser.directory}/cparam_enum.h"
+            general_file = f"{parser.directory}/general.f90"
+
+            write_out = open(enum_file,"w")
+            for line in parser.cparam_out:
+                write_out.write(f"{line}")
+            write_out.close()
+
+            write_out= open(general_file,"w")
+            for line in parser.general_out:
+                write_out.write(f"{line}")
+            write_out.close()
+
         parser.gen_pushpars()
         print("CREATED PUSHPARS\n")
 
