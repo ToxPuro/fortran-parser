@@ -6721,7 +6721,8 @@ class Parser:
             "sigb1m_all_nonaver__mod__backreact_infl",
 
             "ij_table__mod__gravitational_waves_htxk",
-            "cp_full__mod__equationofstate"
+            "cp_full__mod__equationofstate",
+            "srad__mod__radiation"
         ]
 
         already_pushed_pars = self.get_already_pushed_pars();
