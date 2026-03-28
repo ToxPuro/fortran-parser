@@ -6717,7 +6717,7 @@ class Parser:
             "sige1m_all_nonaver__mod__backreact_infl",
             "sigb1m_all_nonaver__mod__backreact_infl",
 
-            "ij_table__mod__gravitational_waves_htxk"
+            "ij_table__mod__gravitational_waves_htxk",
             "cp_full__mod__equationofstate"
         ]
 
