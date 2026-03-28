@@ -10900,11 +10900,7 @@ def main():
                 new_lines.append(line)
             file.close()
         print("\n\nDONE inlining\n\n")
-        #file = open("res-without-mod-names.txt","w")
-        #for line in new_lines:
-        #  file.write(f"{remove_mod(line)}\n")
-        #file.close()
-        #exit(0)
+
         local_variables = {parameter:v for parameter,v in parser.get_variables(new_lines, {},filename,True).items() }
         variables = merge_dictionaries(local_variables,parser.static_variables)
         new_lines = parser.transform_get_shared_variable_line(local_variables,new_lines)
