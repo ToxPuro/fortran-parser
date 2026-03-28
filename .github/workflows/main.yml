@@ -63,7 +63,7 @@ jobs:
           git add src/cparam_enum.h
           git add src/special/*.f90
           git commit -m"Automatic commit to keep code GPU-enabled"
-          #git push
+          git push
 
 
       - name: Sample1
@@ -90,7 +90,7 @@ jobs:
           git add src/*.f90
           git add src/special/*.f90
           git commit -m"Automatic commit to keep code GPU-enabled"
-          #git push
+          git push
 
       - name: Sample2
         shell: bash
@@ -116,7 +116,7 @@ jobs:
           git add src/cparam_enum.h
           git add src/special/*.f90
           git commit -m"Automatic commit to keep code GPU-enabled"
-          #git push
+          git push
 
       - name: Sample3
         shell: bash
@@ -142,7 +142,7 @@ jobs:
           git add src/special/*.f90
           git add src/cparam_enum.h
           git commit -m"Automatic commit to keep code GPU-enabled"
-          #git push
+          git push
 
       - name: Sample4
         shell: bash
@@ -168,7 +168,7 @@ jobs:
           git add src/special/*.f90
           git add src/cparam_enum.h
           git commit -m"Automatic commit to keep code GPU-enabled"
-          #git push
+          git push
 
       - name: Sample5
         shell: bash
@@ -194,7 +194,7 @@ jobs:
           git add src/special/*.f90
           git add src/cparam_enum.h
           git commit -m"Automatic commit to keep code GPU-enabled"
-          #git push
+          git push
 
       - name: Sample6
         shell: bash
@@ -220,6 +220,6 @@ jobs:
           git add src/special/*.f90
           git add src/cparam_enum.h
           git commit -m"Automatic commit to keep code GPU-enabled"
-          #git push
+          git push
 
 
