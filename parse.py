@@ -6853,7 +6853,7 @@ class Parser:
                         if f"__mod__{mod}" in enum:
                             res[mod][1] += 1
                             name = remove_mod(enum)
-                            out.append( "    call string_to_enum(enum_{name},{name})\n")
+                            out.append(f"    call string_to_enum(enum_{name},{name})\n")
                             out.append(f"    call copy_addr({name},p_par({res[mod][1]})) ! int\n")
                             
                 out.append(line)
