@@ -9927,6 +9927,8 @@ class Parser:
                         continue
                     if line.strip()[:len("call warning")] == "call warning":
                         continue
+                    if line.strip()[:len("call not_implemented")] == "call not_implemented":
+                        continue
                     if line.strip()[:len("write")] == "write":
                         continue
                     all_strings.append(string)
@@ -9942,6 +9944,8 @@ class Parser:
                     if line.strip()[:len("call fatal_error")] == "call fatal_error":
                         continue
                     if line.strip()[:len("call warning")] == "call warning":
+                        continue
+                    if line.strip()[:len("call not_implemented")] == "call not_implemented":
                         continue
                     if line.strip()[:len("write")] == "write":
                         continue
