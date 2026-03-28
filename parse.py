@@ -6652,7 +6652,7 @@ class Parser:
                         func_calls = self.get_function_calls_in_line(line,local_variables)
                         if len(func_calls) == 1:
                             func_call = func_calls[0]
-                            if func_call["function_name"] in ["copy_addr","copy_addr_dble"]:
+                            if func_call["function_name"] in ["copy_addr","copy_addr_dble","copy_addr_dble_1d"]:
                                 res[mod][0].append(func_call["parameters"][0])
                                 index = func_call["parameters"][1].split("(")[-1].split(")")[0].strip()
                                 res[mod][1] = max(res[mod][1],int(index))
