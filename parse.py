@@ -9925,6 +9925,8 @@ class Parser:
                         continue
                     if line.strip()[:len("call fatal_error")] == "call fatal_error":
                         continue
+                    if line.strip()[:len("call warning")] == "call warning":
+                        continue
                     if "fatal_error" in line:
                         print("WROOONG: ",line)
                     all_strings.append(string)
@@ -9938,6 +9940,8 @@ class Parser:
                     if line.strip()[:len("print")] == "print":
                         continue
                     if line.strip()[:len("call fatal_error")] == "call fatal_error":
+                        continue
+                    if line.strip()[:len("call warning")] == "call warning":
                         continue
                     if "fatal_error" in line:
                         print("WROOONG: ",line)
