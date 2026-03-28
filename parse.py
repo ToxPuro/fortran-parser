@@ -6643,6 +6643,7 @@ class Parser:
             for file in self.module_info[mod_key]["files"]:
                 if file in self.func_info["pushpars2c"]["files"]:
                     lines = self.func_info["pushpars2c"]["lines"][file]
+                    lines = self.normalize([x.replace(".eq.","==").replace(".ne.","/=").replace(".lt.","<").replace(".gt.",">")  for x in lines])
                     local_variables = {parameter:v for parameter,v in self.get_variables(lines, {},file, True).items() }
                     for line in lines:
                         func_calls = self.get_function_calls_in_line(line,local_variables)
