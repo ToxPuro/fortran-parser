@@ -6463,7 +6463,10 @@ class Parser:
                 if len(parts) == 2:
                     f_arr_index = orig_indexes[3].split(":")[0].split("(")[-1].split(")")[0].strip()
                     if parts[0] == "iudx__mod__cdata":
-                        return f"value(F_DUST_VELOCITY[{f_arr_index}])"
+                        if rhs_var == "f":
+                          return f"value(F_DUST_VELOCITY[{f_arr_index}])"
+                        else:
+                          return f"DF_DUST_VELOCITY[{f_arr_index}]"
                     
                 #pexit("WEIRD FOURTH DIM: ",orig_indexes[3])
             indexes = [self.evaluate_indexes(index) for index  in orig_indexes]
@@ -7119,6 +7122,10 @@ class Parser:
                                 res = f"{segment[0]}"
                             elif len(var_dims) == 2 and len(indexes) == 2 and indexes[0] == nx_index and var_dims[0]  == "nx__mod__cparam":
                                 res = f"{segment[0]}[{indexes[1]}-1]"
+                            elif len(var_dims) == 3 and len(indexes) == 3 and indexes[0] == nx_index and var_dims[0]  == "nx__mod__cparam" and var_dims[1] == "3" and indexes[1] == ":":
+                                res = f"{segment[0]}[{indexes[2]}-1]"
+                            elif len(var_dims) == 4 and len(indexes) == 4 and indexes[0] == nx_index and var_dims[0]  == "nx__mod__cparam" and ":"  not in indexes:
+                                res = f"{segment[0]}[{indexes[1]}-1][{indexes[2]}-1][{indexes[3]}-1]"
                             elif i > 0 and len(var_dims) == 2 and len(indexes) == 2 and indexes[0] == "1" and var_dims[0]  == "nx__mod__cparam" and var_dims[1] in bundle_dims:
                                 res = f"{segment[0]}[0][{indexes[1]}-1]"
                             elif len(var_dims) == 1 and len(indexes) == 0 and var_dims[0] in bundle_dims:
@@ -7137,6 +7144,8 @@ class Parser:
                                 res = f"{segment[0]}[{indexes[3]}-1][{indexes[4]}-1]"
                             elif len(var_dims) == 3 and len(indexes) == 3:
                                 res = f"{segment[0]}[{indexes[0]}-1][{indexes[1]}-1][{indexes[2]}-1]"
+                            elif len(var_dims) == 4 and len(indexes) == 4:
+                                res = f"{segment[0]}[{indexes[0]}-1][{indexes[1]}-1][{indexes[2]}-1][{indexes[3]}-1]"
                             else:
                                 print(indexes,len(indexes))
                                 pexit("What to do?",line[segment[1]:segment[2]])
