@@ -6464,9 +6464,9 @@ class Parser:
                     f_arr_index = orig_indexes[3].split(":")[0].split("(")[-1].split(")")[0].strip()
                     if parts[0] == "iudx__mod__cdata":
                         if rhs_var == "f":
-                          return f"value(F_DUST_VELOCITY[{f_arr_index}])"
+                          return f"value(F_DUST_VELOCITY[{f_arr_index}-1])"
                         else:
-                          return f"DF_DUST_VELOCITY[{f_arr_index}]"
+                          return f"DF_DUST_VELOCITY[{f_arr_index}-1]"
                     
                 #pexit("WEIRD FOURTH DIM: ",orig_indexes[3])
             indexes = [self.evaluate_indexes(index) for index  in orig_indexes]
