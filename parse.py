@@ -5802,6 +5802,22 @@ class Parser:
                         modified_sum = True
                     sum_calls =  [x for x in self.get_function_calls_in_line(line,variables) if x["function_name"] == "sum" and len(x["parameters"]) == 2 and x["parameters"][1] == "2" and self.get_param_info((x["parameters"][0],False),local_variables,self.static_variables)[3] == [global_subdomain_range_x,"3"]]
         return lines
+
+    def transform_maxval_calls(self,lines,local_variables):
+        variables = merge_dictionaries(local_variables,self.static_variables)
+        for line_index,line in enumerate(lines):
+                maxval_calls =  [x for x in self.get_function_calls_in_line(line,variables) if x["function_name"] == "maxval" ]
+                if(len(maxval_calls) == 1):
+                    call = maxval_calls[0]
+                    if(len(call["parameters"]) == 2):
+                        var = call["parameters"][0]
+                        dim = call["parameters"][1]
+                        dims = variables[var]["dims"]
+                        if(dim == "2" and len(dims) == 2 and dims[0] == "nx__mod__cparam"):
+                            line = self.replace_func_call(line,call,f"maxval({var})")
+                            lines[line_index] = line
+        return lines
+
     def unroll_ranges(self,lines,local_variables):
         variables = merge_dictionaries(local_variables,self.static_variables)
         res_lines = []
@@ -8871,6 +8887,7 @@ class Parser:
 
         #for dim=2 sums for AcReal3 replace with simpl sum, which will sum components
         lines = self.transform_sum_calls(lines,local_variables)
+        lines = self.transform_maxval_calls(lines,local_variables)
         lines = self.transform_merge_calls(lines,local_variables)
 
         writes = self.get_writes(lines)
