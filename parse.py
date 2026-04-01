@@ -7836,13 +7836,13 @@ class Parser:
             return ""
         if local_variables[vars_to_declare[0]]["dims"] in [[global_subdomain_range_x,"2"],["2"]]:
             return "real2 " + ", ".join(vars_to_declare)
-        for dim in ["2","4","6"]:
+        for dim in ["1","2","4","6"]:
             if local_variables[vars_to_declare[0]]["dims"] in [[dim],["nx__mod__cparam",dim]]:
                 res = ""
                 for var in vars_to_declare:
                     res = res + "real " + var + f"[{dim}]\n"
                 return res
-        for dim in ["2","4","6"]:
+        for dim in ["1","2","4","6"]:
             if local_variables[vars_to_declare[0]]["dims"] in [["nx__mod__cparam",dim,dim]]:
                 res = ""
                 for var in vars_to_declare:
