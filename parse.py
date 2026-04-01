@@ -4377,9 +4377,11 @@ class Parser:
                                 pos_mods.append(mod)
                     #TP: we assume the array is not used
                     if(len(pos_mods) == 0):
-                        return (var,True, self.static_variables[var]["type"],self.static_variables[var]["dims"])
-                    assert(len(pos_mods) == 1)
-                    src_var = f"{var_name}__mod__{pos_mods[0]}"
+                      src_var = var
+                      #return (var,True, self.static_variables[var]["type"],self.static_variables[var]["dims"])
+                    else:
+                      assert(len(pos_mods) == 1)
+                      src_var = f"{var_name}__mod__{pos_mods[0]}"
                     sizes = self.static_variables[src_var]["dims"]
                 else:
                     sizes = self.static_variables[var]["dims"]
@@ -8822,13 +8824,12 @@ class Parser:
         #for calls [real] just return the param
         lines = self.transform_conversion_calls(lines,variables,"real")
         lines = self.transform_conversion_calls(lines,variables,"dble")
-
-
-
-
-
-
-
+        for line_index,line in enumerate(lines):
+          func_calls = self.get_function_calls_in_line(line,local_variables)
+          unused_array_calls = [x for x in func_calls if x["function_name"] == "ac_unused_real_array_2d"]
+          if(len(unused_array_calls) == 1):
+              call = unused_array_calls[0]
+              lines[line_index] = self.replace_func_call(line,call,"ac_unused_real_array_2d_dummy_value")
         file = open("res-before-interfaced.txt","w")
         for line in lines:
             file.write(f"{line}\n")
