@@ -39,176 +39,84 @@ jobs:
           git clone --recurse-submodules --remote https://github.com/pencil-code/pencil-code.git
           cd pencil-code
 
-      - name: Sample0
+      - name: Samples
         shell: bash
         run: |
           cd pencil-code
+          export PENCIL_USER=GPU_AUTOTEST
           source sourceme.sh || true
           cd samples/build-samples/sample1
-          pc_build
+          pc_build FFLAGS+=-O0
           make distclean
+          pc_build -f GNU-GCC_MPI+GNU-GCC_debug+GNU-GCC_GPU FFLAGS+=-O0
+          make distclean
+          rm -rf src/astaroth
           cd ../../..
           cd src/astaroth
           python3 update_fortran.py -p $PENCIL_HOME -s sample0
-
-      - name: Sample0CommitAndPush
-        continue-on-error: true
-        shell: bash
-        run: |
-          cd pencil-code
-          git config --global user.email "touko.puro@aalto.fi"
-          git config --global user.name "ToxPuro"
-          git remote set-url origin https://ToxPuro:${{ secrets.PENCIL_PASSWORD }}@pencil-code.org/git/
-          git add src/*.f90
-          git add src/cparam_enum.h
-          git add src/special/*.f90
-          git commit -m"Automatic commit to keep code GPU-enabled"
-          git push
-
-
-      - name: Sample1
-        shell: bash
-        run: |
-          cd pencil-code
-          source sourceme.sh || true
+          cd ../..
           cd samples/build-samples/sample1
-          pc_build
+          pc_build fflags+=-o0
           make distclean
+          pc_build -f gnu-gcc_mpi+gnu-gcc_debug+gnu-gcc_gpu fflags+=-o0
+          make distclean
+          rm -rf src/astaroth
           cd ../../..
           cd src/astaroth
-          python3 update_fortran.py -p $PENCIL_HOME -s sample1
-
-      - name: Sample1CommitAndPush
-        continue-on-error: true
-        shell: bash
-        run: |
-          cd pencil-code
-          git config --global user.email "touko.puro@aalto.fi"
-          git config --global user.name "ToxPuro"
-          git remote set-url origin https://ToxPuro:${{ secrets.PENCIL_PASSWORD }}@pencil-code.org/git/
-          git add src/cparam_enum.h
-          git add src/*.f90
-          git add src/special/*.f90
-          git commit -m"Automatic commit to keep code GPU-enabled"
-          git push
-
-      - name: Sample2
-        shell: bash
-        run: |
-          cd pencil-code
-          source sourceme.sh || true
+          python3 update_fortran.py -p $pencil_home -s sample1
+          cd ../..
           cd samples/build-samples/sample2
-          pc_build
+          pc_build FFLAGS+=-O0
           make distclean
+          pc_build -f GNU-GCC_MPI+GNU-GCC_debug+GNU-GCC_GPU FFLAGS+=-O0
+          make distclean
+          rm -rf src/astaroth
           cd ../../..
           cd src/astaroth
           python3 update_fortran.py -p $PENCIL_HOME -s sample2
-
-      - name: Sample2CommitAndPush
-        continue-on-error: true
-        shell: bash
-        run: |
-          cd pencil-code
-          git config --global user.email "touko.puro@aalto.fi"
-          git config --global user.name "ToxPuro"
-          git remote set-url origin https://ToxPuro:${{ secrets.PENCIL_PASSWORD }}@pencil-code.org/git/
-          git add src/*.f90
-          git add src/cparam_enum.h
-          git add src/special/*.f90
-          git commit -m"Automatic commit to keep code GPU-enabled"
-          git push
-
-      - name: Sample3
-        shell: bash
-        run: |
-          cd pencil-code
-          source sourceme.sh || true
+          cd ../..
           cd samples/build-samples/sample3
-          pc_build
+          pc_build FFLAGS+=-O0
           make distclean
+          pc_build -f GNU-GCC_MPI+GNU-GCC_debug+GNU-GCC_GPU FFLAGS+=-O0
+          make distclean
+          rm -rf src/astaroth
           cd ../../..
           cd src/astaroth
           python3 update_fortran.py -p $PENCIL_HOME -s sample3
-
-      - name: Sample3CommitAndPush
-        continue-on-error: true
-        shell: bash
-        run: |
-          cd pencil-code
-          git config --global user.email "touko.puro@aalto.fi"
-          git config --global user.name "ToxPuro"
-          git remote set-url origin https://ToxPuro:${{ secrets.PENCIL_PASSWORD }}@pencil-code.org/git/
-          git add src/*.f90
-          git add src/special/*.f90
-          git add src/cparam_enum.h
-          git commit -m"Automatic commit to keep code GPU-enabled"
-          git push
-
-      - name: Sample4
-        shell: bash
-        run: |
-          cd pencil-code
-          source sourceme.sh || true
+          cd ../..
           cd samples/build-samples/sample4
-          pc_build
+          pc_build FFLAGS+=-O0
           make distclean
+          pc_build -f GNU-GCC_MPI+GNU-GCC_debug+GNU-GCC_GPU FFLAGS+=-O0
+          make distclean
+          rm -rf src/astaroth
           cd ../../..
           cd src/astaroth
           python3 update_fortran.py -p $PENCIL_HOME -s sample4
-
-      - name: Sample4CommitAndPush
-        continue-on-error: true
-        shell: bash
-        run: |
-          cd pencil-code
-          git config --global user.email "touko.puro@aalto.fi"
-          git config --global user.name "ToxPuro"
-          git remote set-url origin https://ToxPuro:${{ secrets.PENCIL_PASSWORD }}@pencil-code.org/git/
-          git add src/*.f90
-          git add src/special/*.f90
-          git add src/cparam_enum.h
-          git commit -m"Automatic commit to keep code GPU-enabled"
-          git push
-
-      - name: Sample5
-        shell: bash
-        run: |
-          cd pencil-code
-          source sourceme.sh || true
+          cd ../..
           cd samples/build-samples/sample5
-          pc_build
+          pc_build FFLAGS+=-O0
           make distclean
+          pc_build -f GNU-GCC_MPI+GNU-GCC_debug+GNU-GCC_GPU FFLAGS+=-O0
+          make distclean
+          rm -rf src/astaroth
           cd ../../..
           cd src/astaroth
           python3 update_fortran.py -p $PENCIL_HOME -s sample5
-
-      - name: Sample5CommitAndPush
-        continue-on-error: true
-        shell: bash
-        run: |
-          cd pencil-code
-          git config --global user.email "touko.puro@aalto.fi"
-          git config --global user.name "ToxPuro"
-          git remote set-url origin https://ToxPuro:${{ secrets.PENCIL_PASSWORD }}@pencil-code.org/git/
-          git add src/*.f90
-          git add src/special/*.f90
-          git add src/cparam_enum.h
-          git commit -m"Automatic commit to keep code GPU-enabled"
-          git push
-
-      - name: Sample6
-        shell: bash
-        run: |
-          cd pencil-code
-          source sourceme.sh || true
+          cd ../..
           cd samples/build-samples/sample6
-          pc_build
+          pc_build FFLAGS+=-O0
           make distclean
+          pc_build -f GNU-GCC_MPI+GNU-GCC_debug+GNU-GCC_GPU FFLAGS+=-O0
+          make distclean
+          rm -rf src/astaroth
           cd ../../..
           cd src/astaroth
           python3 update_fortran.py -p $PENCIL_HOME -s sample6
+          cd ../..
 
-      - name: Sample6CommitAndPush
+      - name: CommitAndPush
         continue-on-error: true
         shell: bash
         run: |
@@ -217,9 +125,11 @@ jobs:
           git config --global user.name "ToxPuro"
           git remote set-url origin https://ToxPuro:${{ secrets.PENCIL_PASSWORD }}@pencil-code.org/git/
           git add src/*.f90
-          git add src/special/*.f90
           git add src/cparam_enum.h
+          git add src/special/*.f90
           git commit -m"Automatic commit to keep code GPU-enabled"
           git push
+
+
 
 
