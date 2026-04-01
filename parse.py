@@ -11186,8 +11186,9 @@ def main():
 
         print("CREATING PUSHPARS\n")
         if config["modify_source_code"]:
-            #Needed because build process modifies special files
-            os.system("git restore $PENCIL_HOME")
+            #Not needed anymore since special sources are reverted
+            ##Needed because build process modifies special files
+            ##os.system("git restore $PENCIL_HOME")
             enum_file = f"{parser.directory}/cparam_enum.h"
             general_file = f"{parser.directory}/general.f90"
 
