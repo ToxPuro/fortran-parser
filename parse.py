@@ -723,9 +723,17 @@ def map_calc_del6_for_upwind(func_call):
 def map_del6(func_call):
     names = func_call["parameters"]
     params = func_call["new_param_list"]
-    #print("DEL6 params: ",params)
-
     field = f"{gen_field(names[1])}"
+    #print("DEL6 params: ",params)
+    if len(params) == 4 and params[-1][-1] == "lexp":
+        if params[-1][0] == ".true.":
+          if "(" in field:
+            index = field.split("(")[-1].split(")")[0]
+            base = field.split("(")[0]
+            field = f"{base}[{index}-1]"
+          return [f"{names[2]} = del6_exp({field})"]
+        else:
+            pexit("Not handled!")
     if len(params) == 4:
         res = [
                 f"if({params[3][0]}) then",
@@ -738,13 +746,6 @@ def map_del6(func_call):
     else:
         return [f"{names[2]} = del6({field})"]
 
-def map_del6_exp(func_call):
-    params = func_call["parameters"]
-    #print("DEL6 params: ",params)
-    if len(params)>3:
-        pexit("optional params not supported\n")
-    return [f"{params[2]} = del6_exp({gen_field(params[1])})"]
-    pexit("WHAT TO DO ?",params)
 def map_del2fi_dxjk(func_call):
     params = func_call["parameters"]
     return [f"{params[2]} = del2fi_dxjk({gen_field3(params[1])})"]
@@ -878,6 +879,7 @@ def map_der6_main(func_call):
     params = func_call["new_param_list"]
     ignoredx_str = ""
     upwind_str = ""
+    exp_str    = ""
     if len(params) == 5 and params[-1][-1] == "ignoredx":
         if params[-1][0] == ".true.":
             ignoredx_str = "_ignore_spacing"
@@ -894,6 +896,13 @@ def map_der6_main(func_call):
             pass
         else:
             pexit("don't know if upwind")
+    elif len(params) == 5 and params[-1][-1] == "lexp":
+        if params[-1][0] == ".true.":
+            exp_str = "_exp"
+        elif params[-1][0] == ".false.":
+            pass
+        else:
+            pexit("don't know if exp or not")
     else: 
         print(params)
         pexit("optional params not supported\n")
@@ -901,11 +910,11 @@ def map_der6_main(func_call):
     j = int(pc_parser.evaluate_integer(params[3][0]))
     names = func_call["parameters"]
     if j == 1:
-        return [f"{names[2]} = der6x{ignoredx_str}{upwind_str}({gen_field(names[1])})"]
+        return [f"{names[2]} = der6x{ignoredx_str}{upwind_str}{exp_str}({gen_field(names[1])})"]
     elif j == 2:
-        return [f"{names[2]} = der6y{ignoredx_str}{upwind_str}({gen_field(names[1])})"]
+        return [f"{names[2]} = der6y{ignoredx_str}{upwind_str}{exp_str}({gen_field(names[1])})"]
     elif j == 3:
-        return [f"{names[2]} = der6z{ignoredx_str}{upwind_str}({gen_field(names[1])})"]
+        return [f"{names[2]} = der6z{ignoredx_str}{upwind_str}{exp_str}({gen_field(names[1])})"]
     print("j=",j)
     pexit("don't know whic der6 to call")
 def map_der5(func_call):
@@ -1547,11 +1556,6 @@ sub_funcs = {
     {
         "output_params_indexes": [2],
         "map_func": map_del6
-    },
-    "del6_exp":
-    {
-        "output_params_indexes": [2],
-        "map_func": map_del6_exp
     },
     "calc_del6_for_upwind":
     {
@@ -10908,6 +10912,7 @@ def main():
         parser.get_allocations_in_init_func("chemistry_allocate_rhs_arrays",subs_not_to_inline)
         parser.get_allocations_in_init_func("initialize_radiation",subs_not_to_inline)
         parser.get_allocations_in_init_func("chemkin_data",subs_not_to_inline)
+        parser.get_allocations_in_init_func("chemkin_data_simple",subs_not_to_inline)
         parser.get_allocations_in_init_func("astrobiology_data",subs_not_to_inline)
         parser.get_allocations_in_init_func("initialize_forcing",subs_not_to_inline)
         parser.get_allocations_in_init_func("random_isotropic_ks_setup_test",subs_not_to_inline)
@@ -11187,8 +11192,8 @@ def main():
 
         print("CREATING PUSHPARS\n")
         if config["modify_source_code"]:
+            #Was needed because build process modifies special files
             #Not needed anymore since special sources are reverted
-            ##Needed because build process modifies special files
             #os.system("git restore $PENCIL_HOME")
             enum_file = f"{parser.directory}/cparam_enum.h"
             general_file = f"{parser.directory}/general.f90"
