@@ -727,11 +727,11 @@ def map_del6(func_call):
     #print("DEL6 params: ",params)
     if len(params) == 4 and params[-1][-1] == "lexp":
         if params[-1][0] == ".true.":
-          if "(" in field:
-            index = field.split("(")[-1].split(")")[0]
-            base = field.split("(")[0]
+          if "(" in names[1]:
+            index = names[1].split("(")[-1].split(")")[0]
+            base = names[1].split("(")[0]
             field = f"{base}[{index}-1]"
-          return [f"{names[2]} = del6_exp({field})"]
+          return [f"{names[2]} = del6_exp(Field({field}-1))"]
         else:
             pexit("Not handled!")
     if len(params) == 4:
