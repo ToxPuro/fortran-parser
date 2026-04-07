@@ -6664,8 +6664,8 @@ class Parser:
             #Needed because we push cdata stuff from run.f90
             mod_key = mod
             if mod == "cdata":
-                mod_key = "run_module"
-            if mod == "run_module": continue
+                mod_key = "global_pushpars"
+            if mod == "global_pushpars": continue
             res[mod] = [[],0]
             for file in self.module_info[mod_key]["files"]:
                 if file in self.func_info["pushpars2c"]["files"]:
@@ -6757,7 +6757,10 @@ class Parser:
             "diff_full__mod__chemistry",
             "diff_full_add__mod__chemistry",
             "xx_full__mod__chemistry",
-            "rhs_y_full__mod__chemistry"
+            "rhs_y_full__mod__chemistry",
+            "lpencil_check__mod__cdata",
+            "lpencil_check_at_work__mod__cdata",
+            "lsubstepping_in_time__mod__cdata"
         ]
 
         already_pushed_pars = self.get_already_pushed_pars();
@@ -6859,7 +6862,10 @@ class Parser:
             file.write(f"{line}\n")
           file.close()
 
-          filename = [x for x in self.file_info if "module" in self.file_info[x] and self.file_info[x]["module"] == mod][0]
+          mod_file = mod
+          if mod == "cdata":
+              mod_file = "global_pushpars"
+          filename = [x for x in self.file_info if "module" in self.file_info[x] and self.file_info[x]["module"] == mod_file][0]
           is_special = "/special" in filename
 
           if self.modify_source_code:
