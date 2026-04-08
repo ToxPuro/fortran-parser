@@ -10834,8 +10834,8 @@ def main():
         parser.ignored_subroutines.append(f"calc_phiavg_profile")
         parser.safe_subs_to_remove.append(f"calc_phiavg_profile")
 
-        parser.ignored_subroutines.append(f"check_if_necessary")
-        parser.safe_subs_to_remove.append(f"check_if_necessary")
+        parser.ignored_subroutines.append(f"check_if_have_to_wait_for_communication")
+        parser.safe_subs_to_remove.append(f"check_if_have_to_wait_for_communication")
 
         parser.ignored_subroutines.append(f"calc_aaxyaver")
         parser.safe_subs_to_remove.append(f"calc_aaxyaver")
