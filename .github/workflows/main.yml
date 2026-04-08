@@ -46,60 +46,60 @@ jobs:
           export PENCIL_USER=GPU_AUTOTEST
           source sourceme.sh || true
           cd src/astaroth
-          python3 update_fortran.py -p $PENCIL_HOME -s sample0 &> /dev/null
+          python3 update_fortran.py -p $PENCIL_HOME -s sample0
           cd ../..
           cd samples/build-samples/sample0
           make distclean
           rm -rf src/astaroth
-          pc_build -f GNU-GCC_MPI+GNU-GCC_debug+GNU-GCC_GPU FFLAGS+=-O0 &> /dev/null
+          pc_build -f GNU-GCC_MPI+GNU-GCC_debug+GNU-GCC_GPU FFLAGS+=-O0
           cd ../../..
           cd src/astaroth
-          python3 update_fortran.py -p $PENCIL_HOME -s sample1 &> /dev/null
+          python3 update_fortran.py -p $PENCIL_HOME -s sample1
           cd ../..
           cd samples/build-samples/sample1
           make distclean
           rm -rf src/astaroth
-          pc_build -f GNU-GCC_MPI+GNU-GCC_debug+GNU-GCC_GPU FFLAGS+=-O0 &> /dev/null
+          pc_build -f GNU-GCC_MPI+GNU-GCC_debug+GNU-GCC_GPU FFLAGS+=-O0
           cd ../../..
           cd src/astaroth
-          python3 update_fortran.py -p $PENCIL_HOME -s sample2 &> /dev/null
+          python3 update_fortran.py -p $PENCIL_HOME -s sample2
           cd ../..
           cd samples/build-samples/sample2
           make distclean
           rm -rf src/astaroth
-          pc_build -f GNU-GCC_MPI+GNU-GCC_debug+GNU-GCC_GPU FFLAGS+=-O0 &> /dev/null
+          pc_build -f GNU-GCC_MPI+GNU-GCC_debug+GNU-GCC_GPU FFLAGS+=-O0
           cd ../../..
           cd src/astaroth
-          python3 update_fortran.py -p $PENCIL_HOME -s sample3 &> /dev/null
+          python3 update_fortran.py -p $PENCIL_HOME -s sample3
           cd ../..
           cd samples/build-samples/sample3
           make distclean
           rm -rf src/astaroth
-          pc_build -f GNU-GCC_MPI+GNU-GCC_debug+GNU-GCC_GPU FFLAGS+=-O0 &> /dev/null
+          pc_build -f GNU-GCC_MPI+GNU-GCC_debug+GNU-GCC_GPU FFLAGS+=-O0
           cd ../../..
           cd src/astaroth
-          python3 update_fortran.py -p $PENCIL_HOME -s sample4 &> /dev/null
+          python3 update_fortran.py -p $PENCIL_HOME -s sample4
           cd ../..
           cd samples/build-samples/sample4
           make distclean
           rm -rf src/astaroth
-          pc_build -f GNU-GCC_MPI+GNU-GCC_debug+GNU-GCC_GPU FFLAGS+=-O0 &> /dev/null
+          pc_build -f GNU-GCC_MPI+GNU-GCC_debug+GNU-GCC_GPU FFLAGS+=-O0
           cd ../../..
           cd src/astaroth
-          python3 update_fortran.py -p $PENCIL_HOME -s sample5 &> /dev/null
+          python3 update_fortran.py -p $PENCIL_HOME -s sample5
           cd ../..
           cd samples/build-samples/sample5
           make distclean
           rm -rf src/astaroth
-          pc_build -f GNU-GCC_MPI+GNU-GCC_debug+GNU-GCC_GPU FFLAGS+=-O0 &> /dev/null
+          pc_build -f GNU-GCC_MPI+GNU-GCC_debug+GNU-GCC_GPU FFLAGS+=-O0
           cd ../../..
           cd src/astaroth
-          python3 update_fortran.py -p $PENCIL_HOME -s sample6 &> /dev/null
+          python3 update_fortran.py -p $PENCIL_HOME -s sample6
           cd ../..
           cd samples/build-samples/sample6
           make distclean
           rm -rf src/astaroth
-          pc_build -f GNU-GCC_MPI+GNU-GCC_debug+GNU-GCC_GPU FFLAGS+=-O0 &> /dev/null
+          pc_build -f GNU-GCC_MPI+GNU-GCC_debug+GNU-GCC_GPU FFLAGS+=-O0
           cd ../../..
 
       - name: CommitAndPush
