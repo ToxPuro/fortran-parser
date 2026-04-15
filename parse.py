@@ -7147,6 +7147,8 @@ class Parser:
                                 res = f"{segment[0]}"
                             elif len(var_dims) == 2 and len(indexes) == 2 and indexes[0] == nx_index and var_dims[0]  == "nx__mod__cparam" and indexes[1] == ":":
                                 res = f"{segment[0]}"
+                            elif len(var_dims) == 2 and len(indexes) == 2 and indexes[0] == nx_index and var_dims[0]  == "nx__mod__cparam" and indexes[1] == f"1:{var_dims[1]}":
+                                res = f"{segment[0]}"
                             elif len(var_dims) == 2 and len(indexes) == 2 and indexes[0] == nx_index and var_dims[0]  == "nx__mod__cparam":
                                 res = f"{segment[0]}[{indexes[1]}-1]"
                             elif len(var_dims) == 3 and len(indexes) == 3 and indexes[0] == nx_index and var_dims[0]  == "nx__mod__cparam" and var_dims[1] == "3" and indexes[1] == ":":
