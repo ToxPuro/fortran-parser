@@ -1104,13 +1104,13 @@ def map_calc_slope_diff_flux(func_call):
 
     field_index  = names[1]
     field = gen_field(names[1])
-    div_param   = names[5]
+    h_slope_param = names[2]
+    nlf_param     = names[3]
+    div_param   = names[4]
     heat_param = None
     flux1_param = None
     flux2_param = None
     flux3_param = None
-    h_slope_param = names[3]
-    nlf_param     = names[4]
     for i in range(len(names)):
         if params[i][-1] == "heat":
             heat_param = names[i]
