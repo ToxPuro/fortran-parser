@@ -6929,7 +6929,7 @@ class Parser:
                   else:
                     cparam_file.write(f"const {translate_to_DSL(type)} {name} = {val}\n")
                     cparam_file.write(f"#define AC_{name} {name}\n")
-                    cparam_file.write(f"#define AC_{remove_mod(name)} {name}\n")
+                    #cparam_file.write(f"#define AC_{remove_mod(name)} {name}\n")
                   declared_vars.append(var)
                 else:
                     file.write(f"run_const {translate_to_DSL(type)} AC_{name}\n")
