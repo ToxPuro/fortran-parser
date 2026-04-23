@@ -354,6 +354,7 @@ def translate_fortran_ops_to_c(lines):
     lines = [line.replace(".not.","!") for line in lines]
     lines = [line.replace("/=","!=") for line in lines]
     lines = [line.replace(".neqv.","!=") for line in lines]
+    lines = [line.replace(".eqv.","==") for line in lines]
     lines = [line.replace("'",'"') for line in lines]
     return lines
 def split_line_nml(line):
