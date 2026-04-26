@@ -1125,22 +1125,23 @@ def map_calc_slope_diff_flux(func_call):
     twod_slope_param = "ac_slope_res_2d"
     fourd_slope_param = "ac_slope_res_4d"
     fived_slope_param = "ac_slope_res_5d"
-    if(heat_param and flux1_param == None):
-        slope_res = twod_slope_param
-        res.append(f"{slope_res} = get_slope_limited_divergence_and_heat({field},SLD_CHAR_SPEED,60.0,{h_slope_param},{nlf_param},F_RHO)")
-        res.append(f"{div_param} = {slope_res}.x")
-        res.append(f"{heat_param} = {slope_res}.y")
-
     if(heat_param and flux1_param):
-        slope_res = fived_slope_param 
+        slope_res = fived_slope_param
         res.append(f"{slope_res} = get_slope_limited_all({field},SLD_CHAR_SPEED,60.0,{h_slope_param},{nlf_param},F_RHO)")
         res.append(f"{div_param} = {slope_res}.x")
         res.append(f"{flux1_param} = {slope_res}.y")
         res.append(f"{flux2_param} = {slope_res}.z")
         res.append(f"{flux3_param} = {slope_res}.w")
         res.append(f"{heat_param} = {slope_res}.v")
-    if(heat_param == None and flux1_param):
-        slope_res = fourd_slope_param 
+
+    elif(heat_param and flux1_param == None):
+        slope_res = twod_slope_param
+        res.append(f"{slope_res} = get_slope_limited_divergence_and_heat({field},SLD_CHAR_SPEED,60.0,{h_slope_param},{nlf_param},F_RHO)")
+        res.append(f"{div_param} = {slope_res}.x")
+        res.append(f"{heat_param} = {slope_res}.y")
+
+    elif(heat_param == None and flux1_param):
+        slope_res = fourd_slope_param
         res.append(f"{slope_res} = get_slope_limited_divergence_and_average_fluxes({field},SLD_CHAR_SPEED,60.0,{h_slope_param},{nlf_param})")
         res.append(f"{div_param} = {slope_res}.x")
         res.append(f"{flux1_param} = {slope_res}.y")
@@ -1148,6 +1149,7 @@ def map_calc_slope_diff_flux(func_call):
         res.append(f"{flux3_param} = {slope_res}.w")
     else:
         res.append(f"{div_param} = get_slope_limited_divergence({field},SLD_CHAR_SPEED,60.0,{h_slope_param},{nlf_param},{field_index} == AC_ilnrho__mod__cdata || {field_index} == AC_ilntt__mod__cdata)")
+
     return res
 
 
