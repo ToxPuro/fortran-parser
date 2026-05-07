@@ -556,6 +556,8 @@ def map_gij(func_call):
     if(params[3] == "5"):
         return [f"{params[2]} = gradient5({gen_field3(params[1])})"]
     if(params[3] == "6"):
+        if params[4] == "ignoredx=.true.":
+          return [f"{params[2]} = gradient6_ignore_spacing({gen_field3(params[1])})"]
         return [f"{params[2]} = gradient6({gen_field3(params[1])})"]
     print(params)
     pexit("what to do")
