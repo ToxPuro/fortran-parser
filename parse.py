@@ -6737,6 +6737,8 @@ class Parser:
             "dchit_prof_fluct_stored__mod__energy",
             "ssmz__mod__energy",
             "del2ssmz__mod__energy",
+            "ssmx__mod__energy",
+            "del2ssmx__mod__energy",
 
             "uumxy__mod__hydro",
             "uu_average_cyl__mod__hydro",
