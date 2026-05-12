@@ -5845,7 +5845,8 @@ class Parser:
             for sg in arr_segs_in_line:
                 indexes = get_segment_indexes(sg,line,0)
                 if len(variables[sg[0]]["dims"]) > 0 and len(indexes) > 0:
-                    unroll_now = variables[sg[0]]["dims"][-1]  in ["3","mfarray__mod__cparam"] and indexes[-1] in ["1:2", "2:3","iux__mod__cdata:iuy__mod__cdata"]
+                    unroll_now = variables[sg[0]]["dims"][-1]  in ["3","mfarray__mod__cparam"] and indexes[-1] in ["1:2", "2:3"]
+                    unroll_now = unroll_now or indexes[-1] in ["iux__mod__cdata:iuy__mod__cdata"]
                     unroll = unroll or unroll_now
                     if unroll_now:
                         index_to_replace = indexes[-1]
