@@ -51,6 +51,7 @@ jobs:
           cd samples/build-samples/sample0
           make distclean
           rm -rf src/astaroth
+          pc_setupsrc --force-astaroth
           pc_build -f GNU-GCC_MPI+GNU-GCC_debug+GNU-GCC_GPU FFLAGS+=-O0
           cd ../../..
           cd src/astaroth
@@ -59,6 +60,7 @@ jobs:
           cd samples/build-samples/sample1
           make distclean
           rm -rf src/astaroth
+          pc_setupsrc --force-astaroth
           pc_build -f GNU-GCC_MPI+GNU-GCC_debug+GNU-GCC_GPU FFLAGS+=-O0
           cd ../../..
           cd src/astaroth
@@ -67,6 +69,7 @@ jobs:
           cd samples/build-samples/sample2
           make distclean
           rm -rf src/astaroth
+          pc_setupsrc --force-astaroth
           pc_build -f GNU-GCC_MPI+GNU-GCC_debug+GNU-GCC_GPU FFLAGS+=-O0
           cd ../../..
           cd src/astaroth
@@ -75,6 +78,7 @@ jobs:
           cd samples/build-samples/sample3
           make distclean
           rm -rf src/astaroth
+          pc_setupsrc --force-astaroth
           pc_build -f GNU-GCC_MPI+GNU-GCC_debug+GNU-GCC_GPU FFLAGS+=-O0
           cd ../../..
           cd src/astaroth
@@ -83,6 +87,7 @@ jobs:
           cd samples/build-samples/sample4
           make distclean
           rm -rf src/astaroth
+          pc_setupsrc --force-astaroth
           pc_build -f GNU-GCC_MPI+GNU-GCC_debug+GNU-GCC_GPU FFLAGS+=-O0
           cd ../../..
           cd src/astaroth
@@ -91,6 +96,7 @@ jobs:
           cd samples/build-samples/sample5
           make distclean
           rm -rf src/astaroth
+          pc_setupsrc --force-astaroth
           pc_build -f GNU-GCC_MPI+GNU-GCC_debug+GNU-GCC_GPU FFLAGS+=-O0
           cd ../../..
           cd src/astaroth
@@ -99,6 +105,7 @@ jobs:
           cd samples/build-samples/sample6
           make distclean
           rm -rf src/astaroth
+          pc_setupsrc --force-astaroth
           pc_build -f GNU-GCC_MPI+GNU-GCC_debug+GNU-GCC_GPU FFLAGS+=-O0
           cd ../../..
 
