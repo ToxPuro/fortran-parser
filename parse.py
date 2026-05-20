@@ -5258,6 +5258,11 @@ class Parser:
             type = None
         result_func_calls = [call for call in self.get_function_calls_in_line(subroutine_lines[0],local_variables) if call["function_name"] == "result"]
         has_named_return_value = "result" in subroutine_lines[0] and len(result_func_calls) == 1
+        for line in init_lines:
+            var = line.split("::")[-1].strip()
+            if subroutine_name.strip() == var:
+                has_named_return_value = True
+
         if is_function and not has_named_return_value:
             init_lines.append(f"{type} :: {return_var}")
 
