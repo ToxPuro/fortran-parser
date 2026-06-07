@@ -7118,7 +7118,7 @@ class Parser:
                             prof_type = "z"
                         src[segment[0]]["profile_type"] = prof_type
                     if len(var_dims) == 2 and var_dims[0] == "mx__mod__cparam" and var_dims[1] in bundle_dims and indexes[0] == "l1__mod__cparam:l2__mod__cdata" and ":" not in indexes[1]:
-                        res = f"{segment[0]}[vertexIdx.x][{indexes[1]}]"
+                        res = f"{segment[0]}[vertexIdx.x][{indexes[1]}-1]"
                     elif len(src[segment[0]]["dims"]) == 4 and src[segment[0]]["dims"] == ["nx__mod__cparam","ny__mod__cparam","nz__mod__cparam","3"] and indexes[0] == ":" and indexes[3] == ":":
                       res = f"{segment[0]}[vertexIdx.x-NGHOST][{indexes[1]}-1][{indexes[2]}-1]"
                     elif src[segment[0]]["profile_type"]:
@@ -10075,6 +10075,7 @@ class Parser:
             lines = self.transform_pencils(lines,local_variables,"internalpencils","q__mod__shallow_water")
             lines = self.transform_pencils(lines,local_variables,"internalpencils","q__mod__turbpotential")
             lines = self.transform_pencils(lines,local_variables,"internalpencils","q__mod__newton_cooling")
+            lines = self.transform_pencils(lines,local_variables,"internalpencils","q__mod__photoelectric_dust")
             lines = self.transform_pencils(lines,local_variables,"internalpencils","q")
         lines = self.remove_strings(lines,local_variables)
         return lines
