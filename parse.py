@@ -1373,6 +1373,11 @@ sub_funcs = {
       "output_param_indexes": [0],
       "map_func": map_directly
     },
+    "multsv":
+    {
+      "output_param_indexes": [2],
+      "map_func": map_multsv_mn
+    },
     "multsv_mn":
     {
       "output_param_indexes": [2],
