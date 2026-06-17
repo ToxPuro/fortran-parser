@@ -6449,7 +6449,7 @@ class Parser:
                 return f"{vtxbuf_name}"
               #TP: used to convert f index arithmetic to DSL
               #TP TODO: this should really work even if we have an index there
-              if ":" not in index and "(" not in index:
+              if ":" not in index and "(" not in index and "GLOBAL" not in vtxbuf_name and vtxbuf_name not in ["F_COOL_PROF"]:
                 #This is needed in case of accesses like ieosvar2 which is dynamically set
                 if to_value:
                     return f"value(Field({index}-1))"
