@@ -2494,6 +2494,7 @@ class Parser:
         self.pde_index_counter = 1
         self.general_out = []
         self.cparam_out  = []
+        self.declared_vars = []
         self.enum_strings = []
         self.vars_to_pad = []
         self.known_ints = {
@@ -7831,7 +7832,10 @@ class Parser:
         vars_to_declare = []
         for var in vars_in_line:
             if var.strip() in local_variables and var.strip() not in orig_params:
+                if var in self.declared_vars:
+                    continue
                 vars_to_declare.append(var)
+                self.declared_vars.append(var)
         if len(vars_to_declare) == 0: return ""
         if len(vars_to_declare) == 1:
           var = vars_to_declare[0]
