@@ -7863,10 +7863,15 @@ class Parser:
             else:
                 return f"real {vars_to_declare[0]}"
         if local_variables[vars_to_declare[0]]["dims"] in [[],[global_subdomain_range_x],[global_subdomain_range_x_with_halos]]:
+            writes = self.get_writes_from_line(line)
             var_type = translate_to_DSL(local_variables[vars_to_declare[0]]["type"])
             res = ""
             for var in vars_to_declare:
-                res = res + f"{var_type} {var}\n"
+                res = res + f"{var_type} {var}"
+                if(len(writes) == 1 and writes[0]["variable"] == var):
+                  value = writes[0]["value"]
+                  res = res + f" = {value}"
+                res = res + "\n"
             return res
         if local_variables[vars_to_declare[0]]["type"] != "real":
             return ""
@@ -8157,7 +8162,7 @@ class Parser:
                         }
                     res_lines.append("do spread_index=1,3")
                     new_rhs = f"{var_name}(:,spread_index)"
-                    new_res = new_rhs + res_line[rhs_segment[2]:]
+                    new_res = new_rhs + line[rhs_segment[2]:]
                     #TP: we skip the first one since no need to transform it
                     arr_segs_in_res  = self.get_array_segments_in_line(new_res,variables)[1:]
                     map_vals = []
@@ -8170,7 +8175,7 @@ class Parser:
                         elif dims == ["nx__mod__cparam","3"] and indexes == []:
                             map_vals.append(f"{new_res[seg[1]:seg[2]]}(:,spread_index)")
                         else:
-                            pexit("Don't know how to handle array in expression involving spread","line: ",line,"array: ",new_res[seg[1]:seg[2]])
+                            pexit("Don't know how to handle array in expression involving spread","line: ",line,"array: ",new_res[seg[1]:seg[2]],dims)
                     if(len(map_vals) < len(arr_segs_in_res)):
                         pexit(f"LENS do not match: {len(map_vals)} {len(arr_segs_in_res)}\n")
 
