@@ -3240,6 +3240,7 @@ class Parser:
         public = "public" in [x.strip() for x in start.split(",")]
         is_parameter = "parameter" in [x.strip() for x in start.split(",")]
         is_pointer = "pointer" in [x.strip() for x in start.split(",")]
+        is_target = "target" in [x.strip() for x in start.split(",")]
         public_attribute = "public" in [x.strip() for x in start.split(",")]
         writes = []
         if is_parameter or "=" in line:
@@ -3363,7 +3364,7 @@ class Parser:
                     profile_type = None
                 #var_object = {"type": type, "dims": dims, "allocatable": allocatable, "origin": [filename], "public": public, "threadprivate": False, "saved_variable": (saved_variable or "=" in line_variables.split(",")[i]), "parameter": is_parameter, "on_target": False, "optional": is_optional, "line_num": line_num, "profile_type": profile_type, "is_pointer": is_pointer}
                 #TP for run_const analysis do not include saved_variables
-                var_object = {"type": type, "dims": dims, "allocatable": allocatable, "origin": [filename], "public": public, "threadprivate": False, "saved_variable": False, "parameter": is_parameter, "on_target": False, "optional": is_optional, "line_num": line_num, "profile_type": profile_type, "is_pointer": is_pointer}
+                var_object = {"type": type, "dims": dims, "allocatable": allocatable, "origin": [filename], "public": public, "threadprivate": False, "saved_variable": False, "parameter": is_parameter, "on_target": False, "optional": is_optional, "line_num": line_num, "profile_type": profile_type, "is_pointer": is_pointer, "is_target": is_target}
                 if is_parameter or "=" in line:
                   var_writes = [x for x in writes if x["variable"] == variable_name and "kind" not in x["value"]]
                   if len(var_writes) == 1 and dims == []:
@@ -4039,7 +4040,7 @@ class Parser:
                 if "function" in line and "result" in line and scalar_type in line:
                     var_name = line.split("result(")[1].split(")")[0]
                     if var_name not in variables:
-                        variables[var_name] = {"type": scalar_type, "dimension": [], "is_pointer": False, "saved_variable": False}
+                        variables[var_name] = {"type": scalar_type, "dimension": [], "is_pointer": False, "is_target":False,"saved_variable": False}
         return variables
 
 
@@ -8713,7 +8714,7 @@ class Parser:
                 for mod in self.rename_dict:
                     if pointer in self.rename_dict[mod]:
                         mod_var = f"{pointer}__mod__{mod}"
-                        if(not self.static_variables[mod_var]["is_pointer"]):
+                        if(not self.static_variables[mod_var]["is_pointer"] and self.static_variables[mod_var]["is_target"]):
                           possible_modules.append(mod)
             if(len(possible_modules) != 1):
                 
@@ -8746,6 +8747,7 @@ class Parser:
                   print("Possible modules ",possible_modules)
               assert(len(possible_modules) == 1)
             mod = possible_modules[0]
+
             return f"{pointer}__mod__{mod}"
     def transform_pointers(self,lines,variables):
         res_lines = []
