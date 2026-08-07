@@ -580,6 +580,9 @@ def map_grad_other(func_call):
          return [f"{params[1]} = gradient({gen_field(indexes[3])})"]
       pexit("BUNDLE PARAM",params[0])
     pexit("PARAM ",params[0], func_call["static_variables"][params[0]])
+def map_box_muller_transform(func_call):
+    params = func_call["parameters"]
+    return [f"{params[1]} = box_muller_transform({params[0]})"]
 def map_div(func_call):
     params = func_call["parameters"]
     if len(params)>3:
@@ -1682,6 +1685,11 @@ sub_funcs = {
     {
         "output_params_indexes": [2],
         "map_func": map_div
+    },
+    "box_muller_transform":
+    {
+        "output_params_indexes": [1],
+        "map_func": map_box_muller_transform
     },
     "div_mn":
     {
