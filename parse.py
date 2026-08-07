@@ -2637,6 +2637,8 @@ class Parser:
         self.safe_subs_to_remove.append("store_slices")
         self.ignored_subroutines.append("output_profile")
         self.safe_subs_to_remove.append("output_profile")
+        self.ignored_subroutines.append("mpi_min_keyval")
+        self.safe_subs_to_remove.append("mpi_min_keyval")
         # self.ignored_subroutines.append("loptest")
         self.ignored_subroutines.append("result")
         self.ignored_subroutines.extend(["timing","inevitably_fatal_error"])
