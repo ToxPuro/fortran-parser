@@ -582,7 +582,7 @@ def map_grad_other(func_call):
     pexit("PARAM ",params[0], func_call["static_variables"][params[0]])
 def map_box_muller_transform(func_call):
     params = func_call["parameters"]
-    return [f"{params[1]} = box_muller_transform({params[0]})"]
+    return [f"{params[0]} = box_muller_transform()"]
 def map_div(func_call):
     params = func_call["parameters"]
     if len(params)>3:
