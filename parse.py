@@ -6913,7 +6913,8 @@ class Parser:
                         if f"__mod__{mod}" in enum:
                             res[mod][1] += 1
                             name = remove_mod(enum)
-                            out.append(f"    call string_to_enum(enum_{name},{name})\n")
+                            string_name = name[len("enum_"):len(name)]
+                            out.append(f"    call string_to_enum({name},{string_name})\n")
                             out.append(f"    call copy_addr({name},p_par({res[mod][1]})) ! int\n")
                             
                 out.append(line)
@@ -10045,9 +10046,7 @@ class Parser:
 
             enum_file = f"{self.directory}/cparam_enum.h"
             general_file = f"{self.directory}/general.f90"
-            read_in = open(enum_file,"r")
-            out = [line for line in read_in]
-            read_in.close()
+            out = []
             all_strings = [x for x in all_strings if len(x) < 40]
             #file.write(f"integer, parameter :: enum_unknown_string_string = 0\n")
             largest_string_int = 0
@@ -10062,7 +10061,7 @@ class Parser:
                 res = f"enum_{string}_string"
                 if f"{res}__mod__cparam".lower() not in self.static_variables:
                     largest_string_int += 1
-                    out.append(f"integer, parameter :: {res} = {largest_string_int}\n")
+                    out.append((res,largest_string_int))
             self.cparam_out = copy.deepcopy(out)
 
             mappings = []
@@ -11247,9 +11246,15 @@ def main():
             enum_file = f"{parser.directory}/cparam_enum.h"
             general_file = f"{parser.directory}/general.f90"
 
-            write_out = open(enum_file,"w")
+            write_out = open(enum_file,"a")
             for line in parser.cparam_out:
-                write_out.write(f"{line}")
+                write_out.write(f"integer, parameter :: {line[0]} = {line[1]}\n")
+            write_out.close()
+
+            write_out = open(f"{parser.directory}/cparam_enum_c.h","a")
+            for line in parser.cparam_out:
+                write_out.write(f"const int {line[0]} = {line[1]};\n")
+                write_out.write(f"const int {line[0]}__mod__cparam = {line[1]};\n")
             write_out.close()
 
             write_out= open(general_file,"w")
