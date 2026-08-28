@@ -10855,7 +10855,7 @@ def main():
           parser.safe_subs_to_remove.extend(["xymax_mn_name_z","sum_mn_name","max_mn_name","yzsum_mn_name_x","xzsum_mn_name_y","xysum_mn_name_z","zsum_mn_name_xy","ysum_mn_name_xz","phizsum_mn_name_r","phisum_mn_name_rz","integrate_mn_name","sum_lim_mn_name","save_name"])
           parser.ignored_subroutines.extend(["diagnostic_magnetic","xyaverages_magnetic","yzaverages_magnetic","xzaverages_magnetic"])
           parser.safe_subs_to_remove.extend(["diagnostic_magnetic","xyaverages_magnetic","yzaverages_magnetic","xzaverages_magnetic"])
-          for mod in ["density","magnetic","viscosity","energy","dustvelocity","dustdensity","hydro","interstellar","cosmicray","gravity","chiral","selfgravity","chemistry","special"]:
+          for mod in ["density","magnetic","viscosity","energy","dustvelocity","dustdensity","hydro","interstellar","cosmicray","gravity","chiral","selfgrav","selfgravity","chemistry","special"]:
               parser.ignored_subroutines.append(f"calc_diagnostics_{mod}")
               parser.safe_subs_to_remove.append(f"calc_diagnostics_{mod}")
 
