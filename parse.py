@@ -8815,7 +8815,7 @@ class Parser:
         writes = self.get_writes(lines)
         remove_indexes = []
         for line_index,line in enumerate(lines):
-            if len([call for call in self.get_function_calls_in_line(line,local_variables) if call["function_name"] in self.safe_subs_to_remove]) == 1:
+            if len([call for call in self.get_function_calls_in_line(line,local_variables) if call["function_name"] in self.safe_subs_to_remove] or "calc_diagnostics" in call["function_name"]) == 1:
                 remove_indexes.append(line_index)
             #print and write are somewhat special functions
             if "print*" in line or "write(*,*)" in line or "print *" in line:
@@ -10174,7 +10174,7 @@ class Parser:
         for line in new_lines:
             func_calls_to_replace.extend(self.get_function_calls_in_line(line,local_variables))
 
-        func_calls_to_replace = [call for call in func_calls_to_replace if call["function_name"] != subroutine_name and call["function_name"] not in subs_not_to_inline and call["function_name"] in self.func_info and ("interface_funcs" not in self.func_info[call["function_name"]] or all([x not in subs_not_to_inline for x in self.func_info[call["function_name"]]["all_interface_funcs"]]) )]
+        func_calls_to_replace = [call for call in func_calls_to_replace if call["function_name"] != subroutine_name and "calc_diagnostics" not in call["function_name"] and call["function_name"] not in subs_not_to_inline and call["function_name"] in self.func_info and ("interface_funcs" not in self.func_info[call["function_name"]] or all([x not in subs_not_to_inline for x in self.func_info[call["function_name"]]["all_interface_funcs"]]) )]
         for call in func_calls_to_replace:
             if call["function_name"] == "dot":
                 pexit("wrong")
@@ -10855,9 +10855,6 @@ def main():
           parser.safe_subs_to_remove.extend(["xymax_mn_name_z","sum_mn_name","max_mn_name","yzsum_mn_name_x","xzsum_mn_name_y","xysum_mn_name_z","zsum_mn_name_xy","ysum_mn_name_xz","phizsum_mn_name_r","phisum_mn_name_rz","integrate_mn_name","sum_lim_mn_name","save_name"])
           parser.ignored_subroutines.extend(["diagnostic_magnetic","xyaverages_magnetic","yzaverages_magnetic","xzaverages_magnetic"])
           parser.safe_subs_to_remove.extend(["diagnostic_magnetic","xyaverages_magnetic","yzaverages_magnetic","xzaverages_magnetic"])
-          for mod in ["density","magnetic","viscosity","energy","dustvelocity","dustdensity","hydro","interstellar","cosmicray","gravity","chiral","selfgrav","selfgravity","chemistry","special"]:
-              parser.ignored_subroutines.append(f"calc_diagnostics_{mod}")
-              parser.safe_subs_to_remove.append(f"calc_diagnostics_{mod}")
 
         parser.ignored_subroutines.append("calc_df_diagnostics")
         parser.safe_subs_to_remove.append("calc_df_diagnostics")
