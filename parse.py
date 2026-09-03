@@ -10859,6 +10859,9 @@ def main():
               parser.ignored_subroutines.append(f"calc_diagnostics_{mod}")
               parser.safe_subs_to_remove.append(f"calc_diagnostics_{mod}")
 
+        parser.ignored_subroutines.append("calc_df_diagnostics")
+        parser.safe_subs_to_remove.append("calc_df_diagnostics")
+
         parser.ignored_subroutines.append(f"calc_diagnostic_pencils")
         parser.safe_subs_to_remove.append(f"calc_diagnostic_pencils")
 
