@@ -8815,7 +8815,7 @@ class Parser:
         writes = self.get_writes(lines)
         remove_indexes = []
         for line_index,line in enumerate(lines):
-            if len([call for call in self.get_function_calls_in_line(line,local_variables) if call["function_name"] in self.safe_subs_to_remove] or "calc_diagnostics" in call["function_name"]) == 1:
+            if len([call for call in self.get_function_calls_in_line(line,local_variables) if call["function_name"] in self.safe_subs_to_remove or "calc_diagnostics" in call["function_name"]]) == 1:
                 remove_indexes.append(line_index)
             #print and write are somewhat special functions
             if "print*" in line or "write(*,*)" in line or "print *" in line:
