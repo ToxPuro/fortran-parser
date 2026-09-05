@@ -5184,7 +5184,7 @@ class Parser:
         return line[:func_call["range"][0]] + replacement + line[func_call["range"][1]:]
     def get_function_return_var_info(self,subroutine_name,subroutine_lines,local_variables):
             #has named return value
-            local_variables = {parameter:v for parameter,v in self.get_variables(subroutine_lines, {},self.file, True).items() }
+            local_variables = {parameter:v for parameter,v in self.get_variables(subroutine_lines[1:], {},self.file, True).items() }
             result_func_calls = [call for call in self.get_function_calls_in_line(subroutine_lines[0],local_variables) if call["function_name"] == "result"]
             if "result" in subroutine_lines[0] and len(result_func_calls) == 1:
                 return_var = result_func_calls[0]["parameters"][0]
@@ -5194,6 +5194,8 @@ class Parser:
             #return value type is the local variable with it's name
             if return_var in local_variables:
                 type = local_variables[return_var]["type"]
+                if "dims" not in local_variables[return_var]:
+                    pexit("I do not know the dims of this variable: ",return_var,"In function: ",subroutine_name)
                 return_dims = local_variables[return_var]["dims"]
             else:
                 return_dims = []
@@ -5269,15 +5271,18 @@ class Parser:
 
 
         is_function = "function" in subroutine_lines[0]
+        return_var = None
         if is_function:
             return_var,type,_ = self.get_function_return_var_info(subroutine_name,subroutine_lines,local_variables) 
         else:
             type = None
         result_func_calls = [call for call in self.get_function_calls_in_line(subroutine_lines[0],local_variables) if call["function_name"] == "result"]
-        has_named_return_value = "result" in subroutine_lines[0] and len(result_func_calls) == 1
+        has_named_return_value = False
         for line in init_lines:
             var = line.split("::")[-1].strip()
             if subroutine_name.strip() == var:
+                has_named_return_value = True
+            if return_var is not None and return_var == var:
                 has_named_return_value = True
 
         if is_function and not has_named_return_value:
@@ -5286,7 +5291,6 @@ class Parser:
 
         new_lines = [x.lower() for x in lines]
         mapping = self.get_parameter_mapping(params, parameter_list)
-
         passed_param_names = [x.split("=",1)[-1].strip() for x in function_call_to_replace["parameters"]]
         present_params = [x[1] for x in enumerate(params) if x[0] in mapping]
         optional_present_params = [x for x in present_params if local_variables[x]["optional"]]
@@ -5356,7 +5360,7 @@ class Parser:
         #    print("HMM LINE",line)
         #exit()
 
-
+        init_lines = [line for line in init_lines if "__mod__coala" not in line]
 
         init_variables= {parameter:v for parameter,v in self.get_variables(init_lines, {},filename,True).items() }
 
@@ -7173,6 +7177,8 @@ class Parser:
                             elif len(var_dims) == 3 and len(indexes) == 3 and indexes[0] == nx_index and indexes[1] == ":" and indexes[2] == ":":
                                 res = f"{segment[0]}"
                             elif len(var_dims) == 3 and len(indexes) == 3 and indexes[0] == nx_index and var_dims[1] in bundle_dims and var_dims[2] in bundle_dims:
+                                if indexes[2] == ":":
+                                    pexit("WRONG")
                                 res = f"{segment[0]}[{indexes[1]}-1][{indexes[2]}-1]"
                             elif len(var_dims) == 1 and len(indexes) == 1 and indexes[0] == nx_index and var_dims[0]  == "nx__mod__cparam":
                                 res = f"{segment[0]}"
@@ -7204,7 +7210,11 @@ class Parser:
                                 res = f"{segment[0]}[{indexes[3]}-1]"
                             elif len(var_dims) == 5 and len(indexes) == 5 and indexes[:3] == ["ikx","iky","ikz"]:
                                 res = f"{segment[0]}[{indexes[3]}-1][{indexes[4]}-1]"
+                            elif len(var_dims) == 3 and len(indexes) == 3 and indexes[-1] == ":" and var_dims[-1] == "3":
+                                res = f"{segment[0]}[{indexes[0]}-1][{indexes[1]}-1]"
                             elif len(var_dims) == 3 and len(indexes) == 3:
+                                if indexes[2] == ":":
+                                    pexit("WRONG",indexes,var_dims,line[segment[1]:segment[2]])
                                 res = f"{segment[0]}[{indexes[0]}-1][{indexes[1]}-1][{indexes[2]}-1]"
                             elif len(var_dims) == 4 and len(indexes) == 4:
                                 res = f"{segment[0]}[{indexes[0]}-1][{indexes[1]}-1][{indexes[2]}-1][{indexes[3]}-1]"
@@ -7756,7 +7766,8 @@ class Parser:
                         lower = parts[0]
                         upper = parts[1]
                         if upper in self.static_variables and self.static_variables[upper]["parameter"] and self.static_variables[upper]["value"]:
-                            upper = self.static_variables[upper]["value"]
+                            if(upper != "ndustspec__mod__cparam"):
+                              upper = self.static_variables[upper]["value"]
                         # print("DO LINE",line)
                         # print("PARTS:",lower,upper)
 
@@ -7911,6 +7922,8 @@ class Parser:
             #tensors are not yet supported
             return "Tensor " + ", ".join(vars_to_declare)
         dims = local_variables[vars_to_declare[0]]["dims"]
+        if len(dims) == 2 and dims[0]  in bundle_dims and dims[1] in bundle_dims:
+            return "real " + var + f"[{dims[0]}][{dims[1]}]"
         if len(dims) == 3 and dims[0]  == global_subdomain_range_x and dims[1].isnumeric() and dims[2].isnumeric():
             return "real " + var + f"[{dims[1]}][{dims[2]}]"
         if dims[:-1] ==  [global_subdomain_range_x,"3"] and dims[-1] in bundle_dims:
@@ -10082,12 +10095,17 @@ class Parser:
             self.general_out = copy.deepcopy(out)
 
         return res_lines
+    def normalize_precision(self, lines):
+        res = [re.sub(r'(\d+(?:\.\d*)?)_wp\b', r'\1', line) for line in lines]
+        return [line for line in res if line.strip() not in ["implicit none","end function"]]
+        
     def normalize(self, lines):
         local_variables = {parameter:v for parameter,v in self.get_variables(lines, {},self.file,True).items() }
         lines = self.transform_case(lines)
         lines = self.normalize_if_calls(lines, local_variables)
         lines = self.normalize_where_calls(lines, local_variables)
         lines = self.normalize_if_calls(lines, local_variables)
+        lines = self.normalize_precision(lines)
         return lines
 
         #move written profiles to local_vars since we know their values
