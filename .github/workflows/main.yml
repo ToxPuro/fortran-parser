@@ -121,6 +121,7 @@ jobs:
           git add src/cparam_enum.h
           git add src/special/*.f90
           git commit -m"Automatic commit to keep code GPU-enabled"
+          git pull
           git push
 
 
