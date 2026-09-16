@@ -1175,6 +1175,11 @@ def map_multsv_mn_add(func_call):
     res = [f"{params[2]} = {params[2]} + {params[0]}*{params[1]}"]
     return res
 
+def map_getcell(func_call):
+    params = func_call["parameters"]
+    res = [f"getcell({params[5]},{params[1]},{params[2]})"]
+    return res
+
 
 def map_not_implemented(func_call):
     return [f"fatal_error_message(true,\"{func_call['function_name']}\")"]
@@ -1539,6 +1544,11 @@ sub_funcs = {
     {
         "output_params_indexes": [2],
         "map_func": map_multmv
+    },
+    "getcell":
+    {
+        "getcell": [],
+        "map_func": map_getcell
     },
     "multmv_mixed":
     {
@@ -7202,6 +7212,8 @@ class Parser:
                                 res = f"{segment[0]}"
                             elif len(var_dims) == 1 and len(indexes) == 1:
                                 res = f"{segment[0]}[{indexes[0]}-1]"
+                            elif len(var_dims) == 2 and var_dims[0] == "nx__mod__cparam" and indexes[0] == ":" and len(indexes) == 2:
+                                res = f"{segment[0]}[{indexes[1]}-1]"
                             elif len(var_dims) == 2 and len(indexes) == 2:
                                 res = f"{segment[0]}[{indexes[0]}-1][{indexes[1]}-1]"
                             elif len(var_dims) == 3 and indexes == ["ikx","iky","ikz"]:
@@ -7395,12 +7407,16 @@ class Parser:
                         pexit("HMM")
                       else:
                         res = f"{segment[0]}[{indexes[0]}-1]"
+                    elif len(var_dims) == 2 and var_dims[0] == "nx__mod__cparam" and indexes[0] == ":" and len(indexes) == 2:
+                        res = f"{segment[0]}[{indexes[1]}-1]"
                     elif len(var_dims) == 2 and len(indexes) == 2:
                         res = f"{segment[0]}[{indexes[0]}-1][{indexes[1]}-1]"
                     elif (segment[0] in self.static_variables_to_declare or segment[0] in local_variables) and len(var_dims) == 3 and len(indexes) == 3 and num_of_looped_dims == 1 and indexes[0] == ":" and var_dims[0] == "nx__mod__cparam":
                         res = f"{segment[0]}[{indexes[1]}-1][{indexes[2]}-1]"
                     elif len(var_dims) == 3 and len(indexes) == 3 and num_of_looped_dims == 1 and indexes[0] == ":" and var_dims[0] == "nx__mod__cparam":
                         res = f"{segment[0]}[vertexIdx.x-NGHOST][{indexes[1]}-1][{indexes[2]}-1]"
+                    elif len(var_dims) == 3 and var_dims[0] == "nx__mod__cparam" and indexes[0] == ":" and len(indexes) == 3:
+                        res = f"{segment[0]}[{indexes[1]}-1][{indexes[2]}-1]"
                     elif len(var_dims) == 3 and len(indexes) == 3:
                         res = f"{segment[0]}[{indexes[0]}-1][{indexes[1]}-1][{indexes[2]}-1]"
                     elif len(var_dims) == 4 and len(indexes) == 4:
@@ -7924,6 +7940,10 @@ class Parser:
         dims = local_variables[vars_to_declare[0]]["dims"]
         if len(dims) == 2 and dims[0]  in bundle_dims and dims[1] in bundle_dims:
             return "real " + var + f"[{dims[0]}][{dims[1]}]"
+        if len(dims) == 2 and dims[0]  in ["nx__mod__cparam"] and dims[1] in ["-1:1"]:
+            return "real " + var + f"[3]"
+        if len(dims) == 3 and dims[0]  in ["nx__mod__cparam"] and dims[1].isnumeric() and dims[2] in ["-2:2"]:
+            return "real " + var + f"[{dims[1]}][5]"
         if len(dims) == 3 and dims[0]  == global_subdomain_range_x and dims[1].isnumeric() and dims[2].isnumeric():
             return "real " + var + f"[{dims[1]}][{dims[2]}]"
         if dims[:-1] ==  [global_subdomain_range_x,"3"] and dims[-1] in bundle_dims:
@@ -8688,6 +8708,46 @@ class Parser:
                 lines[line_index] = res
         return lines
 
+    def trans_to_normal_indexing_3d(self,segment,segment_index,line,local_variables,info):
+        if segment[0] != info["var"]:
+            return line[segment[1]:segment[2]]
+        dims = info["dims"]
+        first_part = dims[2].split(":")[0]
+        if not (first_part[0] == "-"):
+            pexit("HMM ",line)
+        negative_offset = first_part[1:]
+        indexes = get_segment_indexes(segment,line,len(dims))
+        assert(len(indexes) == 3)
+        if indexes[0] == ":" and indexes[1] == ":" and indexes[2] == ":":
+            return line[segment[1]:segment[2]]
+        #don't want to consider it for now
+        if ":" in indexes[2] or indexes[0] != ":":
+            pexit("HMM range in negative indexing: ",line[segment[1]:segment[2]],indexes)
+        #plus 1 since normal Fortran indexing is 1 based indexing
+        indexes = [indexes[0],indexes[1],f"{indexes[2]}+{negative_offset}+1"]
+        res = build_new_access(segment[0],indexes)
+        return res
+
+    def trans_to_normal_indexing_2d(self,segment,segment_index,line,local_variables,info):
+        if segment[0] != info["var"]:
+            return line[segment[1]:segment[2]]
+        dims = info["dims"]
+        first_part = dims[1].split(":")[0]
+        if not (first_part[0] == "-"):
+            pexit("HMM ",line)
+        negative_offset = first_part[1:]
+        indexes = get_segment_indexes(segment,line,len(dims))
+        assert(len(indexes) == 2)
+        if indexes[0] == ":" and indexes[1] == ":":
+            return line[segment[1]:segment[2]]
+        #don't want to consider it for now
+        if ":" in indexes[1] or indexes[0] != ":":
+            pexit("HMM range in negative indexing: ",line[segment[1]:segment[2]],indexes)
+        #plus 1 since normal Fortran indexing is 1 based indexing
+        indexes = [indexes[0],f"{indexes[1]}+{negative_offset}+1"]
+        res = build_new_access(segment[0],indexes)
+        return res
+
     def trans_to_normal_indexing(self,segment,segment_index,line,local_variables,info):
         if segment[0] != info["var"]:
             return line[segment[1]:segment[2]]
@@ -8725,6 +8785,15 @@ class Parser:
                 for line_index,_ in enumerate(lines):
                     arr_segs_in_line = self.get_array_segments_in_line(lines[line_index],variables)
                     lines[line_index] = self.replace_segments(arr_segs_in_line,lines[line_index],self.trans_to_normal_indexing,local_variables,{"var": var, "dims":dims})
+            if len(dims) == 2 and all([x in dims[1] for x in "-:"]):
+                for line_index,_ in enumerate(lines):
+                    arr_segs_in_line = self.get_array_segments_in_line(lines[line_index],variables)
+                    lines[line_index] = self.replace_segments(arr_segs_in_line,lines[line_index],self.trans_to_normal_indexing_2d,local_variables,{"var": var, "dims":dims})
+
+            if len(dims) == 3 and all([x in dims[2] for x in "-:"]):
+                for line_index,_ in enumerate(lines):
+                    arr_segs_in_line = self.get_array_segments_in_line(lines[line_index],variables)
+                    lines[line_index] = self.replace_segments(arr_segs_in_line,lines[line_index],self.trans_to_normal_indexing_3d,local_variables,{"var": var, "dims":dims})
         return lines
     def get_pointer_target(self,pointer_in):
             if pointer_in in ["0.0",".false."]:
