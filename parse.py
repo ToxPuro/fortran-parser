@@ -10162,6 +10162,7 @@ class Parser:
             lines = self.transform_pencils(lines,local_variables,"internalpencils","ac_transformed_q","q__mod__turbpotential")
             lines = self.transform_pencils(lines,local_variables,"internalpencils","ac_transformed_q","q__mod__newton_cooling")
             lines = self.transform_pencils(lines,local_variables,"internalpencils","ac_transformed_q","q__mod__photoelectric_dust")
+            lines = self.transform_pencils(lines,local_variables,"internalpencils","ac_transformed_q","q")
             lines = self.transform_pencils(lines,local_variables,"forcing_coeffs" ,"ac_forcing_coeffs","h_coeffs__mod__forcing")
             lines = self.transform_pencils(lines,local_variables,"forcing_coeffs" ,"ac_forcing_coeffs","h_coeffs")
         lines = self.remove_strings(lines,local_variables)
