@@ -5761,45 +5761,18 @@ class Parser:
             return build_new_access(segment[0],sg_indexes)
         return line[segment[1]:segment[2]]
 
-    def transform_pencils(self,lines,local_variables,struct_name,var_name):
+    def transform_pencils(self,lines,local_variables,struct_name,new_struct_name,var_name):
         if struct_name not in self.struct_table:
             return lines
         profile_replacements = {}
         #assuming all profiles are written in mn loop; if not use the lower
         for field in self.struct_table[struct_name]:
           dims = self.struct_table[struct_name][field]["dims"]
-          new_name = f"ac_transformed_pencil_{field}"
+          new_name = f"{new_struct_name}_{field}"
           if new_name not in local_variables:
             local_variables[new_name] = self.struct_table[struct_name][field]
           profile_replacements[f"{var_name}%{field}"] = new_name
 
-        ##get all profiles written to; can also assume that all profiles are calced at mn loop
-        # for line_index,line in enumerate(lines):
-        #     var_name = ""
-        #     #do only for lines with profiles
-        #     #done for speedoptim
-        #     if "p%" in line:
-        #         writes_in_line = self.get_writes_from_line(line,local_variables)
-        #         if len(writes_in_line) == 1:
-        #             write = writes_in_line[0]
-        #             rhs_segment = get_variable_segments(line, [write["variable"]])
-        #             if len(rhs_segment) == 0:
-        #                 rhs_segment = self.get_struct_segments_in_line(line, [write["variable"]])
-        #             rhs_segment  = rhs_segment[0]
-        #             var_name = line[rhs_segment[1]:rhs_segment[2]].split("::",1)[-1].split("(",1)[0].strip()
-
-        #         #do only for profiles
-        #         if "p%" in var_name and var_name not in profile_replacements:
-        #             var_info = self.get_param_info((var_name,False),local_variables,local_variables)
-        #             new_name = var_name.replace("p%","ac_transformed_pencil_")
-        #             if new_name not in local_variables:
-        #                 local_variables[new_name] ={
-        #                     "type":var_info[2],
-        #                     "dims":var_info[3],
-        #                     "saved_variable": False
-        #                 }
-        #             profile_replacements[var_name] = new_name
-        #lines = self.replace_vars_in_lines(lines,profile_replacements, structs=True)
         res_lines = []
         for line_index,line in enumerate(lines):
             for replacement in profile_replacements:
@@ -10182,13 +10155,15 @@ class Parser:
         local_variables = {parameter:v for parameter,v in self.get_variables(lines, {},self.file,True).items() }
         lines = self.transform_pointers(lines,merge_dictionaries(local_variables,self.static_variables))
         if(self.offload_type == "stencil"):
-            lines = self.transform_pencils(lines,local_variables,"pencil_case","p")
-            lines = self.transform_pencils(lines,local_variables,"internalpencils","q__mod__special")
-            lines = self.transform_pencils(lines,local_variables,"internalpencils","q__mod__shallow_water")
-            lines = self.transform_pencils(lines,local_variables,"internalpencils","q__mod__turbpotential")
-            lines = self.transform_pencils(lines,local_variables,"internalpencils","q__mod__newton_cooling")
-            lines = self.transform_pencils(lines,local_variables,"internalpencils","q__mod__photoelectric_dust")
-            lines = self.transform_pencils(lines,local_variables,"internalpencils","q")
+            lines = self.transform_pencils(lines,local_variables,"pencil_case",    "ac_transformed_pencil", "p")
+            lines = self.transform_pencils(lines,local_variables,"internalpencils","ac_transformed_q","q__mod__special")
+            lines = self.transform_pencils(lines,local_variables,"internalpencils","ac_transformed_q","q__mod__special")
+            lines = self.transform_pencils(lines,local_variables,"internalpencils","ac_transformed_q","q__mod__shallow_water")
+            lines = self.transform_pencils(lines,local_variables,"internalpencils","ac_transformed_q","q__mod__turbpotential")
+            lines = self.transform_pencils(lines,local_variables,"internalpencils","ac_transformed_q","q__mod__newton_cooling")
+            lines = self.transform_pencils(lines,local_variables,"internalpencils","ac_transformed_q","q__mod__photoelectric_dust")
+            lines = self.transform_pencils(lines,local_variables,"forcing_coeffs" ,"ac_forcing_coeffs","h_coeffs__mod__forcing")
+            lines = self.transform_pencils(lines,local_variables,"forcing_coeffs" ,"ac_forcing_coeffs","h_coeffs")
         lines = self.remove_strings(lines,local_variables)
         return lines
 
@@ -11004,6 +10979,9 @@ def main():
         parser.safe_subs_to_remove.extend(["deri_3d_inds"])
         parser.ignored_subroutines.extend(["boundconds_y","boundconds_z"])
         parser.ignored_subroutines.extend(["deri_3d_inds"])
+
+        parser.safe_subs_to_remove.extend(["get_forcing_hel_rhs"])
+        parser.ignored_subroutines.extend(["get_forcing_hel_rhs"])
 
         # parser.safe_subs_to_remove.extend(["calc_all_pencils"])
         # parser.ignored_subroutines.extend(["calc_all_pencils"])
