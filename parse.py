@@ -10174,6 +10174,7 @@ class Parser:
             lines = self.transform_pencils(lines,local_variables,"magtmpinternalpencils","q_mag","q__mod__magnetic")
             lines = self.transform_pencils(lines,local_variables,"visctmpinternalpencils","q_visc","q__mod__viscosity")
             lines = self.transform_pencils(lines,local_variables,"denstmpinternalpencils","q_dens","q__mod__density")
+            lines = self.transform_pencils(lines,local_variables,"enetmpinternalpencils","q_ene","q__mod__energy")
             lines = self.transform_pencils(lines,local_variables,"eostmpinternalpencils","q_eos","q__mod__equationofstate")
         lines = self.remove_strings(lines,local_variables)
         return lines
