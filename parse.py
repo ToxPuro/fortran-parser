@@ -5772,6 +5772,8 @@ class Parser:
           if new_name not in local_variables:
             local_variables[new_name] = self.struct_table[struct_name][field]
           profile_replacements[f"{var_name}%{field}"] = new_name
+          if "q__mod__" in var_name:
+            profile_replacements[f"q%{field}"] = new_name
 
         res_lines = []
         for line_index,line in enumerate(lines):
@@ -10162,14 +10164,17 @@ class Parser:
             lines = self.transform_pencils(lines,local_variables,"internalpencils","ac_transformed_q","q__mod__turbpotential")
             lines = self.transform_pencils(lines,local_variables,"internalpencils","ac_transformed_q","q__mod__newton_cooling")
             lines = self.transform_pencils(lines,local_variables,"internalpencils","ac_transformed_q","q__mod__photoelectric_dust")
-            lines = self.transform_pencils(lines,local_variables,"internalpencils","ac_transformed_q","q__mod__hydro")
-            lines = self.transform_pencils(lines,local_variables,"internalpencils","ac_transformed_q","q__mod__magnetic")
-            lines = self.transform_pencils(lines,local_variables,"internalpencils","ac_transformed_q","q__mod__viscosity")
-            lines = self.transform_pencils(lines,local_variables,"internalpencils","ac_transformed_q","q__mod__density")
-            lines = self.transform_pencils(lines,local_variables,"internalpencils","ac_transformed_q","q__mod__equationofstate")
+
+
             lines = self.transform_pencils(lines,local_variables,"internalpencils","ac_transformed_q","q")
             lines = self.transform_pencils(lines,local_variables,"forcing_coeffs" ,"ac_forcing_coeffs","h_coeffs__mod__forcing")
             lines = self.transform_pencils(lines,local_variables,"forcing_coeffs" ,"ac_forcing_coeffs","h_coeffs")
+
+            lines = self.transform_pencils(lines,local_variables,"hydrotmpinternalpencils","q_hydro","q__mod__hydro")
+            lines = self.transform_pencils(lines,local_variables,"magtmpinternalpencils","q_mag","q__mod__magnetic")
+            lines = self.transform_pencils(lines,local_variables,"visctmpinternalpencils","q_visc","q__mod__viscosity")
+            lines = self.transform_pencils(lines,local_variables,"denstmpinternalpencils","q_dens","q__mod__density")
+            lines = self.transform_pencils(lines,local_variables,"eostmpinternalpencils","q_eos","q__mod__equationofstate")
         lines = self.remove_strings(lines,local_variables)
         return lines
 
