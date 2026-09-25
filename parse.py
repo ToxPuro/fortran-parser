@@ -1177,7 +1177,7 @@ def map_multsv_mn_add(func_call):
 
 def map_getcell(func_call):
     params = func_call["parameters"]
-    res = [f"getcell({params[5]},{params[1]},{params[2]})"]
+    res = [f"getcell(Field({params[5]}-1),{params[1]},{params[2]})"]
     return res
 
 
