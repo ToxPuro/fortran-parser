@@ -5318,8 +5318,9 @@ class Parser:
             if(len(writes) == 1):
                 if writes[0]["variable"] in not_present_params:
                     remove_indexes.append(i)
-                local_var_segments = get_var_segments_in_line(line,local_variables)
-                if any([param in [x[0] for x in local_var_segments] for param in not_present_params]):
+                #get_used_variables_from_line also catches struct accesses like p%r_mn
+                used_vars = get_used_variables_from_line(line)
+                if any([param in used_vars for param in not_present_params]):
                     remove_indexes.append(i)
 
 
