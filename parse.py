@@ -2205,7 +2205,7 @@ def get_var_name_segments(line,variables,structs=False):
         num_of_left_brackets += 1
       if char  == ")":
         num_of_right_brackets += 1
-      if char in " ':.;!,/*+-<>=()":
+      if char in " ':.;!,/*+-<>=()[]":
         if buffer and buffer.split("%")[0] in variables:
           buffer = buffer.split("%")[0]
           if structs:
@@ -2226,6 +2226,7 @@ def get_var_name_segments(line,variables,structs=False):
                 res.append((buffer,start_index,end_index))
               #expections are do,if,where,forall
               elif len(line)>=3 and line[:3] == "do":
+              #elif re.match(r"do\s",line):
                 res.append((buffer,start_index,end_index))
               elif len(line)>=len("forall") and line[:len("forall")] == "forall":
                 res.append((buffer,start_index,end_index))
@@ -2239,6 +2240,10 @@ def get_var_name_segments(line,variables,structs=False):
       buffer = ""
   if buffer.strip() in variables:
     res.append((buffer,start_index,len(line)))
+  elif buffer.split("%")[0].strip() in variables:
+    buffer = buffer.split("%")[0].strip()
+    #end_index = len(line) if structs else start_index + len(buffer)
+    res.append((buffer,start_index,start_index + len(buffer)))
   return res
 def get_variable_segments(line, variables):
     check_string = ""
@@ -5772,8 +5777,6 @@ class Parser:
           if new_name not in local_variables:
             local_variables[new_name] = self.struct_table[struct_name][field]
           profile_replacements[f"{var_name}%{field}"] = new_name
-          if "q__mod__" in var_name:
-            profile_replacements[f"q%{field}"] = new_name
 
         res_lines = []
         for line_index,line in enumerate(lines):
@@ -7913,12 +7916,12 @@ class Parser:
             #tensors are not yet supported
             return "Tensor " + ", ".join(vars_to_declare)
         dims = local_variables[vars_to_declare[0]]["dims"]
+        if len(dims) == 3 and dims[0]  in ["nx__mod__cparam"] and dims[1].isnumeric() and dims[2] in ["-2:2"]:
+          return "real " + var + f"[{dims[1]}][5]"
         if len(dims) == 2 and dims[0]  in bundle_dims and dims[1] in bundle_dims:
             return "real " + var + f"[{dims[0]}][{dims[1]}]"
         if len(dims) == 2 and dims[0]  in ["nx__mod__cparam"] and dims[1] in ["-1:1"]:
             return "real " + var + f"[3]"
-        if len(dims) == 3 and dims[0]  in ["nx__mod__cparam"] and dims[1].isnumeric() and dims[2] in ["-2:2"]:
-            return "real " + var + f"[{dims[1]}][5]"
         if len(dims) == 3 and dims[0]  == global_subdomain_range_x and dims[1].isnumeric() and dims[2].isnumeric():
             return "real " + var + f"[{dims[1]}][{dims[2]}]"
         if dims[:-1] ==  [global_subdomain_range_x,"3"] and dims[-1] in bundle_dims:
@@ -11161,6 +11164,7 @@ def main():
                         is_scalar_if = is_scalar_if or (range_len in [global_subdomain_range_x, global_subdomain_range_x_inner] and (range_len_2nd == "3"))
                   if not is_scalar_if:
                     print("what to about where")
+                    print(new_lines[line_index])
                     print(parser.get_array_segments_in_line(line,variables))
                     print(param_info)
                     range_len = parser.evaluate_integer(param_info[3][0])
