@@ -713,6 +713,13 @@ def map_u_dot_grad_scl(func_call):
     if add_line:
         res.append(add_line)
     return res
+def map_div_phib(func_call):
+    #div(phi*B) of special/disp_current; the DSL function knows its fields
+    params = func_call["parameters"]
+    if len(params) != 2:
+        pexit("div_phib: unexpected number of params\n")
+    return [f"{params[1]} = div_phib()"]
+
 def map_del4(func_call):
     params = func_call["parameters"]
     if len(params)>3:
@@ -1574,6 +1581,11 @@ sub_funcs = {
     {
         "output_params_indexes": [2],
         "map_func": map_del4
+    },
+    "div_phib":
+    {
+        "output_params_indexes": [1],
+        "map_func": map_div_phib
     },
     "del6":
     {
@@ -5786,7 +5798,8 @@ class Parser:
             #add transformed profile lines
             if line_index == 3:
                 for new_name in profile_replacements:
-                    res_lines.append(f"real, dimension({','.join(local_variables[profile_replacements[new_name]]['dims'])}) :: {profile_replacements[new_name]}")
+                    var = local_variables[profile_replacements[new_name]]
+                    res_lines.append(f"{var.get('type','real')}, dimension({','.join(var['dims'])}) :: {profile_replacements[new_name]}")
             res_lines.append(line)
 
         return res_lines
@@ -9207,7 +9220,7 @@ class Parser:
             file.write(f"{line}\n")
         file.close()
         allowed_func_calls = ["constexpr", "&&", "||","sqrt","abs","sinh","cosh","tanh","min","max","pow","DEVICE_VTXBUF_IDX".lower(),"DCONST".lower(),"exp","log","if","else","for","sin","cos","tan","atan2"]
-        astaroth_funcs = ["der","der2","der3","der4","der5","der6","col","row","derx","dery","derz","derxx","deryy","derzz","der6x","der6y","der6z","der6x_upwd","der6y_upwd","der6z_upwd","sum","dot","gradient","gradients","laplace","divergence","veclaplace","value","vecvalue","field","field3","divergence_from_matrix","curl_from_matrix","traceless_strain","traceless_strain_without_divu","multm2_sym","del_upwd","del_upwd_vec","gradient_of_divergence","cross","bij","mult","multmm_sc_mn","del6v_strict","static_assert","d2fi_dxj","del2fi_dxjk","der5x1y","der5x1z","der5y1z","gradients_5","der6x_ignore_spacing","der6y_ignore_spacing","der6z_ignore_spacing","del6","der4x2y","der4y2z","der4x2z","hessian"]
+        astaroth_funcs = ["der","der2","der3","der4","der5","der6","col","row","derx","dery","derz","derxx","deryy","derzz","der6x","der6y","der6z","der6x_upwd","der6y_upwd","der6z_upwd","sum","dot","gradient","gradients","laplace","divergence","veclaplace","value","vecvalue","field","field3","divergence_from_matrix","curl_from_matrix","traceless_strain","traceless_strain_without_divu","multm2_sym","del_upwd","del_upwd_vec","gradient_of_divergence","cross","bij","mult","multmm_sc_mn","del6v_strict","static_assert","d2fi_dxj","del2fi_dxjk","der5x1y","der5x1z","der5y1z","gradients_5","der6x_ignore_spacing","der6y_ignore_spacing","der6z_ignore_spacing","del6","der4x2y","der4y2z","der4x2z","hessian","div_phib"]
         allowed_func_calls.extend(astaroth_funcs)
 
 
@@ -10180,6 +10193,9 @@ class Parser:
             lines = self.transform_pencils(lines,local_variables,"denstmpinternalpencils","q_dens","q__mod__density")
             lines = self.transform_pencils(lines,local_variables,"enetmpinternalpencils","q_ene","q__mod__energy")
             lines = self.transform_pencils(lines,local_variables,"eostmpinternalpencils","q_eos","q__mod__equationofstate")
+            lines = self.transform_pencils(lines,local_variables,"subtmpinternalpencils","q_sub","q__mod__sub")
+            lines = self.transform_pencils(lines,local_variables,"derivtmpinternalpencils","q_deriv","q__mod__deriv")
+            lines = self.transform_pencils(lines,local_variables,"diagtmpinternalpencils","q_diag","q__mod__diagnostics")
         lines = self.remove_strings(lines,local_variables)
         return lines
 
