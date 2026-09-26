@@ -10180,6 +10180,8 @@ class Parser:
             lines = self.transform_pencils(lines,local_variables,"internalpencils","ac_transformed_q","q__mod__shallow_water")
             lines = self.transform_pencils(lines,local_variables,"internalpencils","ac_transformed_q","q__mod__turbpotential")
             lines = self.transform_pencils(lines,local_variables,"internalpencils","ac_transformed_q","q__mod__newton_cooling")
+            lines = self.transform_pencils(lines,local_variables,"internalpencils","q_gw","q__mod__gravitational_waves_htxk")
+            lines = self.transform_pencils(lines,local_variables,"internalpencils","q_disp","q__mod__disp_current")
             lines = self.transform_pencils(lines,local_variables,"internalpencils","ac_transformed_q","q__mod__photoelectric_dust")
 
 
