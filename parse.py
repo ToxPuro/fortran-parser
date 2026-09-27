@@ -37,6 +37,21 @@ bundle_dims = [
                   "0",
               ]
 
+def get_profile_type_2d(dims):
+    #TP: same rules as for declared 2d arrays in get_variables, for arrays whose dims are known only from allocate
+    dims = [dim.replace("__mod__cparam","") for dim in dims]
+    if dims in [["mx","my"],["nx","ny"]]:
+        return "xy"
+    if dims in [["mx","mz"],["nx","nz"]]:
+        return "xz"
+    if dims[0] in ["mx","nx"] and dims[1].isnumeric():
+        return "x_vec"
+    if dims in [["my","3"],["ny","3"]]:
+        return "y_vec"
+    if dims in [["mz","3"],["nz","3"]]:
+        return "z_vec"
+    return None
+
 multiplicative_ops = "*/"
 additive_ops = "+-"
 all_ops = "*/+-"
@@ -3152,6 +3167,9 @@ class Parser:
                         param_dims = param.split("(")[-1].split(")")[0].strip().split(",")
                         if param_name in self.static_variables and len(self.static_variables[param_name]["dims"]) == 2:
                             self.static_variables[param_name]["dims"] = param_dims
+                            profile_type = get_profile_type_2d(param_dims)
+                            if profile_type:
+                                self.static_variables[param_name]["profile_type"] = profile_type
                         if param_name in self.static_variables and len(self.static_variables[param_name]["dims"]) == 3:
                             self.static_variables[param_name]["dims"] = param_dims
                             if param_dims == ["mx__mod__cparam","my__mod__cparam","mz__mod__cparam"]:
@@ -11073,6 +11091,7 @@ def main():
         parser.get_allocations_in_init_func("read_hcond",subs_not_to_inline)
         parser.get_allocations_in_init_func("request_border_driving",subs_not_to_inline)
         parser.get_allocations_in_init_func("initialize_pscalar",subs_not_to_inline)
+        parser.get_allocations_in_init_func("register_magnetic",subs_not_to_inline)
 
 
         if not os.path.isfile("res-inlined.txt"):
