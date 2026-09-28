@@ -1199,7 +1199,10 @@ def map_multsv_mn_add(func_call):
 
 def map_getcell(func_call):
     params = func_call["parameters"]
-    res = [f"getcell(Field({params[5]}-1),{params[1]},{params[2]})"]
+    #getcell is a function: replace only the call so that the assignment it is part of is kept
+    line = func_call["line"]
+    start, end = func_call["range"]
+    res = [line[:start] + f"getcell(Field({params[5]}-1),{params[1]},{params[2]})" + line[end:]]
     return res
 
 
