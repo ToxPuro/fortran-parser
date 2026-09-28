@@ -7213,8 +7213,11 @@ class Parser:
                                 res = f"{segment[0]}[{indexes[1]}-1]"
                             elif len(var_dims) == 3 and len(indexes) == 3 and indexes[0] == nx_index and var_dims[0]  == "nx__mod__cparam" and var_dims[1] == "3" and indexes[1] == ":":
                                 res = f"{segment[0]}[{indexes[2]}-1]"
+                            #TP: nx var -> array of AcMatrix, so (ix,:,j,k) is column j of matrix k
+                            elif len(var_dims) == 4 and len(indexes) == 4 and indexes[0] == nx_index and indexes[1] == ":" and var_dims[:3] == ["nx__mod__cparam","3","3"] and var_dims[3] in bundle_dims and ":"  not in indexes[2:]:
+                                res = f"{segment[0]}[{indexes[3]}-1].col({indexes[2]}-1)"
                             elif len(var_dims) == 4 and len(indexes) == 4 and indexes[0] == nx_index and indexes[1] == ":" and var_dims[0]  == "nx__mod__cparam" and var_dims[1] == "3" and ":"  not in indexes[2:]:
-                                res = f"get_first_dim_vector({segment[0]},{indexes[2]},{indexes[3]})"
+                                res = f"get_first_dim_vector({segment[0]},{indexes[2]}-1,{indexes[3]}-1)"
                             elif len(var_dims) == 4 and len(indexes) == 4 and indexes[0] == nx_index and var_dims[0]  == "nx__mod__cparam" and ":"  not in indexes:
                                 res = f"{segment[0]}[{indexes[1]}-1][{indexes[2]}-1][{indexes[3]}-1]"
                             elif i > 0 and len(var_dims) == 2 and len(indexes) == 2 and indexes[0] == "1" and var_dims[0]  == "nx__mod__cparam" and var_dims[1] in bundle_dims:
@@ -11302,8 +11305,12 @@ def main():
                 file.write(f"{type} {name}\n")
               elif len(dims) == 3 and dims[0] == "nx__mod__cparam" and dims[1].isnumeric() and dims[2].isnumeric():
                 file.write(f"{type} {name}[{dims[1]}][{dims[2]}]\n")
+              #TP: nx var -> array of AcMatrix, same layout as the reads/writes from get_ac_matrix_res
+              elif len(dims) == 4 and dims[:3] == ["nx__mod__cparam","3","3"] and dims[3] in bundle_dims:
+                file.write(f"Matrix {name}[AC_{dims[3]}]\n")
               elif len(dims) == 4 and dims[0] == "nx__mod__cparam":
-                file.write(f"{type} {name}[{dims[1]}][{dims[2]}][{dims[3]}]\n")
+                ac_dims = [f"AC_{dim}" if dim in bundle_dims else dim for dim in dims[1:]]
+                file.write(f"{type} {name}[{ac_dims[0]}][{ac_dims[1]}][{ac_dims[2]}]\n")
               elif len(dims) != 0:
                   tmp_res = f"{type} {name}"
                   for dim in dims:
