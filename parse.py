@@ -8,6 +8,7 @@ import glob
 import cProfile
 import ctypes
 import copy
+from field_declarations import add_missing_field_declarations, default_dsl_dir
 ##import my-ast
 
 assumed_boundary = None
@@ -11357,6 +11358,10 @@ def main():
                 if line != "real3 ac_transformed_pencil_":
                   file.write(f"{line}\n") 
             file.close()
+            if subroutine_name == "rhs_cpu":
+                #fields registered in the used modules but not yet in DSL/fieldecs.h etc.
+                with open("rhs.ac") as file:
+                    add_missing_field_declarations(parser.used_files, default_dsl_dir(), file.read())
             print("DONE")
 
         ##TP this is slow for some reason but can cache it to an include file
