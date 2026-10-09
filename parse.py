@@ -791,7 +791,7 @@ def map_multmv(func_call):
     params = func_call["parameters"]
     if len(params)>3:
         pexit("optional params not supported\n")
-    return [f"{params[2]} = {params[0]}*{params[1]}"]
+    return [f"{params[2]} = ({params[0]}*{params[1]})"]
 def map_der_upwind(func_call):
     params = func_call["new_param_list"]
     names  = func_call["parameters"]
@@ -1107,7 +1107,7 @@ def map_multmm_sc_mn(func_call):
 
 def map_mult_matrix(func_call):
     params = func_call["parameters"]
-    return [f"{params[2]} = {params[0]}*{params[1]}"]
+    return [f"{params[2]} = ({params[0]}*{params[1]})"]
 def map_der_other(func_call):
     params = func_call["new_param_list"]
     names  = func_call["parameters"]
@@ -1191,11 +1191,11 @@ def map_multmv_mn_transp(func_call):
 
 def map_multsv_mn(func_call):
     params = func_call["parameters"]
-    return [f"{params[2]} = {params[0]}*{params[1]}"]
+    return [f"{params[2]} = ({params[0]}*{params[1]})"]
 
 def map_multsv_mn_add(func_call):
     params = func_call["parameters"]
-    res = [f"{params[2]} = {params[2]} + {params[0]}*{params[1]}"]
+    res = [f"{params[2]} = {params[2]} + ({params[0]}*{params[1]})"]
     return res
 
 def map_getcell(func_call):
@@ -9139,6 +9139,9 @@ class Parser:
         file = open("res.txt","w")
         for line in lines:
           file.write(f"{line}\n")
+        for var in set([write["variable"] for write in writes]:
+          if var in self.static_variables and self.static_variables[var]["profile_type"] not in [None,"vtxbuf","vtxbuf_bundle"]:
+            self.static_variables[var]["profile_type"] = None
         file.close()
         for i,line in enumerate(lines):
             res = self.transform_line(i,lines,local_variables,loop_indexes,symbol_table,initialization_lines,orig_params, transform_func,vectors_to_replace,writes)
