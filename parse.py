@@ -5141,7 +5141,7 @@ class Parser:
         for i, path in enumerate(filepaths):
             for modules in self.chosen_modules:
                 for mod_order,module in enumerate(self.chosen_modules[modules]):
-                  if path.lower() in [f"{self.directory}/{module}.f90".lower(),f"{self.directory}/special/{module}.f90".lower()] :
+                  if path.lower() in [f"{self.directory}/{module}.f90".lower(),f"{self.directory}/special/{module}.f90".lower(),f"{self.directory}/special/{module}._autogen_.f90".lower()] :
                       if "lines" in self.func_info[call["function_name"]] and path.lower() in self.func_info[call["function_name"]]["lines"]:
                           lines = self.func_info[call["function_name"]]["lines"][path.lower()]
                           params = self.get_parameters(lines[0])
