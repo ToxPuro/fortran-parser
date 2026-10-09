@@ -2212,6 +2212,20 @@ def is_variable_line(line_elem):
     if "!" in parts[0]:
         return False
     return len(parts)>1
+def names_in_text(names, text):
+    """Returns the names that are substrings of text, i.e. {name for name in names if name in text}.
+    A name made of word characters can only occur inside a run of word characters, so for those
+    it is enough to search the distinct word runs of text, which is much shorter than text."""
+    word_runs = "\n".join(set(re.findall(r"\w+", text)))
+    return {name for name in names if (name in word_runs if re.fullmatch(r"\w+", name) else name in text)}
+class ExcludingView:
+    """Membership-only view of the keys of base that are not in excluded."""
+    __slots__ = ("base", "excluded")
+    def __init__(self, base, excluded):
+        self.base = base
+        self.excluded = excluded
+    def __contains__(self, key):
+        return key in self.base and key not in self.excluded
 def merge_dictionaries(dict1, dict2):
     merged_dict = {}
     merged_dict.update(dict1)
@@ -3873,7 +3887,6 @@ class Parser:
                     parameter_list_start_index = current_index
                     #print(line)
                     while(number_of_right_brackets>number_of_left_brackets):
-                        parameter_list = line[parameter_list_start_index:current_index]
                         if line[current_index] == "'" and num_of_double_quotes %2 == 0:
                             num_of_single_quotes += 1
                         if line[current_index] == '"' and num_of_single_quotes %2 == 0:
@@ -5695,17 +5708,24 @@ class Parser:
     def rename_line_to_internal_names(self,line,local_variables,modules,own_module):
         if line.split(" ")[0].strip() in ["subroutine" ,"function"] or is_use_line(line):
           return line
-        vars_in_modules = {}
-        for mod in modules:
-            if mod not in self.rename_dict:
-                continue
-            vars_in_modules =  merge_dictionaries(vars_in_modules, self.rename_dict[mod])
-        vars_in_modules =  merge_dictionaries(vars_in_modules, self.rename_dict[own_module])
-        variables = merge_dictionaries(local_variables,vars_in_modules)
+        #rename_dict only grows (with fixed values per name), so the merge of the module
+        #dictionaries can be reused as long as their sizes are unchanged
+        cache = self.__dict__.setdefault("vars_in_modules_cache", {})
+        key = (tuple(modules), own_module)
+        sizes = tuple(len(self.rename_dict[mod]) if mod in self.rename_dict else -1 for mod in modules) + (len(self.rename_dict[own_module]),)
+        cached = cache.get(key)
+        if cached is not None and cached[0] == sizes:
+            vars_in_modules = cached[1]
+        else:
+            vars_in_modules = {}
+            for mod in modules:
+                if mod not in self.rename_dict:
+                    continue
+                vars_in_modules =  merge_dictionaries(vars_in_modules, self.rename_dict[mod])
+            vars_in_modules =  merge_dictionaries(vars_in_modules, self.rename_dict[own_module])
+            cache[key] = (sizes, vars_in_modules)
         #don't rename local variables
-        for var in [x for x in variables]:
-          if var in local_variables:
-            del variables[var]
+        variables = ExcludingView(vars_in_modules, local_variables)
         var_segments = get_var_name_segments(line,variables)
         res = self.replace_segments(var_segments,line,self.rename_to_internal_module_name,local_variables,{"modules": modules,"own_module":own_module})
         return res
@@ -6836,8 +6856,9 @@ class Parser:
         res_file = open("mhdsolver-rhs.inc","r")
         contents = res_file.read()
         res_file.close()
+        vars_in_contents = names_in_text(self.static_variables, contents)
         res = {}
-        for var in [var for var in self.static_variables if var not in self.static_variables_to_declare and var in contents]:
+        for var in [var for var in self.static_variables if var not in self.static_variables_to_declare and var in vars_in_contents]:
           if var in vars_not_to_push:
               continue
           if self.static_variables[var]["parameter"]:
@@ -6867,7 +6888,7 @@ class Parser:
               elif type == "logical":
                   call = f"call copy_addr({name},p_par({res[mod][1]})) ! bool"
               res[mod][0].append(call)
-        for var in [var for var in self.static_variables if var not in self.static_variables_to_declare and var in contents]:
+        for var in [var for var in self.static_variables if var not in self.static_variables_to_declare and var in vars_in_contents]:
           if self.static_variables[var]["parameter"]:
                 continue
           if self.static_variables[var]["is_pointer"]:
@@ -6973,11 +6994,12 @@ class Parser:
         res_file = open("mhdsolver-rhs.inc","r")
         contents = res_file.read()
         res_file.close()
+        vars_in_contents = names_in_text(self.static_variables, contents)
 
 
-        declared_vars= ["AC_npencils__mod__cparam"]
+        declared_vars= {"AC_npencils__mod__cparam"}
         print("GEN VAR DECLARATIONS\n")
-        for var in [x for x in self.static_variables if x in contents or (self.static_variables[x]["parameter"] and "value" in self.static_variables[x] and self.static_variables[x]["value"].isnumeric())]:
+        for var in [x for x in self.static_variables if x in vars_in_contents or (self.static_variables[x]["parameter"] and "value" in self.static_variables[x] and self.static_variables[x]["value"].isnumeric())]:
 
           dims = self.static_variables[var]["dims"]
           #if self.static_variables[var]["type"] in ["scattered_array","farray_contents_list","ode_vars_list"]:
@@ -7000,84 +7022,84 @@ class Parser:
                     cparam_file.write(f"const {translate_to_DSL(type)} {name} = {val}\n")
                     cparam_file.write(f"#define AC_{name} {name}\n")
                     #cparam_file.write(f"#define AC_{remove_mod(name)} {name}\n")
-                  declared_vars.append(var)
+                  declared_vars.add(var)
                 else:
                     file.write(f"run_const {translate_to_DSL(type)} AC_{name}\n")
                     #cparam_file.write(f"run_const {translate_to_DSL(type)} AC_{name}\n")
                     #cparam_file.write(f"const {translate_to_DSL(type)} AC_{name} = {val}\n")
                     cparam_file.write(f"#define AC_{name} {remove_mod(name)}\n")
                     cparam_file.write(f"#define AC_{remove_mod(name)} {remove_mod(name)}\n")
-                    declared_vars.append(var)
+                    declared_vars.add(var)
               else:
                 if name not in ["n__mod__cdata","m__mod__cdata"]:
                     file.write(f"run_const {translate_to_DSL(type)} AC_{name}\n")
                     #cparam_file.write(f"const {translate_to_DSL(type)} AC_{name} = {val}\n")
-                    declared_vars.append(var)
-              declared_vars.append(var)
+                    declared_vars.add(var)
+              declared_vars.add(var)
           if dims == ["3"] and type in ["integer","real","double","logical"]:
               file.write(f"run_const {translate_to_DSL(type)}3 AC_{name}\n")
-              declared_vars.append(var)
+              declared_vars.add(var)
           elif dims == ["3","3"] and type in ["integer","real","double","logical"]:
               file.write(f"run_const {translate_to_DSL(type)} AC_{name}[3][3]\n")
-              declared_vars.append(var)
+              declared_vars.add(var)
     
           for dim in ["x","y","z"]:
             if dims  == [f"m{dim}__mod__cparam"]:
               file.write(f"gmem {translate_to_DSL(type)} AC_{name}[AC_m{dim}]\n")
-              declared_vars.append(var)
+              declared_vars.add(var)
             elif dims  == [f"n{dim}__mod__cparam"]:
               file.write(f"gmem {translate_to_DSL(type)} AC_{name}[AC_n{dim}]\n")
-              declared_vars.append(var)
+              declared_vars.add(var)
             elif len(dims) == 2 and dims[0]  == f"m{dim}__mod__cparam" and dims[1].isnumeric():
               file.write(f"gmem {translate_to_DSL(type)} AC_{name}[AC_m{dim}][{dims[1]}]\n")
-              declared_vars.append(var)
+              declared_vars.add(var)
             elif len(dims) == 2 and dims[0]  == f"n{dim}__mod__cparam" and dims[1].isnumeric():
               file.write(f"gmem {translate_to_DSL(type)} AC_{name}[AC_n{dim}][{dims[1]}]\n")
-              declared_vars.append(var)
+              declared_vars.add(var)
             for second_dim in ["x","y","z"]:
               for p_1 in ["m","n"]:
                 for p_2 in ["m","n"]:
                   if dims == [f"{p_1}{dim}__mod__cparam",f"{p_2}{second_dim}__mod__cparam"]:
                     file.write(f"gmem {translate_to_DSL(type)} AC_{name}[AC_{p_1}{dim}][AC_{p_2}{second_dim}]\n")
-                    declared_vars.append(var)
+                    declared_vars.add(var)
                   elif dims == [f"{p_1}{dim}__mod__cparam",f"{p_2}{second_dim}__mod__cparam","3"]:
                     file.write(f"gmem {translate_to_DSL(type)} AC_{name}[AC_{p_1}{dim}][AC_{p_2}{second_dim}][3]\n")
-                    declared_vars.append(var)
+                    declared_vars.add(var)
               for third_dim in ["x","y","z"]:
                 for p_1 in ["m","n"]:
                     for p_2 in ["m","n"]:
                         for p_3 in ["m","n"]:
                             if var not in declared_vars and self.static_variables[var]["profile_type"] == "vtxbuf":
                               file.write(f"Field AC_{name}\n")
-                              declared_vars.append(var)
+                              declared_vars.add(var)
                             elif var not in declared_vars and self.static_variables[var]["profile_type"] == "vtxbuf_bundle":
                               print("BUNDLE: ",var,dims)
                               file.write(f"Field AC_{name}[{dims[3]}]\n")
-                              declared_vars.append(var)
+                              declared_vars.add(var)
                             elif var not in declared_vars and dims == [f"{p_1}{dim}__mod__cparam",f"{p_2}{second_dim}__mod__cparam",f"{p_3}{third_dim}__mod__cparam"]:
                                 file.write(f"gmem {translate_to_DSL(type)} AC_{name}[AC_{p_1}{dim}][AC_{p_2}{second_dim}][AC_{p_3}{third_dim}]\n")
-                                declared_vars.append(var)
+                                declared_vars.add(var)
                             elif var not in declared_vars and  dims == [f"{p_1}{dim}__mod__cparam",f"{p_2}{second_dim}__mod__cparam",f"{p_3}{third_dim}__mod__cparam","3"]:
                                 file.write(f"gmem {translate_to_DSL(type)} AC_{name}[AC_{p_1}{dim}][AC_{p_2}{second_dim}][AC_{p_3}{third_dim}][3]\n")
-                                declared_vars.append(var)
+                                declared_vars.add(var)
                   
         #TP: done after the first loop that loop dims are defined first
-        for var in [var for var in self.static_variables if var not in declared_vars and var in contents]:
+        for var in [var for var in self.static_variables if var not in declared_vars and var in vars_in_contents]:
           dims = self.static_variables[var]["dims"]
           type = self.static_variables[var]["type"]
           name = var
           if len(dims) == 1 and type in ["integer","real","double","logical"] and dims[0] in self.static_variables and self.static_variables[dims[0]]["parameter"]:
               val = self.static_variables[dims[0]]["value"]
               file.write(f"run_const {translate_to_DSL(type)} AC_{name}[{val}]\n")
-              declared_vars.append(var)
+              declared_vars.add(var)
           elif len(dims) == 1 and type in ["integer","real","double","logical"] and dims[0].isnumeric():
               file.write(f"run_const {translate_to_DSL(type)} AC_{name}[{dims[0]}]\n")
-              declared_vars.append(var)
+              declared_vars.add(var)
           elif len(dims) == 1 and type in ["integer","real","double","logical"] and ":" not in dims[0] and not any([x in dims[0] for x in ["+","-","*","/"]]):
               file.write(f"gmem {translate_to_DSL(type)} AC_{name}[AC_{dims[0]}]\n")
-              declared_vars.append(var)
+              declared_vars.add(var)
           if var not in declared_vars and len(dims) == 2 and all([dim in bundle_dims or dim.isnumeric() for dim in dims]) and type in ["integer","real"]:
-              declared_vars.append(var)
+              declared_vars.add(var)
               file.write(f"gmem {translate_to_DSL(type)} AC_{name}[{dims[0]}][{dims[1]}]\n")
           elif len(dims) == 2 and var not in declared_vars and type in ["integer","real","double","logical"]:
               first_dim = f"AC_{dims[0]}"
@@ -7087,7 +7109,7 @@ class Parser:
               if dims[1].isnumeric():
                   second_dim = dims[1]
               file.write(f"gmem {translate_to_DSL(type)} AC_{name}[{first_dim}][{second_dim}]\n")
-              declared_vars.append(var)
+              declared_vars.add(var)
         
     def transform_line_stencil(self,line,num_of_looped_dims, local_variables, rhs_var,vectors_to_replace, writes, loop_indexes):
         variables = merge_dictionaries(self.static_variables, local_variables)
@@ -8005,7 +8027,6 @@ class Parser:
             return ""
         if "mn_loop:" in line and "do" in line:
             return ""
-        variables = merge_dictionaries(self.static_variables, local_variables)
         if is_init_line(line):
             return self.transform_init_line(line,i,local_variables,orig_params)
             ##No local declaration of pointers since they are supposed to be global
@@ -8185,7 +8206,10 @@ class Parser:
             #     print("IS n_save in local_variables?","n_save" in local_variables)
             # exit()
         if rhs_var:
-          dim = len(variables[rhs_var]["dims"])
+          #same as looking up rhs_var in merge_dictionaries(self.static_variables, local_variables),
+          #without copying all static variables for every line
+          rhs_var_info = local_variables[rhs_var] if rhs_var in local_variables else self.static_variables[rhs_var]
+          dim = len(rhs_var_info["dims"])
           indexes = get_indexes(get_rhs_segment(line),rhs_var,dim)
           dims, num_of_looped_dims = get_dims_from_indexes(indexes,rhs_var)
         else:
@@ -8505,9 +8529,20 @@ class Parser:
         return lines
 
 
-    def translate_func_call_to_astaroth(self,func,lines,local_variables,variables):
+    def translate_func_call_to_astaroth(self,func,lines,local_variables,variables,first_call_cache=None):
         res = []
         for line_index,_ in enumerate(lines):
+            #first_call_cache maps a line to the name of its first function call, so that
+            #lines are not reparsed for each func; only matching lines are parsed again
+            #since their call info is modified and passed on below
+            if first_call_cache is not None:
+                line = lines[line_index]
+                if line not in first_call_cache:
+                    calls = self.get_function_calls_in_line(line,variables)
+                    first_call_cache[line] = calls[0]["function_name"] if calls else None
+                if first_call_cache[line] != func:
+                    res.append(line)
+                    continue
             func_calls = self.get_function_calls_in_line(lines[line_index],variables)
             #if(len(func_calls) == 1 and func_calls[0]["function_name"] == func):
             if(len(func_calls) >= 1 and func_calls[0]["function_name"] == func):
@@ -8522,8 +8557,9 @@ class Parser:
         return res
 
     def translate_func_calls_to_astaroth(self,lines,local_variables, variables):
+        first_call_cache = {}
         for func in sub_funcs: 
-            lines = self.translate_func_call_to_astaroth(func,lines,local_variables,variables)
+            lines = self.translate_func_call_to_astaroth(func,lines,local_variables,variables,first_call_cache)
         return lines
     def transform_any_calls(self,lines,local_variables, variables):
         for line_index,line in enumerate(lines):
@@ -8811,15 +8847,24 @@ class Parser:
             dims = variables[var]["dims"]
             if len(dims) == 1 and all([x in dims[0] for x in "-:"]):
                 for line_index,_ in enumerate(lines):
+                    #only segments of var are changed, and those can only exist if var occurs in the line
+                    if var not in lines[line_index]:
+                        continue
                     arr_segs_in_line = self.get_array_segments_in_line(lines[line_index],variables)
                     lines[line_index] = self.replace_segments(arr_segs_in_line,lines[line_index],self.trans_to_normal_indexing,local_variables,{"var": var, "dims":dims})
             if len(dims) == 2 and all([x in dims[1] for x in "-:"]):
                 for line_index,_ in enumerate(lines):
+                    #only segments of var are changed, and those can only exist if var occurs in the line
+                    if var not in lines[line_index]:
+                        continue
                     arr_segs_in_line = self.get_array_segments_in_line(lines[line_index],variables)
                     lines[line_index] = self.replace_segments(arr_segs_in_line,lines[line_index],self.trans_to_normal_indexing_2d,local_variables,{"var": var, "dims":dims})
 
             if len(dims) == 3 and all([x in dims[2] for x in "-:"]):
                 for line_index,_ in enumerate(lines):
+                    #only segments of var are changed, and those can only exist if var occurs in the line
+                    if var not in lines[line_index]:
+                        continue
                     arr_segs_in_line = self.get_array_segments_in_line(lines[line_index],variables)
                     lines[line_index] = self.replace_segments(arr_segs_in_line,lines[line_index],self.trans_to_normal_indexing_3d,local_variables,{"var": var, "dims":dims})
         return lines
@@ -9139,7 +9184,7 @@ class Parser:
         file = open("res.txt","w")
         for line in lines:
           file.write(f"{line}\n")
-        for var in set([write["variable"] for write in writes]:
+        for var in set([write["variable"] for write in writes]):
           if var in self.static_variables and self.static_variables[var]["profile_type"] not in [None,"vtxbuf","vtxbuf_bundle"]:
             self.static_variables[var]["profile_type"] = None
         file.close()
