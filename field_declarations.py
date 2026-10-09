@@ -23,6 +23,7 @@ Can also be run standalone for checking:
 """
 import os
 import re
+import functools
 import sys
 import argparse
 
@@ -240,8 +241,46 @@ def get_registrations(files, cdata_variables):
     return list(res.values())
 
 
+@functools.lru_cache(maxsize=None)
+def ascii_words(text):
+    """The maximal runs of [A-Za-z0-9_] in text."""
+    return frozenset(re.findall(r"[A-Za-z0-9_]+", text))
+
+
+@functools.lru_cache(maxsize=None)
+def word_runs(text):
+    """The maximal runs of \\w in text, i.e. the strings that start and end at \\b."""
+    return frozenset(re.findall(r"\w+", text))
+
+
+@functools.lru_cache(maxsize=None)
+def copy_addr_targets(text):
+    """Lowercased first arguments of the copy_addr calls in text."""
+    return frozenset(name.lower() for name in re.findall(r"\bcopy_addr\s*\(\s*(\w+)\s*,", text, re.IGNORECASE))
+
+
+ascii_word_regex = re.compile(r"[A-Za-z0-9_]+")
+
+
 def contains_word(text, word):
+    #a word of [A-Za-z0-9_] characters delimited by non-[A-Za-z0-9_] is one of the maximal runs of them
+    if ascii_word_regex.fullmatch(word):
+        return word in ascii_words(text)
     return re.search(r"(?<![A-Za-z0-9_])" + re.escape(word) + r"(?![A-Za-z0-9_])", text) is not None
+
+
+def starts_word_run(text, prefix, optional_letter_then=None):
+    """Whether some match of \\b<prefix> (or \\b<prefix>[a-z]<optional_letter_then>) exists in text, for
+    prefix and optional_letter_then made of \\w characters: such a match starts a maximal run of \\w."""
+    for run in word_runs(text):
+        if not run.startswith(prefix):
+            continue
+        if optional_letter_then is None:
+            return True
+        rest = run[len(prefix):]
+        if rest.startswith(optional_letter_then) or (len(rest) > 0 and "a" <= rest[0] <= "z" and rest[1:].startswith(optional_letter_then)):
+            return True
+    return False
 
 
 def declared_names(text):
@@ -267,7 +306,8 @@ def is_known(reg, text):
         #e.g. iuu -> iux, iaa -> iax
         index_vars.extend([f"{reg.index[:-1]}{dim}" for dim in "xyz"])
     #a single letter suffix covers component indices like iuu_sphr of iuu_sph
-    if any(re.search(r"\bAC_" + re.escape(var) + r"[a-z]?__mod__", text) for var in index_vars):
+    if any(starts_word_run(text, "AC_" + var, "__mod__") if re.fullmatch(r"\w+", var)
+           else re.search(r"\bAC_" + re.escape(var) + r"[a-z]?__mod__", text) for var in index_vars):
         return True
     names = [reg.name]
     if reg.ncomps == 3:
@@ -295,8 +335,12 @@ def is_pushed(reg, code, sources):
     Whether AC_<index>__mod__<module> will exist on the GPU side: it is pushed if it is used in the
     generated code (MODIFY_SOURCE_CODE adds it to the pushpars) or if it is already in the pushpars.
     """
-    return re.search(r"\bAC_" + re.escape(reg.index) + r"__mod__", code) is not None \
-        or re.search(r"\bcopy_addr\s*\(\s*" + re.escape(reg.index) + r"\s*,", sources, re.IGNORECASE) is not None
+    if not re.fullmatch(r"\w+", reg.index):
+        return re.search(r"\bAC_" + re.escape(reg.index) + r"__mod__", code) is not None \
+            or re.search(r"\bcopy_addr\s*\(\s*" + re.escape(reg.index) + r"\s*,", sources, re.IGNORECASE) is not None
+    #a match of \bAC_<index>__mod__ starts a maximal run of \w; the first argument of copy_addr( followed
+    #by \s*, is a maximal run of \w
+    return starts_word_run(code, "AC_" + reg.index + "__mod__") or reg.index.lower() in copy_addr_targets(sources)
 
 
 def guarded(reg, lines):

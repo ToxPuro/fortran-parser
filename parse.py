@@ -2226,6 +2226,16 @@ class ExcludingView:
         self.excluded = excluded
     def __contains__(self, key):
         return key in self.base and key not in self.excluded
+class MergedView:
+    """Read-only view with the lookups of merge_dictionaries(base, override) without copying base."""
+    __slots__ = ("base", "override")
+    def __init__(self, base, override):
+        self.base = base
+        self.override = override
+    def __contains__(self, key):
+        return key in self.override or key in self.base
+    def __getitem__(self, key):
+        return self.override[key] if key in self.override else self.base[key]
 def merge_dictionaries(dict1, dict2):
     merged_dict = {}
     merged_dict.update(dict1)
@@ -3388,7 +3398,12 @@ class Parser:
                 x["variable"] = get_mod_name(x["variable"],module)
         for i, variable_name in enumerate(variable_names):
             dims = dimension
-            search = re.search(f"{remove_mod(variable_name)}\\(((.*?))\\)",line) 
+            plain_name = remove_mod(variable_name)
+            #for a name of word characters the pattern is literal, so it can only match if name( occurs
+            if re.fullmatch(r"\w+", plain_name) and f"{plain_name}(" not in line:
+                search = None
+            else:
+                search = re.search(f"{plain_name}\\(((.*?))\\)",line) 
             ## check if line is only specifying intent(in) or intent(out)
             if search:
                 dims = [index.strip() for index in search.group(1).split(",")]
@@ -5757,12 +5772,18 @@ class Parser:
             return line[segment[1]:segment[2]]
         if "__mod__" in segment[0]:
           return line[segment[1]:segment[2]]
-        variables = merge_dictionaries(local_variables,self.static_variables)
         found_modules = []
+        #public_variables lists only grow, so their sets can be reused while the length is unchanged
+        public_variables_sets = self.__dict__.setdefault("public_variables_sets", {})
         for i,mod in enumerate(info["modules"]):
             if mod not in self.module_info:
                 continue
-            if segment[0] in self.module_info[mod]["public_variables"] and segment[0] in self.rename_dict[mod]:
+            public_variables = self.module_info[mod]["public_variables"]
+            cached = public_variables_sets.get(mod)
+            if cached is None or cached[0] != len(public_variables):
+                cached = (len(public_variables), set(public_variables))
+                public_variables_sets[mod] = cached
+            if segment[0] in cached[1] and segment[0] in self.rename_dict[mod]:
               if info["modules"][mod]:
                 if segment[0] in info["modules"][mod]:
                   found_modules.append(mod)
@@ -7112,7 +7133,8 @@ class Parser:
               declared_vars.add(var)
         
     def transform_line_stencil(self,line,num_of_looped_dims, local_variables, rhs_var,vectors_to_replace, writes, loop_indexes):
-        variables = merge_dictionaries(self.static_variables, local_variables)
+        #only used for lookups, so a view avoids copying all static variables for every line
+        variables = MergedView(self.static_variables, local_variables)
         array_segments_indexes = self.get_array_segments_in_line(line,variables)
         last_index = 0
         res_line = ""
