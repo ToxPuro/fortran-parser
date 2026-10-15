@@ -581,6 +581,19 @@ def map_gij(func_call):
 def map_grad_main(func_call):
     params = func_call["parameters"]
     return [f"{params[2]} = gradient({gen_field(params[1])})"]
+
+def get_output_dims(func_call,name):
+    #dims of a (local or module) array passed whole as an output parameter
+    for variables in [func_call["local_variables"],func_call["static_variables"]]:
+        if name in variables:
+            return variables[name]["dims"]
+    pexit("unknown output array",name)
+def map_grad_vec(func_call):
+    #grad_vec(f,k,g): g(:,i,j) = d/dx_j of the field k-1+i, i=1..size(g,2)
+    params = func_call["parameters"]
+    ncomps = get_output_dims(func_call,params[2])[1]
+    if not ncomps.isnumeric(): pexit("grad_vec: number of components is not a constant",ncomps)
+    return [f"{params[2]}(:,{i},{j}) = der{'xyz'[j-1]}({gen_field(f'{params[1]}+{i-1}')})" for i in range(1,int(ncomps)+1) for j in range(1,4)]
 def map_grad_other(func_call):
     params = func_call["parameters"]
     first_param_name = params[0].split("(")[0]
@@ -712,6 +725,12 @@ def map_u_dot_grad_scl(func_call):
     add_line = None
     res = []
     start_line = "upwind_correction = 0.0"
+    if len(params)==7 and params[5].split("=")[0].strip() == "upwind" and params[6].split("=")[0].strip() == "ladd":
+        if params[6].split("=")[-1] == ".true.":
+            param_name = params[5].split("=")[-1]
+            add_line = f"if ({param_name}) {params[4]} = {params[4]} - dot(abs({params[3]}),gradient_upwd({gen_field(params[1])}))"
+            res = [f"{params[4]} = {params[4]} + dot({params[3]},{params[2]})",add_line]
+            return res
     if len(params)>6:
         print(params)
         pexit("optional params not supported\n")
@@ -784,9 +803,24 @@ def map_d2fi_dxj(func_call):
 def map_d2f_dxj(func_call):
     params = func_call["parameters"]
     return [f"{params[2]} = d2f_dxj({gen_field(params[1])})"]
-def map_g2ij(func_call):
+def map_g2ij_scal(func_call):
     params = func_call["parameters"]
     return [f"{params[2]} = hessian({gen_field(params[1])})"]
+
+def map_g2ij_vec(func_call):
+    #g2ij_vec(f,k,g): g(:,i,j,l) = d^2/dx_j dx_l of the field k-1+i, i=1..size(g,2)
+    params = func_call["parameters"]
+    ncomps = get_output_dims(func_call,params[2])[1]
+    if not ncomps.isnumeric(): pexit("g2ij_vec: number of components is not a constant",ncomps)
+    res = []
+    for i in range(1,int(ncomps)+1):
+        field = gen_field(f"{params[1]}+{i-1}")
+        for j in range(1,4):
+            for l in range(1,4):
+                deriv = "der" + "xyz"[min(j,l)-1] + "xyz"[max(j,l)-1]
+                res.append(f"{params[2]}(:,{i},{j},{l}) = {deriv}({field})")
+    return res
+
 def map_multmv(func_call):
     params = func_call["parameters"]
     if len(params)>3:
@@ -1586,10 +1620,15 @@ sub_funcs = {
         "output_params_indexes": [2],
         "map_func": map_multmv
     },
-    "g2ij":
+    "g2ij_scal":
     {
         "output_params_indexes": [2],
-        "map_func": map_g2ij
+        "map_func": map_g2ij_scal
+    },
+    "g2ij_vec":
+    {
+        "output_params_indexes": [2],
+        "map_func": map_g2ij_vec
     },
     "d2f_dxj":
     {
@@ -1716,6 +1755,11 @@ sub_funcs = {
     {
         "output_params_indexes": [2],
         "map_func": map_grad_main
+    },
+    "grad_vec":
+    {
+        "output_params_indexes": [2],
+        "map_func": map_grad_vec
     },
     "grad_other":
     {
@@ -2751,6 +2795,9 @@ class Parser:
                 "ilnnd__mod__cdata": "DUST_DENSITY",
                 "ireaci__mod__chemistry": "CHEMISTRY_REACTIONS",
                 "ichemspec__mod__cdata": "CHEMISTRY_SPECIES",
+                "ichemspec__mod__cdata": "CHEMISTRY_SPECIES",
+                "igt__mod__z4c": "GT",
+                "iat__mod__z4c": "AT",
         }
         if index == "ireaci__mod__chemistry(1):ireaci__mod__chemistry(nchemspec__mod__cparam)":
             return f"{prefix}CHEMISTRY_REACTIONS"
@@ -6444,6 +6491,52 @@ class Parser:
           print("unsupported matrix read/write")
           print(line[segment[1]:segment[2]])
           pexit(indexes)
+    def get_parameter_array_values(self,name):
+        #values of an integer parameter array, in Fortran (column major) order, from
+        #'name = (/.../)' or 'name = reshape((/.../),(/.../))' in its declaration; None if not found
+        if not hasattr(self,"parameter_array_values"): self.parameter_array_values = {}
+        if name in self.parameter_array_values: return self.parameter_array_values[name]
+        res = None
+        var = self.static_variables.get(name)
+        if var is not None and var.get("parameter") and var.get("type") == "integer" and var.get("origin"):
+            short_name = name.split("__mod__")[0]
+            try:
+                text = open(var["origin"][0]).read()
+            except OSError:
+                text = ""
+            match = re.search(r"\b" + re.escape(short_name) + r"\s*=\s*(?:reshape\s*\(\s*)?\(/([^/]*)/\)", text, re.IGNORECASE)
+            if match:
+                values = [x.strip() for x in match.group(1).replace("&","").split(",")]
+                if all(re.fullmatch(r"-?\d+",x) for x in values):
+                    res = values
+        self.parameter_array_values[name] = res
+        return res
+    def fold_parameter_array_accesses(self,lines):
+        #e.g. ij_table__mod__cparam(1,2) -> 4: integer parameter arrays are not declared on the GPU
+        def replace(match):
+            name = match.group(1)
+            values = self.get_parameter_array_values(name)
+            if values is None: return match.group(0)
+            indexes = [int(x) for x in match.group(2).split(",")]
+            dims = [int(x) for x in self.static_variables[name]["dims"]] if all(x.isnumeric() for x in self.static_variables[name]["dims"]) else None
+            if dims is None or len(dims) != len(indexes): return match.group(0)
+            flat = 0
+            stride = 1
+            for index,dim in zip(indexes,dims):
+                flat += (index-1)*stride
+                stride *= dim
+            return values[flat] if flat < len(values) else match.group(0)
+        regex = re.compile(r"\b(\w+__mod__\w+)\(\s*(\d+(?:\s*,\s*\d+)*)\s*\)")
+        return [regex.sub(replace,line) if "__mod__" in line else line for line in lines]
+    def is_module_index_array_access(self,index):
+        #e.g. igt__mod__z4c(4): an element of a 1d integer array of a physics module; the arrays of
+        #cdata (e.g. iglobal_eext__mod__cdata) have named DSL fields
+        match = re.fullmatch(r"(\w+)\(([^():,]+)\)",index.strip())
+        if not match: return False
+        base = match.group(1)
+        var = self.static_variables.get(base)
+        return var is not None and var.get("type") == "integer" and len(var.get("dims",[])) == 1 \
+               and "__mod__" in base and not base.endswith("__mod__cdata")
     def gen_f_access(self,i,rhs_var,segment,index,to_value=True):
 
         if(index == "0+iguij__mod__cdata"): index = "igu11__mod__cdata"
@@ -6529,6 +6622,16 @@ class Parser:
             else: 
               return vtxbuf_name
         elif segment[0] == "f":
+            #reads through module index arrays like igt__mod__z4c(4) (special/z4c registers the
+            #components of symmetric tensors in loops) have no named DSL fields: use the index
+            if ((rhs_var is None or rhs_var not in ["df","f"]) or i > 0) and self.is_module_index_array_access(index):
+                base, element = index.strip()[:-1].split("(",1)
+                #index arrays of size 3 are declared as int3 on the GPU, the others as int arrays
+                if self.static_variables[base]["dims"] == ["3"] and element.strip() in ["1","2","3"]:
+                    field = f"Field({base}.{'xyz'[int(element)-1]}-1)"
+                else:
+                    field = f"Field({base}[{element}-1]-1)"
+                return f"value({field})" if to_value else field
             #split in case range
             vtxbuf_name = self.get_vtxbuf_name_from_index("F_", index)
             if vtxbuf_name == "DF_U_131_133":
@@ -6950,6 +7053,8 @@ class Parser:
               res[mod][1] += 1
               if type == "real":
                 res[mod][0].append(f"call copy_addr({name},p_par({res[mod][1]})) ! ({remove_mod(dims[0])})")
+              elif type == "integer":
+                res[mod][0].append(f"call copy_addr({name},p_par({res[mod][1]})) ! int ({remove_mod(dims[0])})")
               elif type == "int":
                 res[mod][0].append(f"call copy_addr({name},p_par({res[mod][1]})) ! int ({remove_mod(dims[0])})")
               elif type == "logical":
@@ -7176,10 +7281,12 @@ class Parser:
                     or (num_of_looped_dims == 2 and rhs_dim[0] == global_subdomain_range_x and rhs_dim[1] in bundle_dims)
                     or (num_of_looped_dims == 3 and rhs_dim[:-1] == [global_subdomain_range_x,"3"] and rhs_dim[-1] in bundle_dims)
                     or (num_of_looped_dims == 3 and rhs_dim in [[global_subdomain_range_x,"3","3"]])
+                    or (num_of_looped_dims == 3 and rhs_dim in [[global_subdomain_range_x,"6","3"]])
                     or (num_of_looped_dims == 3 and rhs_dim in [[global_subdomain_range_x,"4","4"]])
                     or (num_of_looped_dims == 3 and rhs_dim in [[global_subdomain_range_x_with_halos,global_subdomain_range_y_with_halos,global_subdomain_range_z_with_halos]])
                     or (num_of_looped_dims == 3 and rhs_dim in [[global_subdomain_range_x,global_subdomain_range_y,global_subdomain_range_z]])
                     or (num_of_looped_dims == 4 and rhs_dim in [[global_subdomain_range_x,"3","3","3"]])
+                    or (num_of_looped_dims == 4 and rhs_dim in [[global_subdomain_range_x,"6","3","3"]])
                 ))
                 or (rhs_var in ["df","f"] or rhs_var in vectors_to_replace))
             ): 
@@ -7483,6 +7590,9 @@ class Parser:
                         res = f"{segment[0]}[{indexes[1]}-1]"
                     elif len(var_dims) == 2 and len(indexes) == 2:
                         res = f"{segment[0]}[{indexes[0]}-1][{indexes[1]}-1]"
+                    #row of an nx x N x 3 array (declared real[N][3]), e.g. the gradient of one component of a symmetric tensor
+                    elif segment[0] in local_variables and len(var_dims) == 3 and var_dims[0] == "nx__mod__cparam" and var_dims[2] == "3" and len(indexes) == 3 and indexes[0] == ":" and ":" not in indexes[1] and indexes[2] in [":","1:3"]:
+                        res = "real3(" + ",".join(f"{segment[0]}[{indexes[1]}-1][{j}]" for j in range(3)) + ")"
                     elif (segment[0] in self.static_variables_to_declare or segment[0] in local_variables) and len(var_dims) == 3 and len(indexes) == 3 and num_of_looped_dims == 1 and indexes[0] == ":" and var_dims[0] == "nx__mod__cparam":
                         res = f"{segment[0]}[{indexes[1]}-1][{indexes[2]}-1]"
                     elif len(var_dims) == 3 and len(indexes) == 3 and num_of_looped_dims == 1 and indexes[0] == ":" and var_dims[0] == "nx__mod__cparam":
@@ -7491,6 +7601,8 @@ class Parser:
                         res = f"{segment[0]}[{indexes[1]}-1][{indexes[2]}-1]"
                     elif len(var_dims) == 3 and len(indexes) == 3:
                         res = f"{segment[0]}[{indexes[0]}-1][{indexes[1]}-1][{indexes[2]}-1]"
+                    elif len(var_dims) == 4 and len(indexes) == 4 and indexes[0] == ":" and var_dims[0] == "nx__mod__cparam":
+                        res = f"{segment[0]}[{indexes[1]}-1][{indexes[2]}-1][{indexes[3]}-1]"
                     elif len(var_dims) == 4 and len(indexes) == 4:
                         res = f"{segment[0]}[{indexes[0]}-1][{indexes[1]}-1][{indexes[2]}-1][{indexes[3]}-1]"
                     elif var_dims == ["max_n__mod__cparam"] and indexes == []:
@@ -7994,6 +8106,12 @@ class Parser:
                 for var in vars_to_declare:
                     res = res + "real " + var + f"[{dim}]\n"
                 return res
+        #nx x (integer parameter) arrays, e.g. dimension(nx,nz4c) with nz4c=22 in special/z4c
+        dims = local_variables[vars_to_declare[0]]["dims"]
+        if len(dims) == 2 and dims[0] == "nx__mod__cparam" and not dims[1].isnumeric() and dims[1] in self.static_variables \
+           and self.static_variables[dims[1]]["parameter"] and str(self.static_variables[dims[1]].get("value","")).strip().isnumeric():
+            size = str(self.static_variables[dims[1]]["value"]).strip()
+            return "".join(f"real {var}[{size}]\n" for var in vars_to_declare)
         for dim in ["1","2","4","6"]:
             if local_variables[vars_to_declare[0]]["dims"] in [["nx__mod__cparam",dim,dim]]:
                 res = ""
@@ -8009,6 +8127,10 @@ class Parser:
         if local_variables[vars_to_declare[0]]["dims"] == [global_subdomain_range_x,"3","3","3"]:
             #tensors are not yet supported
             return "Tensor " + ", ".join(vars_to_declare)
+        dims = local_variables[vars_to_declare[0]]["dims"]
+        if len(dims) == 4 and dims[0] == global_subdomain_range_x and all(dim.isnumeric() for dim in dims[1:]):
+            #e.g. second derivatives of the 6 components of a symmetric tensor (special/z4c)
+            return "".join(f"real {var}[{dims[1]}][{dims[2]}][{dims[3]}]\n" for var in vars_to_declare)
         dims = local_variables[vars_to_declare[0]]["dims"]
         if len(dims) == 3 and dims[0]  in ["nx__mod__cparam"] and dims[1].isnumeric() and dims[2] in ["-2:2"]:
           return "real " + var + f"[{dims[1]}][5]"
@@ -8628,7 +8750,8 @@ class Parser:
                             #print(parts[0])
                             dims = variables[parts[0]]["dims"]
                             assert(len(dims) == 1)
-                            res = f"any_AC({parts[0]},{dims[0]})"
+                            #a pencil (dimension nx) is a single value per point in the DSL
+                            res = parts[0] if dims[0] == "nx__mod__cparam" else f"any_AC({parts[0]},{dims[0]})"
                             lines[line_index] = self.replace_func_call(line,call,res)
                             any_calls=  [x for x in self.get_function_calls_in_line(lines[line_index],variables) if x["function_name"] == "any"]
                             assert(len(any_calls) == 0)
@@ -9159,6 +9282,7 @@ class Parser:
         lines = self.elim_empty_dos(lines,local_variables)
         local_variables = {parameter:v for parameter,v in self.get_variables(lines, {},"",True).items() }
         lines = self.unroll_constant_loops(lines,local_variables)
+        lines = self.fold_parameter_array_accesses(lines)
         file = open("res-before-unroll-ranges.txt","w")
         for line in lines:
             file.write(f"{line}\n")
@@ -9326,7 +9450,7 @@ class Parser:
             file.write(f"{line}\n")
         file.close()
         allowed_func_calls = ["constexpr", "&&", "||","sqrt","abs","sinh","cosh","tanh","min","max","pow","DEVICE_VTXBUF_IDX".lower(),"DCONST".lower(),"exp","log","if","else","for","sin","cos","tan","atan2"]
-        astaroth_funcs = ["der","der2","der3","der4","der5","der6","col","row","derx","dery","derz","derxx","deryy","derzz","der6x","der6y","der6z","der6x_upwd","der6y_upwd","der6z_upwd","sum","dot","gradient","gradients","laplace","divergence","veclaplace","value","vecvalue","field","field3","divergence_from_matrix","curl_from_matrix","traceless_strain","traceless_strain_without_divu","multm2_sym","del_upwd","del_upwd_vec","gradient_of_divergence","cross","bij","mult","multmm_sc_mn","del6v_strict","static_assert","d2fi_dxj","del2fi_dxjk","der5x1y","der5x1z","der5y1z","gradients_5","der6x_ignore_spacing","der6y_ignore_spacing","der6z_ignore_spacing","del6","der4x2y","der4y2z","der4x2z","hessian","div_phib"]
+        astaroth_funcs = ["der","der2","der3","der4","der5","der6","col","row","derx","dery","derz","derxx","deryy","derzz","derxy","derxz","deryz","der6x","der6y","der6z","der6x_upwd","der6y_upwd","der6z_upwd","sum","dot","gradient","gradients","laplace","divergence","veclaplace","value","vecvalue","field","field3","divergence_from_matrix","curl_from_matrix","traceless_strain","traceless_strain_without_divu","multm2_sym","del_upwd","del_upwd_vec","gradient_of_divergence","cross","bij","mult","multmm_sc_mn","del6v_strict","static_assert","d2fi_dxj","del2fi_dxjk","der5x1y","der5x1z","der5y1z","gradients_5","der6x_ignore_spacing","der6y_ignore_spacing","der6z_ignore_spacing","del6","der4x2y","der4y2z","der4x2z","hessian","div_phib"]
         allowed_func_calls.extend(astaroth_funcs)
 
 
@@ -10288,22 +10412,13 @@ class Parser:
             lines = self.transform_pencils(lines,local_variables,"internalpencils","ac_transformed_q","q__mod__newton_cooling")
             lines = self.transform_pencils(lines,local_variables,"internalpencils","q_gw","q__mod__gravitational_waves_htxk")
             lines = self.transform_pencils(lines,local_variables,"internalpencils","q_disp","q__mod__disp_current")
+            lines = self.transform_pencils(lines,local_variables,"internalpencils","q_z4c","q__mod__z4c")
             lines = self.transform_pencils(lines,local_variables,"internalpencils","ac_transformed_q","q__mod__photoelectric_dust")
 
 
             lines = self.transform_pencils(lines,local_variables,"internalpencils","ac_transformed_q","q")
             lines = self.transform_pencils(lines,local_variables,"forcing_coeffs" ,"ac_forcing_coeffs","h_coeffs__mod__forcing")
             lines = self.transform_pencils(lines,local_variables,"forcing_coeffs" ,"ac_forcing_coeffs","h_coeffs")
-
-            lines = self.transform_pencils(lines,local_variables,"hydrotmpinternalpencils","q_hydro","q__mod__hydro")
-            lines = self.transform_pencils(lines,local_variables,"magtmpinternalpencils","q_mag","q__mod__magnetic")
-            lines = self.transform_pencils(lines,local_variables,"visctmpinternalpencils","q_visc","q__mod__viscosity")
-            lines = self.transform_pencils(lines,local_variables,"denstmpinternalpencils","q_dens","q__mod__density")
-            lines = self.transform_pencils(lines,local_variables,"enetmpinternalpencils","q_ene","q__mod__energy")
-            lines = self.transform_pencils(lines,local_variables,"eostmpinternalpencils","q_eos","q__mod__equationofstate")
-            lines = self.transform_pencils(lines,local_variables,"subtmpinternalpencils","q_sub","q__mod__sub")
-            lines = self.transform_pencils(lines,local_variables,"derivtmpinternalpencils","q_deriv","q__mod__deriv")
-            lines = self.transform_pencils(lines,local_variables,"diagtmpinternalpencils","q_diag","q__mod__diagnostics")
         lines = self.remove_strings(lines,local_variables)
         return lines
 
