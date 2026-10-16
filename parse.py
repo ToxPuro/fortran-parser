@@ -938,6 +938,20 @@ def map_der2_main(func_call):
     print("j=",j)
     pexit("don't know whic der2 to call")
 
+def map_derij_main(func_call):
+    params = func_call["new_param_list"]
+    names  = func_call["parameters"]
+    if len(params)>5:
+        pexit("optional params not supported for derij\n")
+    i = int(pc_parser.evaluate_integer(params[3][0]))
+    j = int(pc_parser.evaluate_integer(params[4][0]))
+    dirs = tuple(sorted((i,j)))
+    funcs = {(1,2): "derxy", (1,3): "derxz", (2,3): "deryz"}
+    if dirs not in funcs:
+        print("i,j=",i,j)
+        pexit("don't know which derij to call")
+    return [f"{names[2]} = {funcs[dirs]}({gen_field(names[1])})"]
+
 def map_der6_main(func_call):
     params = func_call["new_param_list"]
     ignoredx_str = ""
@@ -1574,6 +1588,11 @@ sub_funcs = {
     {
         "output_params_indexes": [2],
         "map_func": map_der2_main
+    },
+    "derij_main":
+    {
+        "output_params_indexes": [2],
+        "map_func": map_derij_main
     },
     "der6_main":
     {
