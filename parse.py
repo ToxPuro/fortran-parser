@@ -9201,6 +9201,8 @@ class Parser:
           if(len(unused_array_calls) == 1):
               call = unused_array_calls[0]
               lines[line_index] = self.replace_func_call(line,call,"ac_unused_real_array_2d_dummy_value")
+        #TP: unused arrays are pointers without targets so statements reading them can never be executed -> remove them
+        lines = [line for line in lines if "ac_unused_real_array_2d_dummy_value" not in line or not self.get_rhs_variable(line)]
         file = open("res-before-interfaced.txt","w")
         for line in lines:
             file.write(f"{line}\n")
