@@ -1239,7 +1239,7 @@ def map_multmv_mn_transp(func_call):
 
 def map_multsv_mn(func_call):
     params = func_call["parameters"]
-    return [f"{params[2]} = ({params[0]}*{params[1]})"]
+    return [f"{params[2]} = ({params[0]}*({params[1]}))"]
 
 def map_multsv_mn_add(func_call):
     params = func_call["parameters"]
