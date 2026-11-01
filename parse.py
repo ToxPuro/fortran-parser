@@ -791,8 +791,17 @@ def map_div_phib(func_call):
 
 def map_del4(func_call):
     params = func_call["parameters"]
-    if len(params)>3:
-        pexit("optional params not supported\n")
+    if len(params) == 4:
+        #optional ignoredx
+        field = gen_field(params[1])
+        ignoredx = func_call["new_param_list"][3][0]
+        return [
+                f"if({ignoredx}) then",
+                f"{params[2]} = del4_ignore_spacing({field})",
+                "else",
+                f"{params[2]} = del4({field})",
+                "endif"
+               ]
     return [f"{params[2]} = del4({gen_field(params[1])})"]
 
 def map_calc_del6_for_upwind(func_call):
@@ -5264,8 +5273,11 @@ class Parser:
             for modules in self.chosen_modules:
                 for mod_order,module in enumerate(self.chosen_modules[modules]):
                   if path.lower() in [f"{self.directory}/{module}.f90".lower(),f"{self.directory}/special/{module}.f90".lower(),f"{self.directory}/special/{module}._autogen_.f90".lower()] :
-                      if "lines" in self.func_info[call["function_name"]] and path.lower() in self.func_info[call["function_name"]]["lines"]:
-                          lines = self.func_info[call["function_name"]]["lines"][path.lower()]
+                      #func_info lines are keyed by the original (case-sensitive) path
+                      func_lines = self.func_info[call["function_name"]].get("lines",{})
+                      lines_key = path if path in func_lines else path.lower()
+                      if lines_key in func_lines:
+                          lines = func_lines[lines_key]
                           params = self.get_parameters(lines[0])
                           if len(params) != n:
                               continue
@@ -5558,7 +5570,13 @@ class Parser:
         for i, passed_param in enumerate(function_call_to_replace["parameters"]):
             #in case was passed as a named param
             passed_param = passed_param.split("=",1)[-1].strip()
-            if "(" in passed_param:
+            #An expression has to stay one operand in the inlined body: x0=-12.-alog(a) in (x-x0)
+            #has to become (x-(-12.-alog(a))), not (x--12.-alog(a)).
+            wrapped_param = parenthesize_passed_param(passed_param)
+            if wrapped_param != passed_param:
+              init_lines = self.replace_vars_in_lines(init_lines, {params[mapping[i]] : wrapped_param})
+              new_lines = self.replace_vars_in_lines(new_lines, {params[mapping[i]]: wrapped_param})
+            elif "(" in passed_param:
               init_lines = self.replace_var_in_lines(init_lines, params[mapping[i]], passed_param)
               new_lines = self.replace_var_in_lines(new_lines, params[mapping[i]], passed_param)
             else:
