@@ -3271,12 +3271,32 @@ class Parser:
             pass
           else:
             checked_local_writes.append({"variable": variable, "line_num": line_num, "local": is_local, "filename": filename, "call_trace": call_trace, "line": line})
-    def get_allocations_in_init_func(self,init_func_name,subs_not_to_inline):
+    def get_allocations_in_call_tree(self,init_func_name,subs_not_to_inline,filename=None,visited=None):
+        #Modules also allocate their profiles below the init function, e.g.
+        #initialize_special -> setup_profiles -> read_profiles. Follow the calls to routines of the same file.
+        if init_func_name not in self.func_info:
+            return
+        func_lines = self.get_function_info(init_func_name).get("lines",{})
+        if filename is None and func_lines:
+            filename = list(func_lines.keys())[0]
+        visited = set() if visited is None else visited
+        if init_func_name in visited or filename not in func_lines:
+            return
+        visited.add(init_func_name)
+        self.get_allocations_in_init_func(init_func_name,subs_not_to_inline,filename,True)
+        lines = self.get_subroutine_lines(init_func_name,filename)
+        local_variables = {parameter:v for parameter,v in self.get_variables(lines, {},filename,True).items() }
+        for line in lines:
+            for call in self.get_function_calls_in_line(line,local_variables):
+                self.get_allocations_in_call_tree(call["function_name"],subs_not_to_inline,filename,visited)
+
+    def get_allocations_in_init_func(self,init_func_name,subs_not_to_inline,filename=None,only_unresolved=False):
 
         if init_func_name not in self.func_info:
             return 
         func_info = self.get_function_info(init_func_name)
-        filename = list(func_info["lines"].keys())[0]
+        if filename is None:
+            filename = list(func_info["lines"].keys())[0]
         #self.inline_all_function_calls(filename,init_func_name,self.get_subroutine_lines(init_func_name,filename),subs_not_to_inline) 
         #inlined_func = self.func_info[init_func_name]["inlined_lines"][filename]
         
@@ -3293,6 +3313,8 @@ class Parser:
                     for param in call["parameters"]:
                         param_name = param.split("(")[0].strip()
                         param_dim = param.split("(")[-1].split(")")[0].strip()
+                        if only_unresolved and param_name in self.static_variables and ":" not in self.static_variables[param_name]["dims"]:
+                            continue
                         if param_name in self.static_variables and len(self.static_variables[param_name]["dims"]) == 1:
                             self.static_variables[param_name]["dims"] = [param_dim]
                             if param_dim in [self.static_variables["nz__mod__cparam"]["value"], self.static_variables["mz__mod__cparam"]["value"]]:
@@ -7121,7 +7143,9 @@ class Parser:
           if type in ["real"] and len(dims) == 4 and ":" not in dims[0] and ":" not in dims[1] and ":" not in dims[2] and ":" not in dims[3]:
                 res[mod][1] += 1
                 res[mod][0].append(f"call copy_addr({name},p_par({res[mod][1]})) ! ({remove_mod(dims[0])}) ({remove_mod(dims[1])}) ({remove_mod(dims[2])}) ({remove_mod(dims[3])})")
-
+          #An allocatable array might not be allocated at all (or not on all processes)
+          if self.static_variables[var]["allocatable"] and mod in res and res[mod][0] and res[mod][0][-1].startswith(f"call copy_addr({name},"):
+              res[mod][0][-1] = f"if (allocated({name})) {res[mod][0][-1]}"
 
         for mod in res:
           if len(res[mod][0]) == 0: continue
@@ -11350,6 +11374,7 @@ def main():
         parser.get_allocations_in_init_func("request_border_driving",subs_not_to_inline)
         parser.get_allocations_in_init_func("initialize_pscalar",subs_not_to_inline)
         parser.get_allocations_in_init_func("register_magnetic",subs_not_to_inline)
+        parser.get_allocations_in_call_tree("initialize_special",subs_not_to_inline)
 
 
         if not os.path.isfile("res-inlined.txt"):
