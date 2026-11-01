@@ -181,6 +181,40 @@ def is_arithmetic_expression(val):
        return False
      return is_float(val.replace("/","").replace("+","").replace("-","").replace("*",""))
 
+def parenthesize_passed_param(param):
+    #Wrap an expression in parentheses before it is pasted next to an operator,
+    #e.g. multsv_mn(nu, del2u+graddivu/3, tmp) has to become nu*(del2u+graddivu/3),
+    #not nu*del2u+graddivu/3. Names, array elements, struct members and plain
+    #numbers are kept as they are (they can also be written to).
+    stripped = param.strip()
+    if stripped == "" or is_number(stripped):
+        return param
+    if stripped[0] in "+-":
+        return f"({stripped})"
+    depth = 0
+    in_string = None
+    for i, char in enumerate(stripped):
+        if in_string:
+            if char == in_string:
+                in_string = None
+            continue
+        if char in "'\"":
+            in_string = char
+        elif char in "([":
+            depth += 1
+        elif char in ")]":
+            depth -= 1
+        elif depth == 0:
+            if char in "+-":
+                #exponent of a real literal like 1.e-3 is not an operator
+                prev = stripped[:i].rstrip()
+                if len(prev) > 1 and prev[-1] in "eEdD" and (prev[-2].isdigit() or prev[-2] == "."):
+                    continue
+                return f"({stripped})"
+            if char in "*/<>=" or (char == "." and re.match(r"\.(and|or|not|eqv|neqv|eq|ne|lt|le|gt|ge)\.", stripped[i:], re.IGNORECASE)):
+                return f"({stripped})"
+    return param
+
 def is_float(string):
     if string== "":
         return False
@@ -785,7 +819,7 @@ def map_del6(func_call):
     if len(params) == 4:
         res = [
                 f"if({params[3][0]}) then",
-                f"{names[2]} = del6_without_spacing({field})",
+                f"{names[2]} = del6_ignore_spacing({field})",
                 "else",
                 f"{names[2]} = del6({field})",
                 "endif"
@@ -825,7 +859,7 @@ def map_multmv(func_call):
     params = func_call["parameters"]
     if len(params)>3:
         pexit("optional params not supported\n")
-    return [f"{params[2]} = ({params[0]}*{params[1]})"]
+    return [f"{params[2]} = ({parenthesize_passed_param(params[0])}*{parenthesize_passed_param(params[1])})"]
 def map_der_upwind(func_call):
     params = func_call["new_param_list"]
     names  = func_call["parameters"]
@@ -1155,7 +1189,7 @@ def map_multmm_sc_mn(func_call):
 
 def map_mult_matrix(func_call):
     params = func_call["parameters"]
-    return [f"{params[2]} = ({params[0]}*{params[1]})"]
+    return [f"{params[2]} = ({parenthesize_passed_param(params[0])}*{parenthesize_passed_param(params[1])})"]
 def map_der_other(func_call):
     params = func_call["new_param_list"]
     names  = func_call["parameters"]
@@ -1239,11 +1273,11 @@ def map_multmv_mn_transp(func_call):
 
 def map_multsv_mn(func_call):
     params = func_call["parameters"]
-    return [f"{params[2]} = ({params[0]}*({params[1]}))"]
+    return [f"{params[2]} = ({parenthesize_passed_param(params[0])}*{parenthesize_passed_param(params[1])})"]
 
 def map_multsv_mn_add(func_call):
     params = func_call["parameters"]
-    res = [f"{params[2]} = {params[2]} + ({params[0]}*{params[1]})"]
+    res = [f"{params[2]} = {params[2]} + ({parenthesize_passed_param(params[0])}*{parenthesize_passed_param(params[1])})"]
     return res
 
 def map_getcell(func_call):
