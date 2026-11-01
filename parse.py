@@ -11315,6 +11315,8 @@ def main():
         parser.ignored_subroutines.extend(["deri_3d_inds"])
 
         parser.safe_subs_to_remove.extend(["get_forcing_hel_rhs"])
+        #TP: optional physics of special/solar_corona that is not available on the GPU
+        parser.safe_subs_to_remove.extend(["calc_slope_limited_density","calc_nanoflare_heating"])
         parser.ignored_subroutines.extend(["get_forcing_hel_rhs"])
 
         # parser.safe_subs_to_remove.extend(["calc_all_pencils"])
