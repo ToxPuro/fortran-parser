@@ -226,6 +226,11 @@ def parenthesize_passed_param(param):
                 return f"({stripped})"
     return param
 
+def drop_whole_sections_of_param(line, param):
+    #A body like c(:,i)=a(:,i)*b(:) with an expression passed as b has become (expr)(:).
+    #A section selecting the whole array is redundant and is not valid after parentheses.
+    return re.sub(re.escape(param) + r"\s*\(\s*:\s*(,\s*:\s*)*\)", lambda _: param, line)
+
 def is_float(string):
     if string== "":
         return False
@@ -5591,6 +5596,8 @@ class Parser:
             if wrapped_param != passed_param:
               init_lines = self.replace_vars_in_lines(init_lines, {params[mapping[i]] : wrapped_param})
               new_lines = self.replace_vars_in_lines(new_lines, {params[mapping[i]]: wrapped_param})
+              init_lines = [drop_whole_sections_of_param(line, wrapped_param) for line in init_lines]
+              new_lines = [drop_whole_sections_of_param(line, wrapped_param) for line in new_lines]
             elif "(" in passed_param:
               init_lines = self.replace_var_in_lines(init_lines, params[mapping[i]], passed_param)
               new_lines = self.replace_var_in_lines(new_lines, params[mapping[i]], passed_param)
