@@ -181,6 +181,17 @@ def is_arithmetic_expression(val):
        return False
      return is_float(val.replace("/","").replace("+","").replace("-","").replace("*",""))
 
+def remove_outer_parentheses(value):
+    stripped = value.strip()
+    while stripped.startswith("(") and stripped.endswith(")"):
+        depth = 0
+        for i, char in enumerate(stripped):
+            depth += char == "("
+            depth -= char == ")"
+            if depth == 0 and i < len(stripped)-1:
+                return stripped
+        stripped = stripped[1:-1].strip()
+    return stripped if stripped != value.strip() else value
 def parenthesize_passed_param(param):
     #Wrap an expression in parentheses before it is pasted next to an operator,
     #e.g. multsv_mn(nu, del2u+graddivu/3, tmp) has to become nu*(del2u+graddivu/3),
@@ -3025,7 +3036,8 @@ class Parser:
       return lines
 
     def evaluate_integer(self,value):
-      
+        #inlining parenthesizes expression arguments, e.g. j=iuu+1-1 gives df(...,(iuu+1-1))
+        value = remove_outer_parentheses(value)
         #pencil specific values known beforehand
         if value in self.known_ints:
             value = self.known_ints[value]
