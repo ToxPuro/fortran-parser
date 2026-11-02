@@ -2716,6 +2716,9 @@ class Parser:
         self.farray_register_calls = []
         self.shared_flags_accessed = {}
         self.shared_flags_given = {}
+        self.shared_variable_puts = None
+        self.pushed_pars = None
+        self.shared_variable_gets = {}
         self.offloading = config["offload"]
         self.include_diagnostics = config["diagnostics"]
         self.known_bools = {
@@ -9108,10 +9111,55 @@ class Parser:
                     arr_segs_in_line = self.get_array_segments_in_line(lines[line_index],variables)
                     lines[line_index] = self.replace_segments(arr_segs_in_line,lines[line_index],self.trans_to_normal_indexing_3d,local_variables,{"var": var, "dims":dims})
         return lines
+    def scan_shared_variables(self):
+        #Most put_shared_variable calls are in register_* routines, which are not otherwise parsed
+        self.shared_variable_puts = {}
+        self.shared_variable_gets = {}
+        for filename in self.used_files:
+            if filename not in self.file_info or "module" not in self.file_info[filename]:
+                continue
+            mod = self.get_own_module(filename)
+            #used_files has all the variants of a module, e.g. both dustdensity and nodustdensity
+            if mod in self.chosen_modules and filename.split("/")[-1].split(".")[0].lower() not in self.chosen_modules[mod]:
+                continue
+            for func in self.func_info:
+                for line in self.func_info[func].get("lines",{}).get(filename,[]):
+                    if "shared_variable" not in line:
+                        continue
+                    match = re.search(r"\bcall\s+(put|get)_shared_variable\s*\(\s*['\"](\w+)['\"]\s*,\s*(\w+)\s*[,)]",line.split("!")[0],re.IGNORECASE)
+                    if not match:
+                        continue
+                    kind, name, var = match.group(1).lower(), match.group(2).lower(), match.group(3).lower()
+                    if kind == "put":
+                        target = f"{var}__mod__{mod}"
+                        if target in self.static_variables and not self.static_variables[target]["is_pointer"] and target not in self.shared_variable_puts.setdefault(name,[]):
+                            self.shared_variable_puts[name].append(target)
+                    else:
+                        self.shared_variable_gets[f"{var}__mod__{mod}"] = name
+    def get_shared_variable_targets(self,pointer_in):
+        if self.shared_variable_puts is None:
+            self.scan_shared_variables()
+        name = self.shared_variable_gets.get(pointer_in,remove_mod(pointer_in))
+        return self.shared_variable_puts.get(name,[])
+    def is_shared_target_on_gpu(self,target):
+        #Without a copy_addr the DSL does not declare the target. With modify_source_code gen_pushpars adds it
+        if self.modify_source_code:
+            return True
+        if self.pushed_pars is None:
+            pushed = self.get_already_pushed_pars()
+            self.pushed_pars = {mod: [var.lower() for var in pushed[mod][0]] for mod in pushed}
+        return remove_mod(target) in self.pushed_pars.get(target.split("__mod__")[-1],[])
     def get_pointer_target(self,pointer_in):
             if pointer_in in ["0.0",".false."]:
                 return pointer_in
             pointer = remove_mod(pointer_in)
+            shared_targets = self.get_shared_variable_targets(pointer_in)
+            if len(shared_targets) == 1:
+                if self.is_shared_target_on_gpu(shared_targets[0]):
+                    return shared_targets[0]
+                print("WARNING: shared variable target is not pushed to the GPU: ",pointer_in,shared_targets[0])
+            if len(shared_targets) > 1:
+                pexit("Multiple shared variable targets for: ",pointer_in,shared_targets)
             possible_modules = [mod for mod in self.module_info if mod in self.shared_flags_given and f"{pointer}__mod__{mod}" in self.shared_flags_given[mod]]
 
             #print(pointer)
@@ -9130,8 +9178,8 @@ class Parser:
                     return "0.0"
 
 
-              print(len(possible_modules))
               if(len(possible_modules) == 0):
+                  print("WARNING: no target for shared variable, assuming it is never used: ",pointer_in)
                   #if can't find target assume it is never used
                   if self.static_variables[pointer_in]["type"]  == "logical":
                       return ".false."
