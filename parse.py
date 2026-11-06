@@ -2837,6 +2837,10 @@ class Parser:
         self.ignored_subroutines.append("output_penciled_vect_c")
         self.ignored_subroutines.append("output_pencil_scal")
         self.ignored_subroutines.append("output_pencil_vect")
+        #CPU-only parts of special/coronae: stopped with an error there when asked for on the GPU
+        for sub in ["filter_farray","update_aa","calc_heatcond_tensor","calc_artif_heating"]:
+            self.ignored_subroutines.append(sub)
+            self.safe_subs_to_remove.append(sub)
         self.ignored_subroutines.append("output_pencil")
         self.safe_subs_to_remove.append("output_pencil")
         self.safe_subs_to_remove.append("store_slices")
@@ -6779,7 +6783,7 @@ class Parser:
               #write to f variable, presumably this is because auxiliary variables
               #reuse DF_variable for now
               if "+" in vtxbuf_name:
-                  pexit("WRONG: ",f"{index} ---> {res}")
+                  pexit("WRONG: ",f"{index} ---> {vtxbuf_name}: {segment}")
               return f"D{vtxbuf_name}"
 
     def get_f_array_access(self,line,segment,local_variables,i,rhs_var,loop_indexes,writes):
