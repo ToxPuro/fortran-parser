@@ -25,6 +25,11 @@ def format_lines(lines):
     return res
 
 
+#(mz,3) arrays which are on the GPU three z-profiles, one per component (declared in DSL/preamble.h and
+#computed by reductions there), since Astaroth has no vector profiles: var(n,j) -> profile_j[vertexIdx.z]
+split_z_profiles = {
+    "uumz__mod__hydro": ["AC_uumz_x__mod__hydro","AC_uumz_y__mod__hydro","AC_uumz_z__mod__hydro"],
+}
 bundle_dims = [
                   "npscalar__mod__cparam",
                   "nchemspec__mod__cparam",
@@ -7062,6 +7067,7 @@ class Parser:
             "dchit_prof_fluct_stored__mod__energy",
             "ssmz__mod__energy",
             "del2ssmz__mod__energy",
+            "uumz__mod__hydro",
             "ssmx__mod__energy",
             "del2ssmx__mod__energy",
 
@@ -7446,7 +7452,11 @@ class Parser:
                         elif(indexes  == ["n__mod__cdata"]):
                             prof_type = "z"
                         src[segment[0]]["profile_type"] = prof_type
-                    if len(var_dims) == 2 and var_dims[0] == "mx__mod__cparam" and var_dims[1] in bundle_dims and indexes[0] == "l1__mod__cparam:l2__mod__cdata" and ":" not in indexes[1]:
+                    if segment[0] in split_z_profiles:
+                        if len(indexes) != 2 or indexes[0] != "n__mod__cdata" or indexes[1] not in ["1","2","3"]:
+                            pexit("Only var(n,1|2|3) is supported for a z-profile split into components: ",line[segment[1]:segment[2]])
+                        res = f"{split_z_profiles[segment[0]][int(indexes[1])-1]}[vertexIdx.z]"
+                    elif len(var_dims) == 2 and var_dims[0] == "mx__mod__cparam" and var_dims[1] in bundle_dims and indexes[0] == "l1__mod__cparam:l2__mod__cdata" and ":" not in indexes[1]:
                         res = f"{segment[0]}[vertexIdx.x][{indexes[1]}-1]"
                     elif len(src[segment[0]]["dims"]) == 4 and src[segment[0]]["dims"] == ["nx__mod__cparam","ny__mod__cparam","nz__mod__cparam","3"] and indexes[0] == ":" and indexes[3] == ":":
                       res = f"{segment[0]}[vertexIdx.x-NGHOST][{indexes[1]}-1][{indexes[2]}-1]"
