@@ -109,6 +109,32 @@ jobs:
           pc_build -f GNU-GCC_MPI+GNU-GCC_debug+GNU-GCC_GPU FFLAGS+=-O0
           cd ../../..
 
+      # The Astaroth build writes its output only to src/astaroth/ac_build.log, so show it when the build breaks
+      - name: Print Astaroth build logs
+        if: failure()
+        shell: bash
+        run: |
+          shopt -s nullglob
+          logs=(pencil-code/samples/build-samples/sample*/src/astaroth/ac_build.log)
+          if [ ${#logs[@]} -eq 0 ]; then echo "No ac_build.log found"; exit 0; fi
+          # newest last: that is the sample that was being built when the step failed
+          for log in $(ls -tr "${logs[@]}"); do
+            echo "::group::$log"
+            cat "$log"
+            echo "::endgroup::"
+          done
+          newest=$(ls -t "${logs[@]}" | head -1)
+          echo "::error file=$newest::Last 60 lines of $newest"
+          tail -n 60 "$newest"
+
+      - name: Upload Astaroth build logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ac_build-logs
+          path: pencil-code/samples/build-samples/sample*/src/astaroth/ac_build.log
+          if-no-files-found: ignore
+
       - name: CommitAndPush
         continue-on-error: true
         shell: bash
