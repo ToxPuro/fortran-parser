@@ -9,6 +9,7 @@ import cProfile
 import ctypes
 import copy
 from field_declarations import add_missing_field_declarations, default_dsl_dir
+import particles_rhs
 ##import my-ast
 
 assumed_boundary = None
@@ -10786,6 +10787,8 @@ def main():
     argparser.add_argument("-s", "--stencil",default=False,action="store_true", help="Whether the subroutine to offload is a stencil op e.g. RK3 or not")
     argparser.add_argument("--to-c",default=False,action="store_true", help="Whether to translate offloadable function to single threaded C for testing")
     argparser.add_argument("--diagnostics",default=False,action="store_true", help="Whether to include diagnostics calculations in rhs calc")
+    argparser.add_argument("--particles-rhs", default=None, help="Write the DSL of this particle right-hand side routine to the given file")
+    argparser.add_argument("--particles-assume", default="", help="Comma-separated flags known at compile time, as name=T or name=F")
     argparser.add_argument("--modify_source_code",default=False,action="store_true", help="Whether to modify the fortran source code to include the pushpars etc. automatically")
     
     args = argparser.parse_args()
@@ -11478,14 +11481,18 @@ def main():
         parser.get_allocations_in_call_tree("initialize_special",subs_not_to_inline)
 
 
-        if not os.path.isfile("res-inlined.txt"):
+        if config["particles_rhs"]:
+            subs_not_to_inline += particles_rhs.PRIMITIVES
+        #res-inlined.txt caches the inlined rhs_cpu, the particle routines are always inlined anew
+        if config["particles_rhs"] or not os.path.isfile("res-inlined.txt"):
             parser.inline_all_function_calls(filename,subroutine_name,orig_lines,subs_not_to_inline) 
             new_lines = parser.func_info[subroutine_name]["inlined_lines"][filename]
             new_lines = parser.normalize_result(new_lines)
-            file = open("res-inlined.txt","w")
-            for line in new_lines:
-                file.write(f"{line}\n")
-            file.close()
+            if not config["particles_rhs"]:
+                file = open("res-inlined.txt","w")
+                for line in new_lines:
+                    file.write(f"{line}\n")
+                file.close()
 
         else:
             file = open("res-inlined.txt","r")
@@ -11494,6 +11501,11 @@ def main():
                 new_lines.append(line)
             file.close()
         print("\n\nDONE inlining\n\n")
+        if config["particles_rhs"]:
+            assume = {pair.split("=")[0]: {"T": True, "F": False}.get(pair.split("=")[1], pair.split("=")[1][2:]) for pair in config["particles_assume"].split(",") if pair}
+            particles_rhs.write_kernel_body(config["particles_rhs"], new_lines, assume)
+            print("DONE")
+            exit()
 
         local_variables = {parameter:v for parameter,v in parser.get_variables(new_lines, {},filename,True).items() }
         variables = merge_dictionaries(local_variables,parser.static_variables)
@@ -11775,6 +11787,10 @@ def main():
 
         parser.gen_pushpars()
         print("CREATED PUSHPARS\n")
+
+        #The particle equations are a separate kernel, particles_rhs.h is empty if the sample does not use particles
+        if subroutine_name == "rhs_cpu" and particles_rhs.generate_kernel(parser.sample_dir, directory_name):
+            print("CREATED particles_rhs.h\n")
 
 
         exit()
