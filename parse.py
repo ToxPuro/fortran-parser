@@ -7210,38 +7210,44 @@ class Parser:
           if mod == "cdata":
               mod_file = "global_pushpars"
           filename = [x for x in self.file_info if "module" in self.file_info[x] and self.file_info[x]["module"] == mod_file][0]
-          is_special = "/special" in filename
 
           if self.modify_source_code:
-            read_in = open(filename,"r")
-            out = []
-            for line in read_in:
-                if line.strip().lower() == "contains":
-                    for enum in self.enum_strings:
-                        if f"__mod__{mod}" in enum:
-                            out.append(f"  integer :: {remove_mod(enum)} = 0\n")
-                if "endsubroutine pushpars2c" in line:
-                    for push_line in res[mod][0]:
-                        out.append(f"    {push_line}\n")
-                    for enum in self.enum_strings:
-                        if f"__mod__{mod}" in enum:
-                            res[mod][1] += 1
-                            name = remove_mod(enum)
-                            string_name = name[len("enum_"):len(name)]
-                            out.append(f"    call string_to_enum({name},{string_name})\n")
-                            out.append(f"    call copy_addr({name},p_par({res[mod][1]})) ! int\n")
-                            
-                out.append(line)
-            read_in.close()
-            write_out = open(filename,"w")
-            for line in out:
-                write_out.write(f"{line}")
-            write_out.close()
+            enum_decls = []
+            enum_pushes = []
+            for enum in self.enum_strings:
+                if f"__mod__{mod}" in enum:
+                    res[mod][1] += 1
+                    name = remove_mod(enum)
+                    string_name = name[len("enum_"):len(name)]
+                    enum_decls.append(f"  integer :: {name} = 0\n")
+                    enum_pushes.append(f"    call string_to_enum({name},{string_name})\n")
+                    enum_pushes.append(f"    call copy_addr({name},p_par({res[mod][1]})) ! int\n")
+            #With several special modules the build compiles special/<name>._autogen_.f90, generated from special/<name>.f90
+            #with the module renamed. Modify both: the copy for this build and the source so that the change is kept.
+            filenames = [filename]
+            if filename.endswith("._autogen_.f90") and os.path.isfile(filename.replace("._autogen_","")):
+                filenames.append(filename.replace("._autogen_",""))
+            for filename in filenames:
+              read_in = open(filename,"r")
+              out = []
+              for line in read_in:
+                  if line.strip().lower() == "contains":
+                      out.extend(enum_decls)
+                  if "endsubroutine pushpars2c" in line:
+                      for push_line in res[mod][0]:
+                          out.append(f"    {push_line}\n")
+                      out.extend(enum_pushes)
+                  out.append(line)
+              read_in.close()
+              write_out = open(filename,"w")
+              for line in out:
+                  write_out.write(f"{line}")
+              write_out.close()
 
 
 
 
-              
+
 
     def gen_var_declares(self,file,cparam_file):
 
