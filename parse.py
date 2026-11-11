@@ -1919,6 +1919,12 @@ def pexit(*args):
   exit()
 def get_mod(x):
     return x.split("__mod__")[-1].strip()
+def pushpar_dim(dim):
+  #Size of a pushed array as written in the comment of its copy_addr, which phys_modules2c turns into the DSL declaration.
+  #The module qualifier is kept since it tells which module variable gives the size (e.g. nt_file__mod__gravitational_waves_htxk);
+  #only the cparam sizes (nx, mz, ...) are known in the DSL without it.
+  return re.sub(r"__mod__cparam\b", "", dim)
+
 def remove_mod(x):
   remove_indexes = []
   buffer = ""
@@ -7182,22 +7188,22 @@ class Parser:
                   res[mod] = [[],0]
               res[mod][1] += 1
               if type == "real":
-                res[mod][0].append(f"call copy_addr({name},p_par({res[mod][1]})) ! ({remove_mod(dims[0])})")
+                res[mod][0].append(f"call copy_addr({name},p_par({res[mod][1]})) ! ({pushpar_dim(dims[0])})")
               elif type == "integer":
-                res[mod][0].append(f"call copy_addr({name},p_par({res[mod][1]})) ! int ({remove_mod(dims[0])})")
+                res[mod][0].append(f"call copy_addr({name},p_par({res[mod][1]})) ! int ({pushpar_dim(dims[0])})")
               elif type == "int":
-                res[mod][0].append(f"call copy_addr({name},p_par({res[mod][1]})) ! int ({remove_mod(dims[0])})")
+                res[mod][0].append(f"call copy_addr({name},p_par({res[mod][1]})) ! int ({pushpar_dim(dims[0])})")
               elif type == "logical":
-                res[mod][0].append(f"call copy_addr({name},p_par({res[mod][1]})) ! bool ({remove_mod(dims[0])})")
+                res[mod][0].append(f"call copy_addr({name},p_par({res[mod][1]})) ! bool ({pushpar_dim(dims[0])})")
           if type in ["real"] and len(dims) == 2 and ":" not in dims[0] and ":" not in dims[1]:
                 res[mod][1] += 1
-                res[mod][0].append(f"call copy_addr({name},p_par({res[mod][1]})) ! ({remove_mod(dims[0])}) ({remove_mod(dims[1])})")
+                res[mod][0].append(f"call copy_addr({name},p_par({res[mod][1]})) ! ({pushpar_dim(dims[0])}) ({pushpar_dim(dims[1])})")
           if type in ["real"] and len(dims) == 3 and ":" not in dims[0] and ":" not in dims[1] and ":" not in dims[2]:
                 res[mod][1] += 1
-                res[mod][0].append(f"call copy_addr({name},p_par({res[mod][1]})) ! ({remove_mod(dims[0])}) ({remove_mod(dims[1])}) ({remove_mod(dims[2])})")
+                res[mod][0].append(f"call copy_addr({name},p_par({res[mod][1]})) ! ({pushpar_dim(dims[0])}) ({pushpar_dim(dims[1])}) ({pushpar_dim(dims[2])})")
           if type in ["real"] and len(dims) == 4 and ":" not in dims[0] and ":" not in dims[1] and ":" not in dims[2] and ":" not in dims[3]:
                 res[mod][1] += 1
-                res[mod][0].append(f"call copy_addr({name},p_par({res[mod][1]})) ! ({remove_mod(dims[0])}) ({remove_mod(dims[1])}) ({remove_mod(dims[2])}) ({remove_mod(dims[3])})")
+                res[mod][0].append(f"call copy_addr({name},p_par({res[mod][1]})) ! ({pushpar_dim(dims[0])}) ({pushpar_dim(dims[1])}) ({pushpar_dim(dims[2])}) ({pushpar_dim(dims[3])})")
           #An allocatable array might not be allocated at all (or not on all processes)
           if self.static_variables[var]["allocatable"] and mod in res and res[mod][0] and res[mod][0][-1].startswith(f"call copy_addr({name},"):
               res[mod][0][-1] = f"if (allocated({name})) {res[mod][0][-1]}"
