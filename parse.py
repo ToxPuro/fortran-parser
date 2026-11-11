@@ -1289,7 +1289,7 @@ def map_calc_slope_diff_flux(func_call):
         res.append(f"{flux2_param} = {slope_res}.z")
         res.append(f"{flux3_param} = {slope_res}.w")
     else:
-        res.append(f"{div_param} = get_slope_limited_divergence({field},SLD_CHAR_SPEED,60.0,{h_slope_param},{nlf_param},{field_index} == AC_ilnrho__mod__cdata || {field_index} == AC_ilntt__mod__cdata)")
+        res.append(f"{div_param} = get_slope_limited_divergence({field},SLD_CHAR_SPEED,60.0,{h_slope_param},{nlf_param},({field_index} == AC_ilnrho__mod__cdata && !AC_ldensity_nolog__mod__cdata) || ({field_index} == AC_ilntt__mod__cdata && !AC_ltemperature_nolog__mod__cdata))")
 
     return res
 
@@ -2931,6 +2931,10 @@ class Parser:
                 return f"{prefix}{lower[1:-3].upper()}_1_VEC"
             if "+6" in lower:
                 return f"{prefix}{lower[1:-3].upper()}_2_VEC"
+            #iuux:iuuz -> UUVEC, iuu:iuu+2 -> UVEC but iww2:iww2+2 -> WW2VEC: a trailing digit is part of the name
+            #(stripping it would map iww1, iww2 and iww3 all to WWVEC)
+            if lower[-1].isdigit():
+                return f"{prefix}{lower[1:].upper()}VEC"
             return f"{prefix}{lower[1:-1].upper()}VEC"
         if "(" in index:
             base = index.split("(",1)[0].strip()

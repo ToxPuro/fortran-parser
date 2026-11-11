@@ -10,11 +10,13 @@ declarations are inserted above the MARKER line of (the marker is added if neede
   DSL/fieldecs.h       -- every field
   DSL/solve.ac         -- PDE variables only (rk_final update)
   DSL/handwritten_end.h -- PDE variables only (rk_intermediate update)
-  DSL/df_declares.h    -- PDE variables only (DF_ variable)
+  DSL/df_declares.h    -- PDE variables and auxiliaries written in the rhs (DF_ variable)
+  DSL/handwritten_end.h -- auxiliaries written in the rhs: write-back of their DF_ variable, above AUX_MARKER
 
 The generated names follow the conventions of parse.py:get_vtxbuf_name_from_index_base:
   f(:,:,:,iuub)          -> F_UUB           (index name without the leading i)
   f(:,:,:,iuubx:iuubz)   -> F_UUBVEC        (first index of range without leading i and trailing char + VEC)
+  f(:,:,:,iww2:iww2+2)   -> F_WW2VEC        (a trailing digit is kept)
   df(:,:,:,iaae+j)       -> DF_IAAE__MOD__DISP_CURRENT[j]
 For vectors the DF variable is DF_<NAME> and the other names are #defined to it.
 
@@ -28,7 +30,13 @@ import sys
 import argparse
 
 MARKER = "// @auto-field-declarations: fortran-parser adds missing fields above this line"
+#The transpiler turns writes to auxiliaries in the rhs (f(l1:l2,m,n,iaux) = x) into DF_AUX = x;
+#these lines copy the DF_ variables back into the fields at the end of twopass_solve_intermediate.
+AUX_MARKER = "// @auto-aux-writeback: fortran-parser adds write-backs of auxiliaries written in the rhs above this line"
 DSL_FILES = ["fieldecs.h", "solve.ac", "handwritten_end.h", "df_declares.h"]
+#output target -> (file, marker); the targets are the keys of new_lines in add_missing_field_declarations
+TARGETS = {file: (file, MARKER) for file in DSL_FILES}
+TARGETS["aux_writeback"] = ("handwritten_end.h", AUX_MARKER)
 #If a file has no MARKER yet it is put before (False) or after (True) these lines.
 #None means the end of the file.
 MARKER_ANCHORS = {
@@ -39,6 +47,8 @@ MARKER_ANCHORS = {
     "handwritten_end.h": ("if(AC_iss_run_aver__mod__cdata != 0) write(F_SS_RUN_AVER,rk_intermediate(F_SS_RUN_AVER,DF_SS_RUN_AVER,step_num,AC_dt__mod__cdata))", True),
     "df_declares.h": (None, True),
 }
+#outside the substepping and courant branches since the Fortran writes the auxiliaries in every rhs evaluation
+AUX_MARKER_ANCHOR = ('#include "../freeze_df.h"', True)
 
 register_funcs = ["farray_register_pde", "farray_register_auxiliary", "farray_register_global", "register_report_aux"]
 call_regex = re.compile(r"^\s*(?:if\s*\(.*\)\s*)?call\s+(" + "|".join(register_funcs) + r")\s*\((.*)\)\s*$", re.IGNORECASE)
@@ -162,6 +172,9 @@ class Registration:
     @property
     def vec_name(self):
         first = self.components[0] if self.components else self.index
+        #same as parse.py: a trailing digit is part of the name (iww2 -> F_WW2VEC)
+        if first[-1].isdigit():
+            return f"F_{first[1:].upper()}VEC"
         return f"F_{first[1:-1].upper()}VEC"
 
     @property
@@ -210,7 +223,8 @@ def get_registrations(files, cdata_variables):
                     ncomps = len(aux)
             else:
                 if "array" in keywords:
-                    ncomps = -1
+                    #array=3 is accessed like a vector, e.g. f(:,:,:,iww1ddot:iww1ddot+2) -> F_WW1DDOVEC
+                    ncomps = int(keywords["array"]) if keywords["array"].isnumeric() else -1
                 elif "vector" in keywords:
                     ncomps = int(keywords["vector"]) if keywords["vector"].isnumeric() else -1
                 else:
@@ -318,8 +332,9 @@ def is_known(reg, text):
 def is_referenced(reg, code, sources):
     """
     Whether the generated DSL code uses the field through names that have to be declared.
-    Accesses like Field(AC_iww1__mod__cdata-1) need no declarations. Writes to DF_ names count only for
-    pushed PDEs, since otherwise the time update cannot be added.
+    Accesses like Field(AC_iww1__mod__cdata-1) need no declarations. Writes to DF_ names count for
+    pushed PDEs (otherwise the time update cannot be added) and for auxiliaries: the transpiler turns
+    writes to them in the rhs, e.g. f(l1:l2,m,n,idivdotw:idivdotw+2) = x, into DF_DIVDOTVEC = x.
     """
     names = [reg.name]
     if reg.ncomps == 3:
@@ -327,7 +342,9 @@ def is_referenced(reg, code, sources):
     if any(contains_word(code, name) for name in names):
         return True
     df_names = [f"D{name}" for name in names] + [f"DF_{reg.index.upper()}__MOD__{reg.module.upper()}"]
-    return reg.is_pde and is_pushed(reg, code, sources) and any(contains_word(code, name) for name in df_names)
+    if not any(contains_word(code, name) for name in df_names):
+        return False
+    return not reg.is_pde or is_pushed(reg, code, sources)
 
 
 def is_pushed(reg, code, sources):
@@ -355,8 +372,8 @@ def gen_fieldecs(reg, declared):
         return guarded(reg, [f"field_order({ac}-1) Field {reg.name}"])
     comps = reg.component_names
     lines = [f"field_order({ac} != 0 ? {ac}+{i}-1 : -1) Field {comp}" for i, comp in enumerate(comps)]
-    #F_<NAME> is only needed for the time update of PDEs in solve.ac and handwritten_end.h
-    vec_names = [reg.name, reg.vec_name] if reg.is_pde else [reg.vec_name]
+    #F_<NAME> is needed for the time update of PDEs in solve.ac and handwritten_end.h and for DF_<NAME> in df_declares.h
+    vec_names = [reg.name, reg.vec_name]
     for name in unique(vec_names):
         if name not in declared:
             lines.append(f"const Field3 {name} = {{{', '.join(comps)}}}")
@@ -380,19 +397,26 @@ def gen_handwritten_end(reg):
 def gen_df_declares(reg, used_df_names):
     df = df_name(reg)
     used_df_names.add(df)
+    #for an auxiliary DF_ holds its new value and is written back as is, so start from the current one:
+    #parts the rhs does not write stay unchanged
+    init = f"rk_intermediate_split_first({reg.name},step_num)" if reg.is_pde else f"value({reg.name})"
     if reg.ncomps == 1:
-        return guarded(reg, [f"real {df} = rk_intermediate_split_first({reg.name},step_num)"])
-    lines = [f"real3 {df} = rk_intermediate_split_first({reg.name},step_num)"]
+        return guarded(reg, [f"real {df} = {init}"])
+    lines = [f"real3 {df} = {init}"]
     #the other names the transpiler can generate for df accesses of this field:
     #df(:,:,:,iaae+j), df(:,:,:,iuubx:iuubz) and df(:,:,:,iuubx)
     aliases = [(f"DF_{reg.index.upper()}__MOD__{reg.module.upper()}", df), (f"D{reg.vec_name}", df)]
     aliases.extend([(f"D{comp}", f"{df}.{dim}") for comp, dim in zip(reg.component_names, "xyz")])
     for alias, value in aliases:
-        #e.g. iww1 and iww2 would both give DF_WWVEC
+        #guards against two fields giving the same alias
         if alias not in used_df_names:
             used_df_names.add(alias)
             lines.append(f"#define {alias} {value}")
     return guarded(reg, lines)
+
+
+def gen_aux_writeback(reg):
+    return guarded(reg, [f"  if({reg.ac_name()} != 0) write({reg.name}, {df_name(reg)})"])
 
 
 def unique(lst):
@@ -403,26 +427,26 @@ def unique(lst):
     return res
 
 
-def add_marker(text, file):
-    anchor, after = MARKER_ANCHORS[file]
+def add_marker(text, file, marker=MARKER):
+    anchor, after = AUX_MARKER_ANCHOR if marker == AUX_MARKER else MARKER_ANCHORS[file]
     if anchor is None:
-        return text.rstrip("\n") + "\n" + MARKER + "\n"
+        return text.rstrip("\n") + "\n" + marker + "\n"
     if text.count(anchor) != 1:
         return None
-    return text.replace(anchor, f"{anchor}\n{MARKER}" if after else f"{MARKER}\n{anchor}")
+    return text.replace(anchor, f"{anchor}\n{marker}" if after else f"{marker}\n{anchor}")
 
 
-def insert_before_marker(filename, lines, apply):
+def insert_before_marker(filename, lines, apply, marker=MARKER):
     with open(filename) as file:
         text = file.read()
-    if MARKER not in text:
-        text = add_marker(text, os.path.basename(filename))
+    if marker not in text:
+        text = add_marker(text, os.path.basename(filename), marker)
         if text is None:
-            print(f"field_declarations: WARNING: could not find where to add fields in {filename}, add the line\n{MARKER}\nwhere the declarations should go")
+            print(f"field_declarations: WARNING: could not find where to add fields in {filename}, add the line\n{marker}\nwhere the declarations should go")
             return False
     if not apply:
         return True
-    new_text = text.replace(MARKER, "\n".join(lines) + "\n" + MARKER, 1)
+    new_text = text.replace(marker, "\n".join(lines) + "\n" + marker, 1)
     with open(filename, "w") as file:
         file.write(new_text)
     return True
@@ -466,7 +490,7 @@ def add_missing_field_declarations(files, dsl_dir, code=None, apply=True):
     all_dsl = read_all_dsl_files(dsl_dir)
     declared = declared_names(all_dsl)
 
-    new_lines = {file: [] for file in DSL_FILES}
+    new_lines = {target: [] for target in TARGETS}
     used_df_names = set(re.findall(r"\bDF_[A-Za-z0-9_]+", texts["df_declares.h"]))
     added = []
     for reg in registrations:
@@ -489,14 +513,20 @@ def add_missing_field_declarations(files, dsl_dir, code=None, apply=True):
             for file, gen in [("solve.ac", gen_solve), ("handwritten_end.h", gen_handwritten_end), ("df_declares.h", lambda reg: gen_df_declares(reg, used_df_names))]:
                 if not is_known(reg, texts[file]) and not contains_word(texts[file], df_name(reg)):
                     new_lines[file].extend(gen(reg))
+        elif code is not None and any(contains_word(code, f"D{name}") for name in [reg.name, reg.vec_name] + (reg.component_names if reg.ncomps == 3 else [])):
+            #auxiliary written in the rhs: needs a DF_ variable and its write-back into the field
+            if not is_known(reg, texts["df_declares.h"]) and not contains_word(texts["df_declares.h"], df_name(reg)):
+                new_lines["df_declares.h"].extend(gen_df_declares(reg, used_df_names))
+            if not is_known(reg, texts["handwritten_end.h"]):
+                new_lines["aux_writeback"].extend(gen_aux_writeback(reg))
         added.append(reg)
 
-    for file in DSL_FILES:
-        if new_lines[file]:
+    for target, (file, marker) in TARGETS.items():
+        if new_lines[target]:
             print(f"field_declarations: {'adding' if apply else 'would add'} to {os.path.join(dsl_dir, file)}:")
-            for line in new_lines[file]:
+            for line in new_lines[target]:
                 print(f"    {line}")
-            insert_before_marker(os.path.join(dsl_dir, file), new_lines[file], apply)
+            insert_before_marker(os.path.join(dsl_dir, file), new_lines[target], apply, marker)
     return added
 
 
