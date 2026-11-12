@@ -12,6 +12,7 @@ declarations are inserted above the MARKER line of (the marker is added if neede
   DSL/handwritten_end.h -- PDE variables only (rk_intermediate update)
   DSL/df_declares.h    -- PDE variables and auxiliaries written in the rhs (DF_ variable)
   DSL/handwritten_end.h -- auxiliaries written in the rhs: write-back of their DF_ variable, above AUX_MARKER
+                           (only with aux_writeback / --aux-writeback, off by default)
 
 The generated names follow the conventions of parse.py:get_vtxbuf_name_from_index_base:
   f(:,:,:,iuub)          -> F_UUB           (index name without the leading i)
@@ -59,6 +60,8 @@ module_flag_names = {
     "energy": "ENTROPY",
     "equationofstate": "EOS",
 }
+#Files for which PC_moduleflags.h has no L<file>_MODULE (their Makefile.local lines are skipped by src/gpu.sed)
+modules_without_file_flag = ("viscosity", "particles")
 
 
 def strip_comment(line):
@@ -179,8 +182,19 @@ class Registration:
 
     @property
     def guard(self):
+        """
+        The macro of PC_moduleflags.h telling whether the registering file is part of the build.
+        Different implementations of a module (e.g. chemistry.f90 and chemistry_simple.f90) can register
+        different fields, so the implementation specific L<file>_MODULE is used instead of L<MODULE>.
+        """
         if self.module == "cdata":
             return None
+        basename = os.path.basename(self.filename).replace("._autogen_", "")
+        basename = os.path.splitext(basename)[0]
+        in_src_dir = os.path.basename(os.path.dirname(os.path.abspath(self.filename))) == "src"
+        #files in subdirectories (special/, magnetic/ etc.) and the modules gpu.sed skips get no L<file>_MODULE
+        if in_src_dir and identifier_regex.match(basename) and not basename.startswith(modules_without_file_flag):
+            return f"L{basename}_MODULE"
         return f"L{module_flag_names.get(self.module, self.module.upper())}"
 
 
@@ -465,11 +479,16 @@ def read_all_dsl_files(dsl_dir):
     return "\n".join(texts)
 
 
-def add_missing_field_declarations(files, dsl_dir, code=None, apply=True):
+def add_missing_field_declarations(files, dsl_dir, code=None, apply=True, index_vars_to_push=None, aux_writeback=False):
     """
     Adds DSL declarations for the fields registered in files that are missing from the DSL files in dsl_dir.
     If code (the generated DSL code) is given only the fields it uses are added: the DSL files are shared
     by all samples so everything added has to compile also for the others.
+    If index_vars_to_push is a list, the index variables (<index>__mod__<module>) that the DSL declarations
+    of the used fields refer to through AC_<index>__mod__<module>, e.g. in field_order, are appended to it:
+    they have to be in the pushpars2c of their module even if the generated code does not use them otherwise.
+    Auxiliaries written in the rhs get a DF_ variable so that the generated code compiles, but its
+    write-back into the field in handwritten_end.h is added only if aux_writeback is set.
     Returns the list of added registrations.
     """
     files = [file for file in files if file.endswith(".f90") and os.path.isfile(file)]
@@ -514,12 +533,23 @@ def add_missing_field_declarations(files, dsl_dir, code=None, apply=True):
                 if not is_known(reg, texts[file]) and not contains_word(texts[file], df_name(reg)):
                     new_lines[file].extend(gen(reg))
         elif code is not None and any(contains_word(code, f"D{name}") for name in [reg.name, reg.vec_name] + (reg.component_names if reg.ncomps == 3 else [])):
-            #auxiliary written in the rhs: needs a DF_ variable and its write-back into the field
+            #auxiliary written in the rhs: needs a DF_ variable, the write-back into the field only on request
             if not is_known(reg, texts["df_declares.h"]) and not contains_word(texts["df_declares.h"], df_name(reg)):
                 new_lines["df_declares.h"].extend(gen_df_declares(reg, used_df_names))
             if not is_known(reg, texts["handwritten_end.h"]):
-                new_lines["aux_writeback"].extend(gen_aux_writeback(reg))
+                if aux_writeback:
+                    new_lines["aux_writeback"].extend(gen_aux_writeback(reg))
+                else:
+                    print(f"field_declarations: not writing back {df_name(reg)} into {reg.name} ({reg.filename}) in handwritten_end.h, use --aux-writeback for that")
         added.append(reg)
+
+    if index_vars_to_push is not None:
+        dsl_after = all_dsl + "\n" + "\n".join(line for lines in new_lines.values() for line in lines)
+        for reg in registrations:
+            if reg.module != "cdata" and contains_word(dsl_after, reg.ac_name()):
+                var = f"{reg.index}__mod__{reg.module}"
+                if var not in index_vars_to_push:
+                    index_vars_to_push.append(var)
 
     for target, (file, marker) in TARGETS.items():
         if new_lines[target]:
@@ -542,6 +572,7 @@ def main():
                                         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     argparser.add_argument("--dsl-dir", default=default_dsl_dir(), help="Directory of fieldecs.h, solve.ac etc.")
     argparser.add_argument("--apply", default=False, action="store_true", help="Write the declarations (default is dry run)")
+    argparser.add_argument("--aux-writeback", default=False, action="store_true", help="Also write auxiliaries written in the rhs back into their fields in handwritten_end.h")
     argparser.add_argument("--code", help="Generated DSL code (e.g. DSL/local/rhs.h), only fields used in it are added")
     argparser.add_argument("files", nargs="+", help="Fortran files to search for field registrations")
     args = argparser.parse_args()
@@ -549,7 +580,7 @@ def main():
     if args.code:
         with open(args.code) as file:
             code = file.read()
-    add_missing_field_declarations(args.files, args.dsl_dir, code, apply=args.apply)
+    add_missing_field_declarations(args.files, args.dsl_dir, code, apply=args.apply, aux_writeback=args.aux_writeback)
 
 
 if __name__ == "__main__":

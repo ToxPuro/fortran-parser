@@ -2793,6 +2793,8 @@ class Parser:
         self.used_static_variables = []
         self.functions_in_file = {}
         self.static_writes = []
+        #index variables of fields declared in the DSL that have to be pushed, filled by add_missing_field_declarations
+        self.field_index_vars_to_push = []
         self.static_variables_to_declare = []
         self.directory = config["directory"]
         self.subroutine_modifies_param = {}
@@ -7117,6 +7119,8 @@ class Parser:
         contents = res_file.read()
         res_file.close()
         vars_in_contents = names_in_text(self.static_variables, contents)
+        #index variables used in field_order of DSL field declarations, see field_declarations.py
+        vars_in_contents = set(vars_in_contents) | {var for var in self.field_index_vars_to_push if var in self.static_variables}
         res = {}
         for var in [var for var in self.static_variables if var not in self.static_variables_to_declare and var in vars_in_contents]:
           if var in vars_not_to_push:
@@ -10805,6 +10809,7 @@ def main():
     argparser.add_argument("--diagnostics",default=False,action="store_true", help="Whether to include diagnostics calculations in rhs calc")
     argparser.add_argument("--particles-rhs", default=None, help="Write the DSL of this particle right-hand side routine to the given file")
     argparser.add_argument("--particles-assume", default="", help="Comma-separated flags known at compile time, as name=T or name=F")
+    argparser.add_argument("--aux-writeback",default=False,action="store_true", help="Whether automatically added auxiliaries that the rhs writes are written back into their fields in DSL/handwritten_end.h")
     argparser.add_argument("--modify_source_code",default=False,action="store_true", help="Whether to modify the fortran source code to include the pushpars etc. automatically")
     
     args = argparser.parse_args()
@@ -11766,7 +11771,7 @@ def main():
             if subroutine_name == "rhs_cpu":
                 #fields registered in the used modules but not yet in DSL/fieldecs.h etc.
                 with open("rhs.ac") as file:
-                    add_missing_field_declarations(parser.used_files, default_dsl_dir(), file.read())
+                    add_missing_field_declarations(parser.used_files, default_dsl_dir(), file.read(), index_vars_to_push=parser.field_index_vars_to_push, aux_writeback=config.get("aux_writeback", False))
             print("DONE")
 
         ##TP this is slow for some reason but can cache it to an include file
