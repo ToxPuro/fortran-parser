@@ -549,6 +549,19 @@ def map_del2_main(func_call):
     params = func_call["parameters"]
     return [f"{params[2]} = laplace({gen_field(params[1])})"]
 
+def map_del2_general(func_call):
+    #del2_general(f,k,del2f,g_upper,contracted_gamma,lgr): D^iD_i f in the given metric if lgr, else del2_main
+    params = func_call["parameters"]
+    lgr = params[5].split("=")[-1].strip()
+    field = gen_field(params[1])
+    return [
+            f"if({lgr}) then",
+            f"{params[2]} = laplace_metric({field},{params[3]},{params[4]})",
+            "else",
+            f"{params[2]} = laplace({field})",
+            "endif"
+           ]
+
 def map_del2_other(func_call):
     params = func_call["parameters"]
     first_param_name = params[0].split("(")[0]
@@ -1307,8 +1320,12 @@ def map_multsv_mn(func_call):
     return [f"{params[2]} = ({parenthesize_passed_param(params[0])}*{parenthesize_passed_param(params[1])})"]
 
 def map_multsv_mn_add(func_call):
+    #multsv_mn_add(a,b,c[,coeff]): c = c + coeff*a*b
     params = func_call["parameters"]
-    res = [f"{params[2]} = {params[2]} + ({parenthesize_passed_param(params[0])}*{parenthesize_passed_param(params[1])})"]
+    coeff = ""
+    if len(params) > 3:
+        coeff = f"{parenthesize_passed_param(params[3].split('=')[-1].strip())}*"
+    res = [f"{params[2]} = {params[2]} + {coeff}({parenthesize_passed_param(params[0])}*{parenthesize_passed_param(params[1])})"]
     return res
 
 def map_getcell(func_call):
@@ -1803,6 +1820,11 @@ sub_funcs = {
     {
         "output_params_indexes": [2],
         "map_func": map_del2_main
+    },
+    "del2_general":
+    {
+        "output_params_indexes": [2],
+        "map_func": map_del2_general
     },
     "del2_other":
     {
@@ -9649,7 +9671,7 @@ class Parser:
             file.write(f"{line}\n")
         file.close()
         allowed_func_calls = ["constexpr", "&&", "||","sqrt","abs","sinh","cosh","tanh","min","max","pow","DEVICE_VTXBUF_IDX".lower(),"DCONST".lower(),"exp","log","if","else","for","sin","cos","tan","atan2"]
-        astaroth_funcs = ["der","der2","der3","der4","der5","der6","col","row","derx","dery","derz","derxx","deryy","derzz","derxy","derxz","deryz","der6x","der6y","der6z","der6x_upwd","der6y_upwd","der6z_upwd","sum","dot","gradient","gradients","laplace","divergence","veclaplace","value","vecvalue","field","field3","divergence_from_matrix","curl_from_matrix","traceless_strain","traceless_strain_without_divu","multm2_sym","del_upwd","del_upwd_vec","gradient_of_divergence","cross","bij","mult","multmm_sc_mn","del6v_strict","static_assert","d2fi_dxj","del2fi_dxjk","der5x1y","der5x1z","der5y1z","gradients_5","der6x_ignore_spacing","der6y_ignore_spacing","der6z_ignore_spacing","del6","der4x2y","der4y2z","der4x2z","hessian","div_phib"]
+        astaroth_funcs = ["laplace_metric","der","der2","der3","der4","der5","der6","col","row","derx","dery","derz","derxx","deryy","derzz","derxy","derxz","deryz","der6x","der6y","der6z","der6x_upwd","der6y_upwd","der6z_upwd","sum","dot","gradient","gradients","laplace","divergence","veclaplace","value","vecvalue","field","field3","divergence_from_matrix","curl_from_matrix","traceless_strain","traceless_strain_without_divu","multm2_sym","del_upwd","del_upwd_vec","gradient_of_divergence","cross","bij","mult","multmm_sc_mn","del6v_strict","static_assert","d2fi_dxj","del2fi_dxjk","der5x1y","der5x1z","der5y1z","gradients_5","der6x_ignore_spacing","der6y_ignore_spacing","der6z_ignore_spacing","del6","der4x2y","der4y2z","der4x2z","hessian","div_phib"]
         allowed_func_calls.extend(astaroth_funcs)
 
 
