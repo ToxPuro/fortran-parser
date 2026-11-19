@@ -7106,6 +7106,8 @@ class Parser:
             "ssmx__mod__energy",
             "del2ssmx__mod__energy",
 
+            "khm__mod__z4c",
+
             "uumxy__mod__hydro",
             "uu_average_cyl__mod__hydro",
             "uu_average_sph__mod__hydro",
