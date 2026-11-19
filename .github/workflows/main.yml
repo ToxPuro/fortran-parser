@@ -13,7 +13,7 @@ jobs:
     container:
       image: nvidia/cuda:12.9.0-devel-ubuntu24.04
 
-    timeout-minutes: 180
+    timeout-minutes: 360
     steps:
       - name: Set timezone
         run: ln -fs /usr/share/zoneinfo/Europe/Helsinki /etc/localtime
@@ -46,76 +46,17 @@ jobs:
           export PENCIL_USER=GPU_AUTOTEST
           source sourceme.sh || true
           cd src/astaroth
-          python3 update_fortran.py -p $PENCIL_HOME -s sample0
-          cd ../..
-          cd samples/build-samples/sample0
-          make distclean
-          rm -rf src/astaroth
-          pc_setupsrc --force-astaroth
-          pc_build -f GNU-GCC_MPI+GNU-GCC_debug+GNU-GCC_GPU FFLAGS+=-O0
-          cd ../../..
-          cd src/astaroth
-          python3 update_fortran.py -p $PENCIL_HOME -s sample1
-          cd ../..
-          cd samples/build-samples/sample1
-          make distclean
-          rm -rf src/astaroth
-          pc_setupsrc --force-astaroth
-          pc_build -f GNU-GCC_MPI+GNU-GCC_debug+GNU-GCC_GPU FFLAGS+=-O0
-          cd ../../..
-          cd src/astaroth
-          python3 update_fortran.py -p $PENCIL_HOME -s sample2
-          cd ../..
-          cd samples/build-samples/sample2
-          make distclean
-          rm -rf src/astaroth
-          pc_setupsrc --force-astaroth
-          pc_build -f GNU-GCC_MPI+GNU-GCC_debug+GNU-GCC_GPU FFLAGS+=-O0
-          cd ../../..
-          cd src/astaroth
-          python3 update_fortran.py -p $PENCIL_HOME -s sample3
-          cd ../..
-          cd samples/build-samples/sample3
-          make distclean
-          rm -rf src/astaroth
-          pc_setupsrc --force-astaroth
-          pc_build -f GNU-GCC_MPI+GNU-GCC_debug+GNU-GCC_GPU FFLAGS+=-O0
-          cd ../../..
-          cd src/astaroth
-          python3 update_fortran.py -p $PENCIL_HOME -s sample4
-          cd ../..
-          cd samples/build-samples/sample4
-          make distclean
-          rm -rf src/astaroth
-          pc_setupsrc --force-astaroth
-          pc_build -f GNU-GCC_MPI+GNU-GCC_debug+GNU-GCC_GPU FFLAGS+=-O0
-          cd ../../..
-          cd src/astaroth
-          python3 update_fortran.py -p $PENCIL_HOME -s sample5
-          cd ../..
-          cd samples/build-samples/sample5
-          make distclean
-          rm -rf src/astaroth
-          pc_setupsrc --force-astaroth
-          pc_build -f GNU-GCC_MPI+GNU-GCC_debug+GNU-GCC_GPU FFLAGS+=-O0
-          cd ../../..
-          cd src/astaroth
-          python3 update_fortran.py -p $PENCIL_HOME -s sample6
-          cd ../..
-          cd samples/build-samples/sample6
-          make distclean
-          rm -rf src/astaroth
-          pc_setupsrc --force-astaroth
-          pc_build -f GNU-GCC_MPI+GNU-GCC_debug+GNU-GCC_GPU FFLAGS+=-O0
-          cd ../../..
+          # run over the samples of the GPU auto-test (@gpu_tests in bin/pc_auto-test),
+          # rebuilding each one from scratch after the update
+          python3 update_fortran.py -p $PENCIL_HOME --gpu-autotest --verify
 
       # The Astaroth build writes its output only to src/astaroth/ac_build.log, so show it when the build breaks
       - name: Print Astaroth build logs
         if: failure()
         shell: bash
         run: |
-          shopt -s nullglob
-          logs=(pencil-code/samples/build-samples/sample*/src/astaroth/ac_build.log)
+          shopt -s nullglob globstar
+          logs=(pencil-code/samples/**/src/astaroth/ac_build.log)
           if [ ${#logs[@]} -eq 0 ]; then echo "No ac_build.log found"; exit 0; fi
           # newest last: that is the sample that was being built when the step failed
           for log in $(ls -tr "${logs[@]}"); do
@@ -132,7 +73,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ac_build-logs
-          path: pencil-code/samples/build-samples/sample*/src/astaroth/ac_build.log
+          path: pencil-code/samples/**/src/astaroth/ac_build.log
           if-no-files-found: ignore
 
       - name: CommitAndPush
