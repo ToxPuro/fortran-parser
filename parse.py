@@ -7107,6 +7107,7 @@ class Parser:
             "del2ssmx__mod__energy",
 
             "khm__mod__z4c",
+            "itsub__mod__cdata",
 
             "uumxy__mod__hydro",
             "uu_average_cyl__mod__hydro",
