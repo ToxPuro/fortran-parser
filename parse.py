@@ -3776,7 +3776,10 @@ class Parser:
                                 if filepath not in self.file_info:
                                     self.file_info[filepath] = {}
                                 self.file_info[filepath]["module"] = module_name
-                            if not in_sub_name:
+                            #An end line must not start a procedure: after an internal procedure (contains inside a subroutine)
+                            #its end line already closed in_sub_name, and the end line of the outer procedure would otherwise
+                            #open a new procedure of that name which swallows the following ones (e.g. pushpars2c in chiral.f90)
+                            if not in_sub_name and not re.match(r"end\s*(subroutine|function)\b",search_line):
                                 search = re.search(r"\s?subroutine\s*([a-zA-Z0-9_-]*?)($|\s|\()", search_line)
                                 if(search and "subroutine" in search_line):
                                     sub_name = search.groups()[0].strip()
@@ -7269,8 +7272,11 @@ class Parser:
             for filename in filenames:
               read_in = open(filename,"r")
               out = []
+              module_contains_seen = False
               for line in read_in:
-                  if line.strip().lower() == "contains":
+                  #only the module's contains, not one of an internal procedure
+                  if line.strip().lower() == "contains" and not module_contains_seen:
+                      module_contains_seen = True
                       out.extend(enum_decls)
                   if "endsubroutine pushpars2c" in line:
                       for push_line in res[mod][0]:
