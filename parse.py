@@ -2797,6 +2797,10 @@ class Parser:
             # "ltime_integrals__mod__cdata":".false.",
         }
         self.safe_subs_to_remove = ["print","not_implemented","output","fatal_error","keep_compiler_quiet","warning","random_seed_wrapper"]
+        #Functions that cannot be evaluated pointwise on the GPU (e.g. they reduce over the whole domain)
+        #are replaced by a neutral value before inlining. The Fortran code has to forbid the options
+        #that use them on the GPU (e.g. lwork_ff in forcing.f90 calls calc_force_ampl).
+        self.gpu_replaced_functions = {"calc_force_ampl": "1."}
         self.safe_subs_to_ignore=  ["print","not_implemented","output","fatal_error","keep_compiler_quiet","warning"]
         self.func_info = {}
         self.file_info = {}
@@ -6062,6 +6066,30 @@ class Parser:
             return build_new_access(segment[0],sg_indexes)
         return line[segment[1]:segment[2]]
 
+    def transform_struct_to_module_arrays(self,lines,struct_name,var_names,prefix,module):
+        #Replaces var%field by the module variable <prefix>_<field>__mod__<module>, which is what
+        #a "call copy_addr(<prefix>%<field>,...)" in pushpars2c of <module> is pushed as.
+        if struct_name not in self.struct_table:
+            return lines
+        replacements = {}
+        for field,info in self.struct_table[struct_name].items():
+            new_name = f"{prefix}_{field}__mod__{module}"
+            if new_name not in self.static_variables:
+                var = copy.deepcopy(info)
+                var.update({"allocatable": False, "public": True, "threadprivate": False, "parameter": False,
+                            "saved_variable": False, "is_pointer": False})
+                self.static_variables[new_name] = var
+            for var_name in var_names:
+                replacements[var_name] = replacements.get(var_name,[]) + [(field,new_name)]
+        res_lines = []
+        for line in lines:
+            if "%" in line:
+                for var_name,fields in replacements.items():
+                    for field,new_name in fields:
+                        line = re.sub(rf"\b{re.escape(var_name)}\s*%\s*{field}\b",new_name,line)
+            res_lines.append(line)
+        return res_lines
+
     def transform_pencils(self,lines,local_variables,struct_name,new_struct_name,var_name):
         if struct_name not in self.struct_table:
             return lines
@@ -7050,7 +7078,8 @@ class Parser:
                         if len(func_calls) == 1:
                             func_call = func_calls[0]
                             if func_call["function_name"] in ["copy_addr","copy_addr_dble","copy_addr_dble_1d"]:
-                                res[mod][0].append(func_call["parameters"][0])
+                                #a component of a derived type (h_coeffs%fx) is pushed as h_coeffs_fx (see phys_modules2c)
+                                res[mod][0].append(func_call["parameters"][0].replace("%","_"))
                                 index = func_call["parameters"][1].split("(")[-1].split(")")[0].strip()
                                 res[mod][1] = max(res[mod][1],int(index))
         return res
@@ -7111,6 +7140,10 @@ class Parser:
 
             "khm__mod__z4c",
             "itsub__mod__cdata",
+
+            "edotb_sum__mod__axionu1back",
+            "rhob__mod__axionu1back",
+            "rhoe__mod__axionu1back",
 
             "uumxy__mod__hydro",
             "uu_average_cyl__mod__hydro",
@@ -8982,13 +9015,41 @@ class Parser:
                     lines[line_index] = self.replace_func_call(line,func_calls[0],f"{output_param} = rand_uniform()")
         return lines
 
+    def is_complex_expression(self,expr,variables):
+        #Syntactic check: complex if it builds a complex number with cmplx or uses a complex variable,
+        #unless the whole expression is a call returning a real (abs, aimag, real)
+        stripped = expr.strip()
+        def closes_at_end(s):
+            depth = 0
+            for i,char in enumerate(s):
+                if char == "(": depth += 1
+                elif char == ")":
+                    depth -= 1
+                    if depth == 0: return i == len(s)-1
+            return False
+        for real_func in ["abs","aimag","real","dble"]:
+            if re.fullmatch(rf"{real_func}\s*\(.*\)",stripped) and closes_at_end(stripped):
+                return False
+        if re.search(r"\bcmplx\s*\(",stripped):
+            return True
+        for token in re.findall(r"[A-Za-z_][A-Za-z0-9_]*",stripped):
+            if token in variables and variables[token].get("type","") == "complex":
+                return True
+        return False
+
     def transform_conversion_calls(self,lines,variables,func_name):
         for line_index,line in enumerate(lines):
                 func_calls = [x for x in self.get_function_calls_in_line(line,variables) if x["function_name"] == func_name]
                 while(len(func_calls)>0):
                     call = func_calls[0]
                     if len(call["parameters"]) == 1:
-                        line = self.replace_func_call(line,call,call['parameters'][0])
+                        #real(z) of a complex z is its real part, not a no-op conversion.
+                        #The DSL has no member access on expressions (z).x and no real-part function,
+                        #so use Re(z) = Im(i*z), which is exact: Im((0+1i)*(x+iy)) = 0*y+1*x = x
+                        if func_name == "real" and self.is_complex_expression(call['parameters'][0],variables):
+                            line = self.replace_func_call(line,call,f"aimag(cmplx(0.,1.)*({call['parameters'][0]}))")
+                        else:
+                            line = self.replace_func_call(line,call,call['parameters'][0])
                         lines[line_index] = line
                         func_calls = [x for x in self.get_function_calls_in_line(line,variables) if x["function_name"] == func_name]
                     else:
@@ -10647,8 +10708,10 @@ class Parser:
 
 
             lines = self.transform_pencils(lines,local_variables,"internalpencils","ac_transformed_q","q")
-            lines = self.transform_pencils(lines,local_variables,"forcing_coeffs" ,"ac_forcing_coeffs","h_coeffs__mod__forcing")
-            lines = self.transform_pencils(lines,local_variables,"forcing_coeffs" ,"ac_forcing_coeffs","h_coeffs")
+            #h_coeffs (forcing.f90) holds coefficients that are the same for all points (and are updated
+            #on the host at each substep), so its fields are module arrays pushed to the GPU,
+            #not per-point values like the pencils
+            lines = self.transform_struct_to_module_arrays(lines,"forcing_coeffs",["h_coeffs__mod__forcing","h_coeffs"],"h_coeffs","forcing")
         lines = self.remove_strings(lines,local_variables)
         return lines
 
@@ -10705,6 +10768,12 @@ class Parser:
         if elim_lines:
             new_lines = self.eliminate_while(new_lines)
         local_variables = {parameter:v for parameter,v in self.get_variables(new_lines, {},filename,True).items() }
+        for line_index,line in enumerate(new_lines):
+            replaced_calls = [call for call in self.get_function_calls_in_line(line,local_variables) if call["function_name"] in self.gpu_replaced_functions]
+            while replaced_calls:
+                line = self.replace_func_call(line,replaced_calls[0],self.gpu_replaced_functions[replaced_calls[0]["function_name"]])
+                replaced_calls = [call for call in self.get_function_calls_in_line(line,local_variables) if call["function_name"] in self.gpu_replaced_functions]
+            new_lines[line_index] = line
 
         #TP uncomment to exclude saved local variables
         # for var in local_variables:
@@ -11468,10 +11537,8 @@ def main():
         parser.ignored_subroutines.extend(["boundconds_y","boundconds_z"])
         parser.ignored_subroutines.extend(["deri_3d_inds"])
 
-        parser.safe_subs_to_remove.extend(["get_forcing_hel_rhs"])
         #TP: optional physics of special/solar_corona that is not available on the GPU
         parser.safe_subs_to_remove.extend(["calc_slope_limited_density","calc_nanoflare_heating"])
-        parser.ignored_subroutines.extend(["get_forcing_hel_rhs"])
 
         # parser.safe_subs_to_remove.extend(["calc_all_pencils"])
         # parser.ignored_subroutines.extend(["calc_all_pencils"])
